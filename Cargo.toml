@@ -1,0 +1,9 @@
+[package]
+name = "feyngraph"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+num-traits = "0.2"
+itertools = "0.13"
+rayon = "1"
