@@ -1,0 +1,67 @@
+COMMENT = _{single_line_comment}
+single_line_comment = { "#" ~ (!NEWLINE ~ ANY)* }
+WHITESPACE = _{" " | "\t"}
+
+name = @{ (ASCII_ALPHANUMERIC | "_")+ }
+int = @{"-"? ~ (!WHITESPACE ~ ASCII_DIGIT)+}
+rational = @{int ~ ("/" ~ int)?}
+string = @{("\"" | "\'") ~ (!("\"" | "\'") ~ ASCII)* ~ ("\"" | "\'")}
+bool = @{^"true" | ^"false"}
+
+property_pdg_code = {^"pdg_code" ~ "=" ~ int}
+property_name = {^"name" ~ "=" ~ string}
+property_antiname = {^"antiname" ~ "=" ~ string}
+property_spin = {^"spin" ~ "=" ~ int}
+property_color = {^"color" ~ "=" ~ int}
+property_mass = {^"mass" ~ "=" ~ (!("," | ")") ~ ANY)*}
+property_width = {^"width" ~ "=" ~ (!("," | ")") ~ ANY)*}
+property_texname = {^"texname" ~ "=" ~ string}
+property_antitexname = {^"antitexname" ~ "=" ~ string}
+property_charge = {^"charge" ~ "=" ~ rational}
+property_GhostNumber = {^"GhostNumber" ~ "=" ~ int}
+property_LeptonNumber = {^"LeptonNumber" ~ "=" ~ int}
+property_Y = {^"Y" ~ "=" ~ int}
+property_goldstone = {^"goldstone" ~ "=" ~ bool}
+property_propagating = {^"propagating" ~ "=" ~ bool}
+property_line = {^"line" ~ "=" ~ string}
+property_misc = {ASCII* ~ "=" ~ (!("," | ")") ~ ANY)*}
+
+
+particle_property = _{
+    property_pdg_code |
+    property_name |
+    property_antiname |
+    property_spin |
+    property_color |
+    property_mass |
+    property_width |
+    property_texname |
+    property_antitexname |
+    property_charge |
+    property_GhostNumber |
+    property_LeptonNumber |
+    property_Y |
+    property_goldstone |
+    property_propagating |
+    property_line |
+    property_misc
+}
+
+particle = { name ~ "=" ~ "Particle(" ~ (!")" ~ particle_property ~ ","? ~ NEWLINE?)* ~ ")" }
+anti_particle = {name ~ "=" ~ name ~ ".anti()"}
+
+particles_py = {
+    SOI ~ ((!(particle | anti_particle) ~ ANY)* ~ (particle | anti_particle))* ~ ANY* ~ EOI
+}
+
+coupling_order_name = {^"name" ~ "=" ~ string}
+coupling_order_order = {^"expansion_order" ~ "=" ~ int}
+coupling_order_hierarchy = {^"hierarchy" ~ "=" ~ int}
+
+coupling_order_property = _{coupling_order_name | coupling_order_order | coupling_order_hierarchy }
+
+coupling_order = { name ~ "CoumplingOrder(" ~ (!")" ~ coupling_order_property ~ ","? ~ NEWLINE?)* ~ ")" }
+
+coupling_orders_py = {SOI ~ ((!coupling_order ~ ANY)* ~ coupling_order)* ~ ANY* ~ EOI}
+// couplings_py = {}
+// vertices_py = {}

@@ -4,7 +4,7 @@ use num_traits::Num;
 /// A symmetric matrix of dimension $n$. The full symmetric matrix is represented by the upper
 /// triangular part, which is stored in `data` as a flattened array with $\frac{n(n+1)}{2}$ entries.
 /// The indices run from $0$ to $n-1$.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct SymmetricMatrix<T: Copy + Num + Ord> {
     /// Dimension of the matrix
     pub dimension: usize,
@@ -110,6 +110,24 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
     }
 }
 
+impl<T: std::fmt::Debug + Copy + Num + Ord> std::fmt::Debug for SymmetricMatrix<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, r"SymmetricMatrix {{")?;
+        writeln!(f, "    dimension: {},", self.dimension)?;
+        writeln!(f, "    data: [")?;
+        for i in 0..self.dimension {
+            write!(f, "        ")?;
+            for j in 0..self.dimension {
+                write!(f, "{:?}  ", self.get(i, j))?;
+            }
+            writeln!(f)?;
+        }
+        writeln!(f, "    ]")?;
+        writeln!(f, "}}")?;
+        return Ok(());
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::cmp::Ordering;
@@ -141,5 +159,21 @@ mod test {
         assert_eq!(matrix.cmp_permutation(&[1, 2, 3]), Ordering::Equal);
         assert_eq!(matrix.cmp_permutation(&[3, 2, 1]), Ordering::Less);
         assert_eq!(matrix.cmp_permutation(&[1, 3, 2]), Ordering::Greater);
+    }
+
+    #[test]
+    fn fmt_test() {
+        let matrix = SymmetricMatrix::from_vec(3, vec![1, 2, 3, 4, 5, 6]);
+        let expected = "\
+SymmetricMatrix {
+    dimension: 3,
+    data: [
+        1  2  3  
+        2  4  5  
+        3  5  6  
+    ]
+}
+";
+        assert_eq!(expected, format!("{:#?}", matrix));
     }
 }
