@@ -1,7 +1,22 @@
 use std::collections::HashMap;
 use itertools::Itertools;
+use thiserror::Error;
+use crate::model::ufoparser::Rule;
+
+#[cfg(feature = "python-bindings")]
+use pyo3::prelude::*;
 
 mod ufoparser;
+
+#[derive(Error, Debug)]
+pub enum ModelError {
+    #[error("Encountered illegal model option '{0}'")]
+    ContentError(String),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+    #[error("Error while parsing UFO model")]
+    ParseError(#[from] pest::error::Error<Rule>),
+}
 
 #[derive(PartialEq, Debug, Hash)]
 pub enum LineStyle {
@@ -69,6 +84,8 @@ pub struct Model {
     vertices: Vec<Vertex>,
 }
 
+#[cfg_attr(feature = "python-bindings", pyclass)]
+#[derive(Clone)]
 pub struct TopologyModel {
     vertex_degrees: Vec<usize>
 }
@@ -100,5 +117,14 @@ impl TopologyModel {
     
     pub fn degrees_iter(&self) -> impl Iterator<Item=usize> {
         return self.vertex_degrees.clone().into_iter();
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl TopologyModel {
+    #[new]
+    fn new(degrees: Vec<usize>) -> Self {
+        return TopologyModel { vertex_degrees: degrees };
     }
 }

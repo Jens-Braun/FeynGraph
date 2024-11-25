@@ -1,20 +1,20 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::path::PathBuf;
 use pest::Parser;
 use pest_derive::Parser;
-use crate::model::{Coupling, LineStyle, Model, Particle, Vertex};
-use eyre::{eyre, WrapErr};
+use crate::model::{Coupling, LineStyle, Model, ModelError, Particle, Vertex};
 use log::warn;
+use crate::model::ModelError::{ContentError};
 
 #[derive(Parser)]
 #[grammar = "model/ufo_model.pest"]
 struct UFOParser;
 
 impl UFOParser {
-    fn parse_particles(path: &PathBuf) -> eyre::Result<HashMap<String, Particle>> {
+    fn parse_particles(path: &PathBuf) -> Result<HashMap<String, Particle>, ModelError> {
         let mut particles: HashMap<String, Particle> = HashMap::new();
-        let particle_py_content = std::fs::read_to_string(path.join("particles.py"))
-            .wrap_err_with(|| format!("Unable to read 'particles.py' from UFO-Model {:#?}", path))?;
+        let particle_py_content = std::fs::read_to_string(path.join("particles.py"))?;
         let parsed_content = UFOParser::parse(Rule::particles_py, &particle_py_content)?.next().unwrap();
         for particle_rule in parsed_content.into_inner() {
             match particle_rule.as_rule() {
@@ -30,7 +30,7 @@ impl UFOParser {
                     for property in particle_rule.into_inner() {
                         match property.as_rule() {
                             Rule::property_pdg_code => {
-                                pdg_code = Some(property.into_inner().next().unwrap().as_str().parse::<isize>()?);
+                                pdg_code = Some(property.into_inner().next().unwrap().as_str().parse::<isize>().unwrap());
                             },
                             Rule::property_name => {name = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\'']))},
                             Rule::property_texname => {texname = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\'']))},
@@ -45,14 +45,14 @@ impl UFOParser {
                                     "scurly" => LineStyle::Scurly,
                                     "swavy" => LineStyle::Swavy,
                                     "double" => LineStyle::Double,
-                                    _ => return Err(eyre!("Encountered unknown 'linestyle': {}", property.as_str()))
+                                    _ => return Err(ContentError(format!("Encountered unknown 'linestyle': {}", property.as_str())))
                                 })
                             },
                             Rule::property_spin => {
-                                spin = Some(property.into_inner().next().unwrap().as_str().parse::<isize>()?);
+                                spin = Some(property.into_inner().next().unwrap().as_str().parse::<isize>().unwrap());
                             },
                             Rule::property_color => {
-                                color = Some(property.into_inner().next().unwrap().as_str().parse::<usize>()?);
+                                color = Some(property.into_inner().next().unwrap().as_str().parse::<usize>().unwrap());
                             },
                             _ => ()
                         }
@@ -60,8 +60,8 @@ impl UFOParser {
                     println!("{:?}", name);
                     if linestyle == None {
                         if spin == None || color == None {
-                            return Err(eyre!("Illegal particle definition in model {:#?} at position {:?}: \
-                            either 'line' or 'spin' and 'color' is required", path, position));
+                            return Err(ContentError(format!("Illegal particle definition in model {:#?} at position {:?}: \
+                            either 'line' or 'spin' and 'color' is required", path, position)));
                         }
                         linestyle = match spin.unwrap() {
                             1 => Some(LineStyle::Dashed),
@@ -106,19 +106,19 @@ impl UFOParser {
         return Ok(particles);
     }
 
-    fn parse_coupling_orders(path: &PathBuf) -> eyre::Result<Vec<String>> {
+    fn parse_coupling_orders(path: &PathBuf) -> Result<Vec<String>, Box<dyn Error>> {
         todo!();
     }
 
-    fn parse_couplings(path: &PathBuf) -> eyre::Result<Vec<Coupling>> {
+    fn parse_couplings(path: &PathBuf) -> Result<Vec<Coupling>, Box<dyn Error>> {
         todo!();
     }
 
-    fn parse_vertices(path: &PathBuf) -> eyre::Result<Vec<Vertex>> {
+    fn parse_vertices(path: &PathBuf) -> Result<Vec<Vertex>, Box<dyn Error>> {
         todo!();
     }
 
-    fn parse_ufo_model(path: &PathBuf) -> eyre::Result<Model> {
+    fn parse_ufo_model(path: &PathBuf) -> Result<Model, Box<dyn Error>> {
         todo!();
     }
 }

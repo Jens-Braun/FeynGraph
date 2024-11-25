@@ -1,18 +1,25 @@
+use std::cmp::min;
 use std::error::Error;
 use itertools::Itertools;
+use pyo3::prelude::*;
 use rayon::prelude::*;
 use crate::model::TopologyModel;
-use crate::topology::components::TopologyWorkspace;
+use crate::topology::workspace::TopologyWorkspace;
 use crate::topology::filter::TopologySelector;
 use crate::topology::matrix::SymmetricMatrix;
 use crate::util::{factorial, find_partitions};
 
-pub mod matrix;
-pub mod components;
+pub(crate) mod matrix;
+pub(crate) mod components;
 pub mod filter;
+pub(crate) mod workspace;
 
-#[derive(Debug, PartialEq)]
-struct Topology {
+#[cfg_attr(feature = "python-bindings", pyclass)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct Topology {
+    n_external: usize,
+    n_nodes: usize,
+    node_degrees: Vec<usize>,
     adjacency_matrix: SymmetricMatrix<usize>,
     node_symmetry: usize,
     edge_symmetry: usize,
@@ -29,13 +36,88 @@ impl Topology {
             }
         }
         return Topology {
+            n_external: workspace.n_external,
+            n_nodes: workspace.nodes.len(),
+            node_degrees: workspace.nodes.iter().filter_map(|node| 
+                if node.max_connections > 1 { Some(node.max_connections) } else { None }
+            ).collect(),
             adjacency_matrix: workspace.adjacency_matrix.clone(),
             node_symmetry,
             edge_symmetry
         }
     }
+
+    fn get_internal_connections(&self, node: usize) -> Vec<usize> {
+        return (self.n_external..(self.n_external+self.node_degrees.len())).filter_map(
+            |j| {
+                if j != node && *self.adjacency_matrix.get(node, j) != 0 {
+                    Some(j)
+                } else { None }
+            }
+        ).collect();
+    }
+    
+    fn bridge_dfs(&self, 
+                  node: usize, 
+                  parent: usize,
+                  visited: &mut Vec<bool>, 
+                  distance: &mut Vec<usize>, 
+                  shortest_distance: &mut Vec<usize>, 
+                  mut step: usize, 
+                  bridges: &mut Vec<(usize, usize)>) {
+        step += 1;
+        distance[node] = step;
+        shortest_distance[node] = step;
+        visited[node] = true;
+        for connected_node in self.get_internal_connections(node) {
+            if connected_node < self.n_external || connected_node == parent {
+                if *self.adjacency_matrix.get(node, parent) > 1 {
+                    shortest_distance[node] = min(shortest_distance[node], shortest_distance[parent]);
+                }
+                continue;
+            }
+            if visited[connected_node] {
+                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
+            } else {
+                self.bridge_dfs(connected_node, node, visited, distance, shortest_distance, step, bridges);
+                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
+                if shortest_distance[connected_node] > distance[node] {
+                    bridges.push((node, connected_node));
+                }
+            }
+        }
+    }
+    
+    pub fn bridges(&self) -> Vec<(usize, usize)> {
+        let mut bridges = Vec::new();
+        let mut visited = vec![false; self.n_external + self.node_degrees.len()];
+        let mut distance = vec![0; self.n_external + self.node_degrees.len()];
+        let mut shortest_distance = vec![0; self.n_external + self.node_degrees.len()];
+        let step = 0;
+        self.bridge_dfs(self.n_external, 0, &mut visited, &mut distance, &mut shortest_distance, step, &mut bridges);
+        return bridges;
+    }
+    
+    pub fn count_opi(&self) -> usize {
+        return self.bridges().len()+1;
+    }
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl Topology {
+    fn get_adjacency_matrix(&self) -> Vec<Vec<usize>> {
+        let mut result = vec![vec![0; self.n_nodes]; self.n_nodes];
+        for i in 0..self.n_nodes {
+            for j in 0..self.n_nodes {
+                result[i][j] = *self.adjacency_matrix.get(i, j);
+            }
+        }
+        return result;
+    }
+}
+
+#[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, PartialEq)]
 pub struct TopologyContainer {
     data: Vec<Topology>,
@@ -79,6 +161,15 @@ impl From<Vec<TopologyContainer>> for TopologyContainer {
     }
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl TopologyContainer {
+    fn to_python(&self) -> Vec<Topology> {
+        return self.data.clone();
+    }
+}
+
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct TopologyGenerator {
     n_external: usize,
     n_loops: usize,
@@ -86,7 +177,9 @@ pub struct TopologyGenerator {
     selector: TopologySelector,
 }
 
+#[cfg_attr(feature = "python-bindings", pymethods)]
 impl TopologyGenerator {
+    #[new]
     pub fn new(n_external: usize, n_loops: usize, model: TopologyModel, selector: Option<TopologySelector>) -> Self {
         return if let Some(selector) = selector {
             Self {
@@ -105,14 +198,23 @@ impl TopologyGenerator {
         }
     }
     
-    pub fn generate(&self) -> Result<TopologyContainer, Box<dyn Error>> {
+    pub fn generate(&self) -> TopologyContainer {
+        let degrees = self.model.degrees_iter().collect_vec();
         // \sum_{k=3}^\infty (k-2) N_k = 2 L - 2 + E
         let node_partitions = find_partitions(
-            self.model.degrees_iter().map(|d| d - 2), 
-            2*self.n_loops + self.n_external - 2
-        );
+            self.model.degrees_iter().map(|d| d - 2), 2*self.n_loops + self.n_external - 2
+        ).into_iter()
+            .filter(|partition| {
+                self.selector.select_partition(
+                    partition.iter().enumerate().map(|(i, count)| (degrees[i], *count)).collect_vec()
+                )
+            }
+        ).collect_vec();
+        
         let mut containers = Vec::new();
-        node_partitions.into_par_iter().map(|partition| {
+        node_partitions
+            .into_par_iter()
+            .map(|partition| {
             let mut nodes = vec![1; self.n_external];
             let mut internal_nodes = partition
                 .into_iter()
@@ -120,23 +222,24 @@ impl TopologyGenerator {
                 .map(|(i, n)| vec![self.model.get(i); n])
                 .concat();
             nodes.append(&mut internal_nodes);
-            let mut workspace = TopologyWorkspace::from_nodes(&nodes);
+            let mut workspace = TopologyWorkspace::from_nodes(self.n_external, &nodes);
+            workspace.topology_selector = self.selector.clone();
             return workspace.generate();
         }).collect_into_vec(&mut containers);
-        return Ok(TopologyContainer::from(containers));
+        return TopologyContainer::from(containers);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use super::*;
-    use rayon::{prelude::*};
     
     #[test]
     fn topology_generator_1_loop_test() {
         let model = TopologyModel::from(vec![3, 4]);
         let generator = TopologyGenerator::new(4, 1, model, None);
-        let topologies = generator.generate().unwrap();
+        let topologies = generator.generate();
         assert_eq!(topologies.inner_ref().len(), 99);
     }
 
@@ -144,7 +247,55 @@ mod tests {
     fn topology_generator_3_loop_test() {
         let model = TopologyModel::from(vec![3, 4]);
         let generator = TopologyGenerator::new(4, 3, model, None);
-        let topologies = generator.generate().unwrap();
+        let topologies = generator.generate();
         assert_eq!(topologies.inner_ref().len(), 50051);
+    }
+    
+    #[test]
+    fn topology_generator_3_loop_opi_test() {
+        let model = TopologyModel::from(vec![3, 4]);
+        let mut selector = TopologySelector::default();
+        selector.add_opi_count(1);
+        let generator = TopologyGenerator::new(4, 3, model, Some(selector));
+        let topologies = generator.generate();
+        assert_eq!(topologies.inner_ref().len(), 6166);
+    }
+
+    #[test]
+    fn topology_generator_3_loop_opi_partition_test() {
+        let model = TopologyModel::from(vec![3, 4]);
+        let mut selector = TopologySelector::default();
+        selector.add_opi_count(1);
+        selector.add_node_partition(vec![(3, 4), (4, 2)]);
+        let generator = TopologyGenerator::new(4, 3, model, Some(selector));
+        let topologies = generator.generate();
+        assert_eq!(topologies.inner_ref().len(), 2614);
+    }
+    
+    #[test]
+    fn topology_bridge_test() {
+        let topo = Topology {
+            n_external: 4,
+            n_nodes: 6,
+            node_degrees: vec![3, 3, 4, 4, 4, 4],
+            adjacency_matrix: SymmetricMatrix::from_vec(10, 
+                                                        vec![
+                                                            0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                                                               0, 0, 0, 0, 0, 1, 0, 0, 0,
+                                                                  0, 0, 0, 0, 0, 0, 1, 0,
+                                                                     0, 0, 0, 0, 0, 0, 1,
+                                                                        0, 1, 0, 1, 0, 0,
+                                                                           0, 1, 1, 0, 0,
+                                                                              2, 0, 0, 0,
+                                                                                 0, 2, 0,
+                                                                                    0, 1,
+                                                                                       2
+                                                        ]
+            ),
+            node_symmetry: 1,
+            edge_symmetry: 1,
+        };
+        assert_eq!(topo.bridges().into_iter().collect::<HashSet<(usize, usize)>>(), 
+                   HashSet::from([(5, 6), (7, 8), (8, 9)]));
     }
 }
