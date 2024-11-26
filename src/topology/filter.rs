@@ -4,14 +4,21 @@ use pyo3::prelude::*;
 use crate::topology::filter::SelectionCriterion::*;
 use crate::topology::Topology;
 
+/// Possible criteria, which are used by a [TopologySelector] to decide whether a diagram is kept.
 #[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, Clone)]
 pub enum SelectionCriterion {
+    /// Only keep topologies for which the count of nodes with `degree` is in `selection`
     NodeDegree {degree: usize, selection: Vec<usize>},
+    /// Only keep topologies with the specified node partition, specified as a list of (degree, count)
     NodePartition(Vec<(usize, usize)>),
+    /// Only keep topologies with the specified number of one-particle-irreducible components
     OPIComponents(usize),
 }
 
+/// A struct that decides whether a topology is to be kept or discarded. Only topologies for which
+/// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
+/// then select diagrams which satisfy any of them.
 #[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, Clone)]
 pub struct TopologySelector {
@@ -21,15 +28,18 @@ pub struct TopologySelector {
 #[cfg_attr(feature = "python-bindings", pymethods)]
 impl TopologySelector {
     
+    /// Create a new [TopologySelector], which selects every topology.
     #[new]
     fn new() -> Self {
         return Self::default();
     }
     
+    /// Add a [SelectionCriterion] to the selector.
     pub fn add_criterion(&mut self, criterion: SelectionCriterion) {
         self.criteria.push(criterion);
     }
 
+    /// Add a criterion to keep only diagrams with `selection` number of nodes with `degree`.
     pub fn add_node_degree(&mut self, degree: usize, selection: usize) {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {
@@ -43,6 +53,8 @@ impl TopologySelector {
         }
     }
 
+    /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
+    /// in `selection`.
     pub fn add_node_degree_selection(&mut self, degree: usize, mut selection: Vec<usize>) {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {
@@ -56,16 +68,20 @@ impl TopologySelector {
         }
     }
 
+    /// Add a criterion to keep only diagrams with the node partition given by `partition`.
     pub fn add_node_partition(&mut self, partition: Vec<(usize, usize)>) {
         self.criteria.push(NodePartition(partition));
     }
 
+    /// Add a criterion to keep only diagrams with `count` one-particle-irreducible components.
     pub fn add_opi_count(&mut self, count: usize) {
         self.criteria.push(OPIComponents(count));
     }
 }
 
 impl TopologySelector {
+    /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
+    /// in the range `selection`.
     pub fn add_node_degree_range(&mut self, degree: usize, selection: Range<usize>) {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {

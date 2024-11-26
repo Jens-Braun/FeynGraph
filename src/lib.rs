@@ -10,7 +10,7 @@ pub(crate) mod util;
 #[cfg(feature = "python-bindings")]
 #[pymodule]
 #[allow(non_snake_case)]
-fn FeynGraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let topology_submodule = PyModule::new(m.py(), "topology")?;
     topology_submodule.add_class::<model::TopologyModel>()?;
     topology_submodule.add_class::<topology::Topology>()?;

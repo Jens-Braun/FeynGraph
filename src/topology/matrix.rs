@@ -63,35 +63,6 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
         };
     }
 
-    /// Swap the $i$-th and $j$-the row and column in place.
-    pub fn swap(&mut self, i: usize, j: usize) {
-        let max;
-        let min;
-        if i > j {
-            max = i;
-            min = j;
-        } else {
-            max = j;
-            min = i;
-        }
-        self.data.swap(i*(2*self.dimension - i + 1)/2, j*(2*self.dimension - j + 1)/2);
-        for k in 0..self.dimension {
-            if k == i || k == j { continue; }
-            if min < k { // Swap (k, min) <-> (k, min)
-                if max < k { // min < max < k
-                    self.data.swap(min * self.dimension + k - min*(min+1)/2,
-                                   max * self.dimension + k - max*(max+1)/2)
-                } else { // min < k < max
-                    self.data.swap(min * self.dimension + k - min*(min+1)/2,
-                                   k * self.dimension + max - k*(k+1)/2)
-                }
-            } else { // k < min < max
-                self.data.swap(k * self.dimension + min - k*(k+1)/2,
-                               k * self.dimension + max - k*(k+1)/2)
-            }
-        }
-    }
-
     /// Compare with self, when the rows and columns are permuted according to `permutation`, where
     /// `permutation` is a permutation of ${1, ..., n}$. Here, the entries of the matrix are
     /// interpreted as digits of a number $X$ with a base $B > a_{ij} \forall i, j$ , i.e.
@@ -132,26 +103,6 @@ impl<T: std::fmt::Debug + Copy + Num + Ord> std::fmt::Debug for SymmetricMatrix<
 mod test {
     use std::cmp::Ordering;
     use super::SymmetricMatrix;
-    #[test]
-    fn swap_test() {
-        let mut matrix = SymmetricMatrix::from_vec(5,
-                                                   vec![
-                                                       0,  1,  2,  3,  4,
-                                                           5,  6,  7,  8,
-                                                               9, 10, 11,
-                                                                  12, 13,
-                                                                      14
-                                                   ]);
-        matrix.swap(1, 3);
-        assert_eq!(matrix, SymmetricMatrix::from_vec(5,
-                                                   vec![
-                                                       0,  3,  2,  1,  4,
-                                                          12, 10,  7, 13,
-                                                               9,  6, 11,
-                                                                   5,  8,
-                                                                      14
-                                                   ]));
-    }
 
     #[test]
     fn cmp_test() {

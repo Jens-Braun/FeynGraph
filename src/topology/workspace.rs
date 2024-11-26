@@ -5,20 +5,28 @@ use crate::topology::{Topology, TopologyContainer};
 use crate::topology::filter::TopologySelector;
 use crate::util::generate_permutations;
 
+/// Workspace struct for the generation of all topologies of a given list of nodes.
 #[derive(Debug)]
 pub struct TopologyWorkspace{
     pub(crate) n_external: usize,
+    /// List of nodes in ascending order by their degrees
     pub(crate) nodes: Vec<TopologyNode>,
     pub(crate) adjacency_matrix: SymmetricMatrix<usize>,
-    connection_tree: Vec<Option<usize>>,
+    /// List containing the current spanning forest of the nodes
+    connection_forest: Vec<Option<usize>>,
     pub(crate) connection_components: usize,
+    /// Total number of edges remaining to be added to the topology
     remaining_edges: usize,
+    /// Current node classification
     node_classification: NodeClassification,
     topology_buffer: Option<TopologyContainer>,
+    /// [TopologySelector] deciding whether a found topology is kept
     pub(crate) topology_selector: TopologySelector,
 }
 
 impl TopologyWorkspace {
+    /// Create new workspace for generating the topologies of `n_external` external particles and number and
+    /// degrees of nodes given by `node_degrees`.
     pub fn from_nodes(n_external: usize, node_degrees: &Vec<usize>) -> Self {
         let node_degrees_sorted = node_degrees.clone().into_iter().sorted().collect_vec();
         let node_classification = NodeClassification::from_degrees(&node_degrees_sorted);
@@ -29,7 +37,7 @@ impl TopologyWorkspace {
         return Self {
             n_external,
             nodes,
-            connection_tree: vec![None; node_degrees.len()],
+            connection_forest: vec![None; node_degrees.len()],
             connection_components: node_degrees.len(),
             adjacency_matrix: SymmetricMatrix::zero(node_degrees.len()),
             remaining_edges: node_degrees.iter().sum::<usize>()/2,
@@ -39,13 +47,14 @@ impl TopologyWorkspace {
         }
     }
 
+    /// Return the root of the spanning tree to which `node` belongs. Flattens the tree in the process.
     fn find_root(&mut self, node: usize) -> usize {
         let mut current = node;
         loop {
-            match self.connection_tree[current] {
+            match self.connection_forest[current] {
                 Some(parent) =>  {
-                    if let Some(grandparent) = self.connection_tree[parent] {
-                        self.connection_tree[current] = Some(grandparent);
+                    if let Some(grandparent) = self.connection_forest[parent] {
+                        self.connection_forest[current] = Some(grandparent);
                     }
                     current = parent;
                 },
@@ -55,6 +64,7 @@ impl TopologyWorkspace {
         return current;
     }
 
+    /// Get all nodes to which `node` has an edge, except itself if `node` has a self-loop.
     fn get_connections(&self, node: usize) -> Vec<usize> {
         return (0..self.nodes.len()).filter_map(
             |j| {
@@ -65,6 +75,7 @@ impl TopologyWorkspace {
         ).collect();
     }
 
+    /// Get all nodes to which `node` is connected, except itself if `node` has a self-loop.
     fn find_connected_nodes(&self, node: usize) -> Vec<usize> {
         let mut visited: Vec<usize> = vec![node];
         let mut to_visit: Vec<usize> = vec![node];
@@ -81,6 +92,8 @@ impl TopologyWorkspace {
         return visited;
     }
 
+    /// Check whether the connection component to which `node` belongs has no remaining open connections and 
+    /// will thus remain disconnected.
     fn is_disconnected(&self, node: usize) -> bool {
         return self.find_connected_nodes(node)
             .into_iter()
@@ -88,13 +101,17 @@ impl TopologyWorkspace {
             .sum::<usize>() == 0;
     }
 
+    /// Add a connection of `multiplicity` between `first_node` and `second_node`, updating the adjacency matrix,
+    /// the spanning forest and the classification matrix in the process.
     fn add_connection(&mut self, first_node: usize, second_node: usize, multiplicity: usize) {
         if first_node != second_node {
             *self.adjacency_matrix.get_mut(first_node, second_node) += multiplicity;
             let first_root = self.find_root(first_node);
             let second_root = self.find_root(second_node);
             if first_root != second_root {
-                self.connection_tree[second_root] = Some(first_root);
+                // Nodes belonged to different connection components
+                // -> merge both components, since they are now connected
+                self.connection_forest[second_root] = Some(first_root);
                 self.connection_components -= 1;
             }
         } else {
@@ -106,20 +123,24 @@ impl TopologyWorkspace {
         self.node_classification.add_connection(first_node, second_node, multiplicity);
     }
 
+    /// Remove a connection of `multiplicity` between `first_node` and `second_node`, updating the adjacency 
+    /// matrix, the spanning forest and the classification matrix in the process.
     fn remove_connection(&mut self, first_node: usize, second_node: usize, multiplicity: usize) {
         if first_node != second_node {
             *self.adjacency_matrix.get_mut(first_node, second_node) -= multiplicity;
             if *self.adjacency_matrix.get(first_node, second_node) == 0 {
+                // The nodes are not directly connected anymore - check if there is still an indirect connection
+                // between them, otherwise split the connection component and (re-)build both spanning trees
                 let first_component = self.find_connected_nodes(first_node);
                 if !first_component.contains(&second_node) {
                     let second_component = self.find_connected_nodes(second_node);
-                    self.connection_tree[first_node] = None;
-                    self.connection_tree[second_node] = None;
+                    self.connection_forest[first_node] = None;
+                    self.connection_forest[second_node] = None;
                     for node in second_component.iter().skip(1) {
-                        self.connection_tree[*node] = Some(second_node);
+                        self.connection_forest[*node] = Some(second_node);
                     }
                     for node in first_component.iter().skip(1) {
-                        self.connection_tree[*node] = Some(first_node);
+                        self.connection_forest[*node] = Some(first_node);
                     }
                     self.connection_components += 1;
                 }
@@ -133,6 +154,10 @@ impl TopologyWorkspace {
         self.node_classification.remove_connection(first_node, second_node, multiplicity);
     }
 
+    /// Find the next class used as initial class for constructing new edges. This is always the first class 
+    /// with open connections, except if there is a class which already has connections, but is not saturated.
+    /// Then this class is chosen. Since nodes with different connection structures are places in different 
+    /// classes by the refinement procedure, only the first node of each class has to be considered.
     fn find_next_class(&self) -> Option<usize> {
         let mut next_class = None;
         for (class, boundary) in self.node_classification.boundaries.iter().enumerate()
@@ -147,6 +172,8 @@ impl TopologyWorkspace {
         return next_class;
     }
 
+    /// Find the next class acting as target for the constructed edge. This is always the first node with
+    /// open connections not excluded by `excluded_nodes`.
     fn find_next_target_class(&self, excluded_nodes: &Vec<bool>) -> Option<usize> {
         for node_index in 0..self.nodes.len() {
             if excluded_nodes[node_index] {
@@ -160,8 +187,15 @@ impl TopologyWorkspace {
         return None;
     }
 
+    /// Check whether a found graph is a representative of its orbit. This is decided by regarding the entries
+    /// of the adjacency matrix as digits of a number, different graphs are then ordered by the size of this 
+    /// number. The graph is a representative, if its coding is larger or equal to the codings of all other 
+    /// permutations of the adjacency matrix. Since the nodes are classified by their topological properties,
+    /// only permutations within a class have to be considered.
+    /// 
+    /// When the graph is the representative, the symmetry number by node permutations is returned.
     fn is_representative(&self) -> Option<usize> {
-        return generate_permutations(&self.node_classification.get_partition_sizes())
+        return generate_permutations(&self.node_classification.get_class_sizes())
             .fold_while(Some(0usize), |acc, permutation| {
                 match self.adjacency_matrix.cmp_permutation(&permutation) {
                     Ordering::Equal => FoldWhile::Continue(Some(acc.unwrap() + 1)),
@@ -171,15 +205,20 @@ impl TopologyWorkspace {
             }).into_inner();
     }
 
+    /// Find and connect the next class.
     fn connect_next_class(&mut self) {
-        if let Some(next_classification) = self.node_classification.refine_classification(&self.adjacency_matrix) {
-            let previous_classification = self.node_classification.clone();
+        // First update the classification. If the classification from the current configuration is 
+        // inconsistent, return immediately.
+        if let Some(next_classification) = self.node_classification.update_classification(&self.adjacency_matrix) {
+            let previous_classification = self.node_classification.clone(); // Save current classification
             self.node_classification = next_classification;
-            if let Some(class) = self.find_next_class() {
+            if let Some(class) = self.find_next_class() { // Find the next class to be connected
+                // Start by connecting the first node of the class
                 self.connect_node(class, self.node_classification.boundaries[class]);
-            } else {
+            } else { // If there is no class remaining to be connected, the graph is fully constructed
                 if self.connection_components == 1 {
                     if let Some(node_symmetry) = self.is_representative() {
+                        // Only keep fully connected graphs which are representatives
                         let topology = Topology::from(&self, node_symmetry);
                         if self.topology_selector.select(&topology) {
                             self.topology_buffer.as_mut().unwrap().push(topology);
@@ -187,15 +226,19 @@ impl TopologyWorkspace {
                     }
                 }
             }
-            self.node_classification = previous_classification;
+            self.node_classification = previous_classification; // Restore previous classification for further connections
         }
     }
 
+    /// Try to connect `node`, or another remaining node in the class otherwise.
     fn connect_node(&mut self, class: usize, node: usize) {
         if node >= self.node_classification.boundaries[class+1] {
+            // If the requested node is not part of the given class, start connecting the next class
             self.connect_next_class();
         }
+        // Try connecting the remaining nodes in the class
         for class_node in node..self.node_classification.boundaries[class+1] {
+            // Graph cannot become fully connected by adding edges if this is not satisfied 
             if self.connection_components - 1 <= self.remaining_edges {
                 self.connect_leg(class, class_node, class, &vec![false; self.nodes.len()]);
                 return;
@@ -203,18 +246,23 @@ impl TopologyWorkspace {
         }
     }
 
+    /// Connect a leg of `node` to `target_class`, or to the next target class if not possible. All nodes
+    /// given in `skip_nodes` are ignored.
     fn connect_leg(&mut self, class: usize, node: usize, target_class: usize, skip_nodes: &Vec<bool>) {
         let mut current_target_class = target_class;
         let mut current_skip_nodes: Vec<bool> = (*skip_nodes).clone();
-
+        
         if self.nodes[node].open_connections == 0 {
+            // Return immediately if the graph cannot become fully connected
             if self.remaining_edges < (self.connection_components-1) ||
                 (self.connection_components > 1 && self.is_disconnected(node)) { return; }
+            // No remaining connections for `node` -> start connecting next node
             self.connect_node(class, node+1);
         } else {
             let mut advance_class = false;
             for _ in 0..self.nodes.len() {
                 if class != current_target_class || advance_class {
+                    // Find next class to connect `node` to, if there is none left, the graph is fully constructed
                     if let Some(next_target_class) = self.find_next_target_class(&current_skip_nodes) {
                         current_target_class = next_target_class;
                     } else { return; }
@@ -224,11 +272,14 @@ impl TopologyWorkspace {
                     if current_skip_nodes[target_node] {
                         continue;
                     } else {
+                        // All possible connection configurations for `target_node` will be constructed by the
+                        // current function - therefore all calls of `connect_leg` deeper in the recursion can
+                        // ignore `target_node`
                         current_skip_nodes[target_node] = true;
                     }
                     if class == current_target_class && target_node < node {
                         continue;
-                    } else if target_node == node {
+                    } else if target_node == node { // Construct self-loops
                         for multiplicity in
                             if self.nodes[node].open_connections == self.nodes[node].max_connections {
                                 // Node is completely disconnected from any other node
@@ -248,7 +299,7 @@ impl TopologyWorkspace {
                             self.remove_connection(node, node, multiplicity);
                             advance_class = false;
                         }
-                    } else {
+                    } else { // Construct edges between `node` and `target_node`
                         for multiplicity in
                             if self.nodes[node].open_connections == self.nodes[node].max_connections
                                 && self.nodes[target_node].open_connections == self.nodes[node].max_connections
@@ -267,12 +318,14 @@ impl TopologyWorkspace {
                     }
                 }
                 if skip_nodes.iter().all(|x| *x) {
+                    // Early exit if all nodes are taken care of
                     break;
                 }
             }
         }
     }
 
+    /// Generate all topologies of the current workspace.
     pub fn generate(&mut self) -> TopologyContainer {
         self.topology_buffer = Some(TopologyContainer::new());
         self.connect_next_class();
@@ -331,6 +384,7 @@ mod test {
             data: vec![
                 Topology {
                     n_external: 2,
+                    n_nodes: 4,
                     node_degrees: vec![4, 4],
                     adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 0, 1, 2, 1, 2]),
                     node_symmetry: 1,
@@ -338,6 +392,7 @@ mod test {
                 },
                 Topology {
                     n_external: 2,
+                    n_nodes: 4,
                     node_degrees: vec![4, 4],
                     adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 1, 0, 0, 2, 2]),
                     node_symmetry: 1,
@@ -345,6 +400,7 @@ mod test {
                 },
                 Topology {
                     n_external: 2,
+                    n_nodes: 4,
                     node_degrees: vec![4, 4],
                     adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 0, 1, 0, 3, 0]),
                     node_symmetry: 1,
