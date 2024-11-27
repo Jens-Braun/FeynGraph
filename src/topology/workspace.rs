@@ -27,12 +27,12 @@ pub struct TopologyWorkspace{
 impl TopologyWorkspace {
     /// Create new workspace for generating the topologies of `n_external` external particles and number and
     /// degrees of nodes given by `node_degrees`.
-    pub fn from_nodes(n_external: usize, node_degrees: &Vec<usize>) -> Self {
-        let node_degrees_sorted = node_degrees.clone().into_iter().sorted().collect_vec();
+    pub fn from_nodes(n_external: usize, node_degrees: &[usize]) -> Self {
+        let node_degrees_sorted = node_degrees.iter().copied().sorted().collect_vec();
         let node_classification = NodeClassification::from_degrees(&node_degrees_sorted);
         let mut nodes: Vec<TopologyNode> = Vec::with_capacity(node_degrees.len());
-        for degree in node_degrees_sorted.iter() {
-            nodes.push(TopologyNode::empty(*degree));
+        for degree in node_degrees_sorted {
+            nodes.push(TopologyNode::empty(degree));
         }
         return Self {
             n_external,
@@ -50,28 +50,19 @@ impl TopologyWorkspace {
     /// Return the root of the spanning tree to which `node` belongs. Flattens the tree in the process.
     fn find_root(&mut self, node: usize) -> usize {
         let mut current = node;
-        loop {
-            match self.connection_forest[current] {
-                Some(parent) =>  {
-                    if let Some(grandparent) = self.connection_forest[parent] {
-                        self.connection_forest[current] = Some(grandparent);
-                    }
-                    current = parent;
-                },
-                None => break
+        while let Some(parent) = self.connection_forest[current] {
+            if let Some(grandparent) = self.connection_forest[parent] {
+                self.connection_forest[current] = Some(grandparent);
             }
+            current = parent;
         }
         return current;
     }
 
     /// Get all nodes to which `node` has an edge, except itself if `node` has a self-loop.
     fn get_connections(&self, node: usize) -> Vec<usize> {
-        return (0..self.nodes.len()).filter_map(
-            |j| {
-                if j != node && *self.adjacency_matrix.get(node, j) != 0 {
-                    Some(j)
-                } else { None }
-            }
+        return (0..self.nodes.len()).filter(
+            |j| *j != node && *self.adjacency_matrix.get(node, *j) != 0
         ).collect();
     }
 
@@ -80,7 +71,7 @@ impl TopologyWorkspace {
         let mut visited: Vec<usize> = vec![node];
         let mut to_visit: Vec<usize> = vec![node];
         let mut current;
-        while to_visit.len() > 0 {
+        while !to_visit.is_empty() {
             current = to_visit.pop().unwrap();
             for node in self.get_connections(current) {
                 if !visited.contains(&node) {
@@ -174,14 +165,14 @@ impl TopologyWorkspace {
 
     /// Find the next class acting as target for the constructed edge. This is always the first node with
     /// open connections not excluded by `excluded_nodes`.
-    fn find_next_target_class(&self, excluded_nodes: &Vec<bool>) -> Option<usize> {
-        for node_index in 0..self.nodes.len() {
-            if excluded_nodes[node_index] {
+    fn find_next_target_class(&self, excluded_nodes: &[bool]) -> Option<usize> {
+        for (index, node) in self.nodes.iter().enumerate() {
+            if excluded_nodes[index] {
                 continue;
             }
-            match self.nodes[node_index].open_connections {
+            match node.open_connections {
                 0 => (),
-                _ => { return Some(self.node_classification.find_class(node_index)); }
+                _ => { return Some(self.node_classification.find_class(index)); }
             }
         }
         return None;
@@ -219,7 +210,7 @@ impl TopologyWorkspace {
                 if self.connection_components == 1 {
                     if let Some(node_symmetry) = self.is_representative() {
                         // Only keep fully connected graphs which are representatives
-                        let topology = Topology::from(&self, node_symmetry);
+                        let topology = Topology::from(self, node_symmetry);
                         if self.topology_selector.select(&topology) {
                             self.topology_buffer.as_mut().unwrap().push(topology);
                         }

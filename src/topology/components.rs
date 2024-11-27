@@ -38,7 +38,7 @@ impl NodeClassification {
     /// order. The initial classification is only based on the degrees, where nodes with identical degrees are 
     /// placed in the same class. Nodes with degree $1$ are assumed to be external and are therefore placed
     /// in different classes.
-    pub(crate) fn from_degrees(node_degrees: &Vec<usize>) -> Self {
+    pub(crate) fn from_degrees(node_degrees: &[usize]) -> Self {
         let mut boundaries: Vec<usize> = Vec::with_capacity(node_degrees.len());
         let mut previous = node_degrees[0];
         for (node_index, node_degree) in node_degrees.iter().enumerate() {

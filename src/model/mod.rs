@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use itertools::Itertools;
 use pyo3::exceptions::{PyIOError, PySyntaxError};
 use thiserror::Error;
@@ -10,6 +10,7 @@ use pyo3::prelude::*;
 
 mod ufoparser;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Error, Debug)]
 pub enum ModelError {
     #[error("Encountered illegal model option '{0}'")]
@@ -31,7 +32,7 @@ impl std::convert::From<ModelError> for PyErr {
     }
 }
 
-#[derive(PartialEq, Debug, Hash)]
+#[derive(PartialEq, Debug, Hash, Clone)]
 pub enum LineStyle {
     Dashed,
     Dotted,
@@ -43,7 +44,7 @@ pub enum LineStyle {
     Double
 }
 
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub struct Particle {
     name: String,
     pdg_code: isize,
@@ -69,7 +70,7 @@ impl Particle {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Vertex {
     name: String,
     particles: Vec<String>,
@@ -77,16 +78,21 @@ pub struct Vertex {
 }
 
 #[cfg_attr(feature = "python-bindings", pyclass)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Model {
     particles: HashMap<String, Particle>,
     vertices: HashMap<String, Vertex>,
     coupling_orders: Vec<String>
 }
 
+impl Model {
+    fn from_ufo(path: &Path) -> Result<Self, ModelError> {
+        return UFOParser::parse_ufo_model(path);
+    }
+}
+
 #[cfg_attr(feature = "python-bindings", pymethods)]
 impl Model {
-    
     #[cfg(feature = "python-bindings")]
     #[pyo3(name = "from_ufo")]
     #[staticmethod]
@@ -96,7 +102,7 @@ impl Model {
 }
 
 #[cfg_attr(feature = "python-bindings", pyclass)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct TopologyModel {
     vertex_degrees: Vec<usize>
 }
@@ -108,7 +114,7 @@ impl From<&Model> for TopologyModel {
             vertex_degrees.push(vertex.particles.len());
         }
         return Self {
-            vertex_degrees: vertex_degrees.into_iter().dedup().sorted().collect_vec(),
+            vertex_degrees: vertex_degrees.into_iter().sorted().dedup().collect_vec(),
         }
     }
 }
@@ -137,5 +143,29 @@ impl TopologyModel {
     #[new]
     fn new(degrees: Vec<usize>) -> Self {
         return TopologyModel { vertex_degrees: degrees };
+    }
+
+    #[staticmethod]
+    fn from_model(model: Model) -> Self {
+        let mut vertex_degrees = Vec::new();
+        for (_, vertex) in model.vertices.iter() {
+            vertex_degrees.push(vertex.particles.len());
+        }
+        return Self {
+            vertex_degrees: vertex_degrees.into_iter().sorted().dedup().collect_vec(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use crate::model::{Model, TopologyModel};
+
+    #[test]
+    fn model_conversion_test() {
+        let model = Model::from_ufo(&PathBuf::from("tests/Standard_Model_UFO")).unwrap();
+        let topology_model = TopologyModel::from(&model);
+        assert_eq!(topology_model, TopologyModel {vertex_degrees: vec![3, 4]});
     }
 }

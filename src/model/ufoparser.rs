@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path};
 use pest::Parser;
 use pest_derive::Parser;
 use crate::model::{LineStyle, Model, ModelError, Particle, Vertex};
@@ -11,7 +11,7 @@ use crate::model::ModelError::{ContentError};
 pub(crate) struct UFOParser;
 
 impl UFOParser {
-    fn parse_particles(path: &PathBuf) -> Result<HashMap<String, Particle>, ModelError> {
+    fn parse_particles(path: &Path) -> Result<HashMap<String, Particle>, ModelError> {
         let mut particles: HashMap<String, Particle> = HashMap::new();
         let particle_py_content = std::fs::read_to_string(path.join("particles.py"))?;
         let parsed_content = UFOParser::parse(Rule::particles_py, &particle_py_content)?.next().unwrap();
@@ -56,8 +56,8 @@ impl UFOParser {
                             _ => ()
                         }
                     }
-                    if linestyle == None {
-                        if spin == None || color == None {
+                    if linestyle.is_none() {
+                        if spin.is_none() || color.is_none() {
                             return Err(ContentError(format!("Illegal particle definition in model {:#?} at position {:?}: \
                             either 'line' or 'spin' and 'color' is required", path, position)));
                         }
@@ -104,7 +104,7 @@ impl UFOParser {
         return Ok(particles);
     }
 
-    fn parse_coupling_orders(path: &PathBuf) -> Result<Vec<String>, ModelError> {
+    fn parse_coupling_orders(path: &Path) -> Result<Vec<String>, ModelError> {
         let mut coupling_orders: Vec<String> = Vec::new();
         let coupling_orders_py_content = std::fs::read_to_string(path.join("coupling_orders.py"))?;
         let parsed_content = UFOParser::parse(Rule::coupling_orders_py, &coupling_orders_py_content)?.next().unwrap();
@@ -133,7 +133,7 @@ impl UFOParser {
         return Ok(coupling_orders);
     }
 
-    fn parse_couplings(path: &PathBuf) -> Result<HashMap<String, HashMap<String, usize>>, ModelError> {
+    fn parse_couplings(path: &Path) -> Result<HashMap<String, HashMap<String, usize>>, ModelError> {
         let mut couplings: HashMap<String, HashMap<String, usize>> = HashMap::new();
         let couplings_py_content = std::fs::read_to_string(path.join("couplings.py"))?;
         let parsed_content = UFOParser::parse(Rule::couplings_py, &couplings_py_content)?.next().unwrap();
@@ -161,7 +161,7 @@ impl UFOParser {
                             _ => unreachable!()
                         }
                     }
-                    if order.len() != 0 {
+                    if !order.is_empty() {
                         couplings.insert(py_name, order);
                     } else { 
                         return Err(ContentError(format!("Property 'order' is required for Coupling '{}'", py_name)));
@@ -174,7 +174,7 @@ impl UFOParser {
         return Ok(couplings);
     }
 
-    fn parse_vertices(path: &PathBuf) -> Result<HashMap<String, Vertex>, ModelError> {
+    fn parse_vertices(path: &Path) -> Result<HashMap<String, Vertex>, ModelError> {
         let mut vertices: HashMap<String, Vertex> = HashMap::new();
         let coupling_map = Self::parse_couplings(path)?;
         let vertices_py_content = std::fs::read_to_string(path.join("vertices.py"))?;
@@ -199,7 +199,7 @@ impl UFOParser {
                             },
                             Rule::property_couplings => {
                                 for coupling in property.into_inner() {
-                                    let current_orders = coupling_map.get(&coupling.as_str().to_string())
+                                    let current_orders = coupling_map.get(coupling.as_str())
                                         .unwrap().clone();
                                     if !coupling_orders_vec.contains(&current_orders) {
                                         coupling_orders_vec.push(current_orders);
@@ -212,7 +212,7 @@ impl UFOParser {
                             _ => unreachable!()
                         }
                     }
-                    if particles.len() != 0 {
+                    if !particles.is_empty() {
                         let n_distinct_orders = coupling_orders_vec.len();
                         match n_distinct_orders {
                             0 => return Err(ContentError(format!("Property 'order' required for vertex {}", &name))),
@@ -251,7 +251,7 @@ impl UFOParser {
         return Ok(vertices);
     }
 
-    pub(crate) fn parse_ufo_model(path: &PathBuf) -> Result<Model, ModelError> {
+    pub(crate) fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         let particles = Self::parse_particles(path)?;
         let coupling_orders = Self::parse_coupling_orders(path)?;
         let vertices = Self::parse_vertices(path)?;

@@ -70,7 +70,7 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
     pub fn cmp_permutation(&self, permutation: &[usize]) -> Ordering {
         for i in 0..self.dimension {
             for j in i..self.dimension {
-                match (*self.get(i, j)).cmp(&self.get(permutation[i]-1, permutation[j]-1)) {
+                match (*self.get(i, j)).cmp(self.get(permutation[i]-1, permutation[j]-1)) {
                     Ordering::Less => return Ordering::Less,
                     Ordering::Greater => return Ordering::Greater,
                     Ordering::Equal => (),

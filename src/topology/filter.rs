@@ -44,7 +44,7 @@ impl TopologySelector {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {
                 return if let NodeDegree { degree: inner_degree, .. } = criterion {
-                    if *inner_degree == degree { true } else { false }
+                    *inner_degree == degree
                 } else { false }
             }) {
             inner_selection.push(selection)
@@ -59,7 +59,7 @@ impl TopologySelector {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {
                 return if let NodeDegree { degree: inner_degree, .. } = criterion {
-                    if *inner_degree == degree { true } else { false }
+                    *inner_degree == degree
                 } else { false }
             }) {
             inner_selection.append(&mut selection)
@@ -86,7 +86,7 @@ impl TopologySelector {
         if let Some(NodeDegree { degree: _, selection: inner_selection }) =
             &mut self.criteria.iter_mut().find(|criterion| {
                 return if let NodeDegree { degree: inner_degree, .. } = criterion {
-                    if *inner_degree == degree { true } else { false }
+                    *inner_degree == degree
                 } else { false }
             }) {
             inner_selection.append(&mut selection.collect_vec())
@@ -97,7 +97,7 @@ impl TopologySelector {
     
     pub(crate) fn select(&self, topo: &Topology) -> bool {
         for criterion in &self.criteria {
-            if false == match criterion {
+            if !match criterion {
                 NodeDegree { degree, selection} => {
                     selection.iter().map(|count|  {
                         topo.node_degrees.iter().filter(|deg| **deg == *degree).count() == *count

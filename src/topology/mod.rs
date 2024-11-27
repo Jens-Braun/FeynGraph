@@ -50,15 +50,12 @@ impl Topology {
     }
 
     fn get_internal_connections(&self, node: usize) -> Vec<usize> {
-        return (self.n_external..(self.n_external+self.node_degrees.len())).filter_map(
-            |j| {
-                if j != node && *self.adjacency_matrix.get(node, j) != 0 {
-                    Some(j)
-                } else { None }
-            }
+        return (self.n_external..(self.n_external+self.node_degrees.len())).filter(
+            |j| *j != node && *self.adjacency_matrix.get(node, *j) != 0
         ).collect();
     }
     
+    #[allow(clippy::too_many_arguments)]
     fn bridge_dfs(&self, 
                   node: usize, 
                   parent: usize,
@@ -153,6 +150,10 @@ impl TopologyContainer {
     
     pub fn len(&self) -> usize {
         return self.data.len();
+    }
+    
+    pub fn is_empty(&self) -> bool {
+        return self.data.is_empty();
     }
 }
 

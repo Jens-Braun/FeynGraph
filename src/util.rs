@@ -24,7 +24,7 @@ pub(crate) fn find_partitions(values: impl Iterator<Item = usize>, sum: usize) -
         .map(|i| 0..=(*i))
         .multi_cartesian_product()
         .filter(|x| 
-            x.into_iter().enumerate().map(|(i, y)| (*y) * possible_values[i]).sum::<usize>() == sum
+            x.iter().enumerate().map(|(i, y)| (*y) * possible_values[i]).sum::<usize>() == sum
         ).collect_vec();
 }
 
