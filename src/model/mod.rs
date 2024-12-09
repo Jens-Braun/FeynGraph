@@ -1,12 +1,8 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use itertools::Itertools;
-use pyo3::exceptions::{PyIOError, PySyntaxError};
 use thiserror::Error;
 use crate::model::ufoparser::{Rule, UFOParser};
-
-#[cfg(feature = "python-bindings")]
-use pyo3::prelude::*;
 
 mod ufoparser;
 
@@ -19,17 +15,6 @@ pub enum ModelError {
     IOError(#[from] std::io::Error),
     #[error("Error while parsing UFO model")]
     ParseError(#[from] pest::error::Error<Rule>),
-}
-
-#[cfg(feature = "python-bindings")]
-impl std::convert::From<ModelError> for PyErr {
-    fn from(err: ModelError) -> PyErr {
-        match err {
-            ModelError::IOError(_) => PyIOError::new_err(err.to_string()),
-            ModelError::ParseError(_) => PySyntaxError::new_err(err.to_string()),
-            ModelError::ContentError(_) => PySyntaxError::new_err(err.to_string()),
-        }
-    }
 }
 
 #[derive(PartialEq, Debug, Hash, Clone)]
@@ -77,7 +62,6 @@ pub struct Vertex {
     couplings_orders: HashMap<String, usize>,
 }
 
-#[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct Model {
     particles: HashMap<String, Particle>,
@@ -86,22 +70,11 @@ pub struct Model {
 }
 
 impl Model {
-    fn from_ufo(path: &Path) -> Result<Self, ModelError> {
+    pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
         return UFOParser::parse_ufo_model(path);
     }
 }
 
-#[cfg_attr(feature = "python-bindings", pymethods)]
-impl Model {
-    #[cfg(feature = "python-bindings")]
-    #[pyo3(name = "from_ufo")]
-    #[staticmethod]
-    fn from_ufo_py(path: PathBuf) -> PyResult<Self> {
-        return Ok(UFOParser::parse_ufo_model(&path)?);
-    }
-}
-
-#[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Clone, PartialEq, Debug)]
 pub struct TopologyModel {
     vertex_degrees: Vec<usize>
@@ -109,6 +82,18 @@ pub struct TopologyModel {
 
 impl From<&Model> for TopologyModel {
     fn from(model: &Model) -> Self {
+        let mut vertex_degrees = Vec::new();
+        for (_, vertex) in model.vertices.iter() {
+            vertex_degrees.push(vertex.particles.len());
+        }
+        return Self {
+            vertex_degrees: vertex_degrees.into_iter().sorted().dedup().collect_vec(),
+        }
+    }
+}
+
+impl From<Model> for TopologyModel {
+    fn from(model: Model) -> Self {
         let mut vertex_degrees = Vec::new();
         for (_, vertex) in model.vertices.iter() {
             vertex_degrees.push(vertex.particles.len());
@@ -134,26 +119,6 @@ impl TopologyModel {
     
     pub fn degrees_iter(&self) -> impl Iterator<Item=usize> {
         return self.vertex_degrees.clone().into_iter();
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-#[pymethods]
-impl TopologyModel {
-    #[new]
-    fn new(degrees: Vec<usize>) -> Self {
-        return TopologyModel { vertex_degrees: degrees };
-    }
-
-    #[staticmethod]
-    fn from_model(model: Model) -> Self {
-        let mut vertex_degrees = Vec::new();
-        for (_, vertex) in model.vertices.iter() {
-            vertex_degrees.push(vertex.particles.len());
-        }
-        return Self {
-            vertex_degrees: vertex_degrees.into_iter().sorted().dedup().collect_vec(),
-        }
     }
 }
 

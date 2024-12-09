@@ -1,11 +1,9 @@
 use std::ops::Range;
 use itertools::Itertools;
-use pyo3::prelude::*;
 use crate::topology::filter::SelectionCriterion::*;
 use crate::topology::Topology;
 
 /// Possible criteria, which are used by a [TopologySelector] to decide whether a diagram is kept.
-#[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, Clone)]
 pub enum SelectionCriterion {
     /// Only keep topologies for which the count of nodes with `degree` is in `selection`
@@ -19,20 +17,12 @@ pub enum SelectionCriterion {
 /// A struct that decides whether a topology is to be kept or discarded. Only topologies for which
 /// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
 /// then select diagrams which satisfy any of them.
-#[cfg_attr(feature = "python-bindings", pyclass)]
 #[derive(Debug, Clone)]
 pub struct TopologySelector {
     criteria: Vec<SelectionCriterion>
 }
 
-#[cfg_attr(feature = "python-bindings", pymethods)]
 impl TopologySelector {
-    
-    /// Create a new [TopologySelector], which selects every topology.
-    #[new]
-    fn new() -> Self {
-        return Self::default();
-    }
     
     /// Add a [SelectionCriterion] to the selector.
     pub fn add_criterion(&mut self, criterion: SelectionCriterion) {
@@ -77,9 +67,12 @@ impl TopologySelector {
     pub fn add_opi_count(&mut self, count: usize) {
         self.criteria.push(OPIComponents(count));
     }
-}
 
-impl TopologySelector {
+    /// Clear the previously selected critera
+    pub fn clear_criteria(&mut self) {
+        self.criteria.clear();
+    }
+    
     /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
     /// in the range `selection`.
     pub fn add_node_degree_range(&mut self, degree: usize, selection: Range<usize>) {
@@ -147,6 +140,6 @@ impl TopologySelector {
 
 impl Default for TopologySelector {
     fn default() -> Self {
-        return Self { criteria: Vec::new()};
+        return Self { criteria: vec![OPIComponents(1)]};
     }
 }
