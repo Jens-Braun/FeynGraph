@@ -99,6 +99,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "pyo3",
+ "pyo3-ffi",
  "pyo3-log",
  "rayon",
  "thiserror 2.0.3",

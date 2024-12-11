@@ -1,12 +1,16 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyIOError, PySyntaxError};
 use std::path::PathBuf;
+use std::sync::Arc;
+use itertools::Itertools;
+use pyo3::types::PyFunction;
 use crate::{
     model::{
         ModelError, Model, TopologyModel
     }, 
     topology::{
-        Topology, TopologyContainer, TopologyGenerator, filter::TopologySelector
+        Node, Edge, Topology, TopologyContainer, TopologyGenerator, 
+        filter::{TopologySelector, SelectionCriterion}
     }
 };
 
@@ -22,7 +26,13 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     topology_submodule.add_class::<PyTopologySelector>()?;
     m.add_submodule(&topology_submodule)?;
     m.add_class::<PyModel>()?;
+    m.add_function(wrap_pyfunction!(set_threads, m)?)?;
     return Ok(());
+}
+
+#[pyfunction]
+fn set_threads(n_threads: usize) {
+    rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global().unwrap();
 }
 
 impl std::convert::From<ModelError> for PyErr {
@@ -51,7 +61,7 @@ impl PyTopologyModel {
         return format!("{:#?}", self.0);
     }
 
-    fn __str(&self) -> String {
+    fn __str__(&self) -> String {
         return format!("{:?}", self.0);
     }
 }
@@ -82,7 +92,7 @@ impl PyModel {
         return format!("{:#?}", self.0);
     }
 
-    fn __str(&self) -> String {
+    fn __str__(&self) -> String {
         return format!("{:?}", self.0);
     }
 }
@@ -104,6 +114,11 @@ impl PyTopologySelector {
     fn new() -> Self {
         return Self(TopologySelector::default());
     }
+    
+    #[staticmethod]
+    fn empty() -> Self {
+        return Self(TopologySelector::new());
+    }
 
     fn select_node_degree(&mut self, degree: usize, selection: usize) {
         self.0.add_node_degree(degree, selection);
@@ -120,6 +135,18 @@ impl PyTopologySelector {
     fn select_opi_components(&mut self, opi_count: usize) {
         self.0.add_opi_count(opi_count);
     }
+    
+    fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
+        self.0.add_criterion(SelectionCriterion::CustomCriterion(
+            Arc::new(move |topo: &Topology| -> bool { 
+                Python::with_gil( |py| -> bool {
+                    py_function.call1(py, (PyTopology(topo.clone()),)).unwrap().extract(py).unwrap()
+                }
+                )
+                
+            })
+        ))
+    }
 
     fn clear_critera(&mut self) {
         self.0.clear_criteria();
@@ -129,7 +156,7 @@ impl PyTopologySelector {
         return format!("{:#?}", self.0);
     }
 
-    fn __str(&self) -> String {
+    fn __str__(&self) -> String {
         return format!("{:?}", self.0);
     }
 }
@@ -142,21 +169,65 @@ impl From<PyTopologySelector> for TopologySelector {
 
 #[derive(Clone)]
 #[pyclass]
+#[pyo3(name = "Node")]
+struct PyNode(Node);
+
+#[pymethods]
+impl PyNode {
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+}
+
+#[derive(Clone)]
+#[pyclass]
+#[pyo3(name = "Edge")]
+struct PyEdge(Edge);
+
+#[pymethods]
+impl PyEdge {
+    
+    fn get_nodes(&self) -> (usize, usize) {
+        return self.0.connected_nodes.clone();
+    }
+    
+    fn get_momentum(&self) -> Vec<i8> {
+        return self.0.momenta.as_ref().unwrap().clone();
+    }
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+}
+
+#[derive(Clone)]
+#[pyclass]
 #[pyo3(name = "Topology")]
 struct PyTopology(Topology);
 
 #[pymethods]
 impl PyTopology {
-    fn get_adjacency_matrix(&self) -> Vec<Vec<usize>> {
-        return self.0.get_adjacency_matrix();
+    fn get_nodes(&self) -> Vec<PyNode> {
+        return self.0.nodes_iter().map(|node| PyNode(node.clone())).collect_vec();
+    }
+
+    fn get_edges(&self) -> Vec<PyEdge> {
+        return self.0.edges_iter().map(|edge| PyEdge(edge.clone())).collect_vec();
     }
 
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }
 
-    fn __str(&self) -> String {
-        return format!("{:?}", self.0);
+    fn __str__(&self) -> String {
+        return format!("{}", self.0);
     }
 }
 
@@ -166,6 +237,11 @@ struct PyTopologyContainer(TopologyContainer);
 
 #[pymethods]
 impl PyTopologyContainer {
+    
+    fn query(&self, selector: &PyTopologySelector) -> Option<usize> {
+        return self.0.query(&selector.0);
+    }
+    
     fn __len__(&self) -> usize {
         return self.0.len();
     }
@@ -187,14 +263,58 @@ impl PyTopologyGenerator {
         model: PyTopologyModel, 
         selector: Option<PyTopologySelector>
     ) -> PyTopologyGenerator {
-        if let Some(selector) = selector {
-            return Self(TopologyGenerator::new(n_external, n_loops, model.into(), Some(selector.into())));
+        return if let Some(selector) = selector {
+            Self(TopologyGenerator::new(n_external, n_loops, model.into(), Some(selector.into())))
         } else {
-            return Self(TopologyGenerator::new(n_external, n_loops, model.into(), None));
+            Self(TopologyGenerator::new(n_external, n_loops, model.into(), None))
         }
     }
 
-    fn generate(&self) -> PyTopologyContainer {
-        return PyTopologyContainer(self.0.generate());
+    fn generate(&self, py: Python<'_>) -> PyTopologyContainer {
+        return py.allow_threads(
+            || -> PyTopologyContainer {
+                return PyTopologyContainer(self.0.generate());
+            }
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::prelude::*;
+    use pyo3::types::PyFunction;
+    use pyo3_ffi::c_str;
+    use super::*;
+
+    #[test]
+    fn py_topology_generator_py_function() {
+        let filter: Py<PyFunction> = Python::with_gil(|py| -> Py<PyFunction> {
+           PyModule::from_code(py, c_str!("def no_self_loops(topo):
+    for edge in topo.get_edges():
+        nodes = edge.get_nodes()
+        if nodes[0] == nodes[1]:
+            return False
+    return True
+           "),
+           c_str!(""),
+           c_str!("")
+           ).unwrap()
+               .getattr("no_self_loops")
+               .unwrap()
+               .downcast_into().unwrap()
+               .unbind()
+        });
+        let mut selector = PyTopologySelector::new();
+        selector.add_custom_function(filter);
+        let generator = PyTopologyGenerator::new(
+            2, 
+            1, 
+            PyTopologyModel::new(vec![3, 4]),
+            Some(selector)
+        );
+        let topologies = Python::with_gil(|py| {
+            generator.generate(py)
+        });        
+        assert_eq!(topologies.__len__(), 1);
     }
 }

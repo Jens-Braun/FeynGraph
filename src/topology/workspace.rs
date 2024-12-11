@@ -9,6 +9,7 @@ use crate::util::generate_permutations;
 #[derive(Debug)]
 pub struct TopologyWorkspace{
     pub(crate) n_external: usize,
+    pub(crate) n_loops: usize,
     /// List of nodes in ascending order by their degrees
     pub(crate) nodes: Vec<TopologyNode>,
     pub(crate) adjacency_matrix: SymmetricMatrix<usize>,
@@ -27,7 +28,7 @@ pub struct TopologyWorkspace{
 impl TopologyWorkspace {
     /// Create new workspace for generating the topologies of `n_external` external particles and number and
     /// degrees of nodes given by `node_degrees`.
-    pub fn from_nodes(n_external: usize, node_degrees: &[usize]) -> Self {
+    pub fn from_nodes(n_external: usize, n_loops: usize, node_degrees: &[usize]) -> Self {
         let node_degrees_sorted = node_degrees.iter().copied().sorted().collect_vec();
         let node_classification = NodeClassification::from_degrees(&node_degrees_sorted);
         let mut nodes: Vec<TopologyNode> = Vec::with_capacity(node_degrees.len());
@@ -36,6 +37,7 @@ impl TopologyWorkspace {
         }
         return Self {
             n_external,
+            n_loops,
             nodes,
             connection_forest: vec![None; node_degrees.len()],
             connection_components: node_degrees.len(),
@@ -329,13 +331,13 @@ impl TopologyWorkspace {
 mod test {
     use itertools::Itertools;
     use crate::topology::matrix::SymmetricMatrix;
-    use crate::topology::{Topology, TopologyContainer};
+    use crate::topology::{Node, Edge, Topology, TopologyContainer};
     use super::*;
 
     #[test]
     fn connection_test () {
         let nodes: Vec<usize> = vec![1, 1, 1, 1, 4, 4];
-        let mut graph = TopologyWorkspace::from_nodes(4, &nodes);
+        let mut graph = TopologyWorkspace::from_nodes(4, 1, &nodes);
         assert_eq!(graph.connection_components, 6);
         graph.add_connection(0, 4, 1);
         graph.add_connection(1, 5, 1);
@@ -349,7 +351,7 @@ mod test {
     #[test]
     fn representative_test () {
         let nodes: Vec<usize> = vec![1, 4, 4, 1];
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let mut workspace = TopologyWorkspace::from_nodes(2, 2, &nodes);
         let adjacency_data: Vec<usize> = vec![0, 0, 1, 0, 0, 0, 1, 2, 1, 2];
         workspace.adjacency_matrix = SymmetricMatrix::from_vec(4, adjacency_data);
         assert!(workspace.is_representative().is_some());
@@ -361,7 +363,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_1_loop() {
         let nodes: Vec<usize> = vec![1, 3, 3, 1];
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 1, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 2);
     }
@@ -369,34 +373,72 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_2_loop() {
         let nodes: Vec<usize> = vec![1, 4, 4, 1];
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 2, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         let topologies_ref = TopologyContainer {
             data: vec![
                 Topology {
                     n_external: 2,
-                    n_nodes: 4,
-                    node_degrees: vec![4, 4],
-                    adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 0, 1, 2, 1, 2]),
+                    nodes: vec![
+                        Node::new(1, vec![2]), 
+                        Node::new(1, vec![3]),
+                        Node::new(4, vec![0, 2, 3]),
+                        Node::new(4, vec![1, 2, 3])
+                    ],
+                    edges: vec![
+                        Edge::new((0, 2), Some(vec![1, 0, 0, 0])),
+                        Edge::new((1, 3), Some(vec![0, 1, 0, 0])),
+                        Edge::new((2, 2), Some(vec![0, 0, 1, 0])),
+                        Edge::new((2, 3), Some(vec![1, 0, 0, 0])),
+                        Edge::new((3, 3), Some(vec![0, 0, 0, 1])),
+                    ],
                     node_symmetry: 1,
-                    edge_symmetry: 4
+                    edge_symmetry: 4,
+                    momentum_labels: vec![String::from("p1"), String::from("p2"), 
+                                          String::from("l1"), String::from("l2")],
                 },
                 Topology {
                     n_external: 2,
-                    n_nodes: 4,
-                    node_degrees: vec![4, 4],
-                    adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 1, 0, 0, 2, 2]),
+                    nodes: vec![
+                        Node::new(1, vec![2]),
+                        Node::new(1, vec![2]),
+                        Node::new(4, vec![0, 1, 3]),
+                        Node::new(4, vec![2, 3])
+                    ],
+                    edges: vec![
+                        Edge::new((0, 2), Some(vec![1, 0, 0, 0])),
+                        Edge::new((1, 2), Some(vec![0, 1, 0, 0])),
+                        Edge::new((2, 3), Some(vec![0, 0, 0, 1])),
+                        Edge::new((2, 3), Some(vec![0, 0, 0, -1])),
+                        Edge::new((3, 3), Some(vec![0, 0, 1, 0])),
+                    ],
                     node_symmetry: 1,
-                    edge_symmetry: 4
+                    edge_symmetry: 4,
+                    momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                          String::from("l1"), String::from("l2")],
                 },
                 Topology {
                     n_external: 2,
-                    n_nodes: 4,
-                    node_degrees: vec![4, 4],
-                    adjacency_matrix: SymmetricMatrix::from_vec(4, vec![0, 0, 1, 0, 0, 0, 1, 0, 3, 0]),
+                    nodes: vec![
+                        Node::new(1, vec![2]),
+                        Node::new(1, vec![3]),
+                        Node::new(4, vec![0, 3]),
+                        Node::new(4, vec![1, 2])
+                    ],
+                    edges: vec![
+                        Edge::new((0, 2), Some(vec![1, 0, 0, 0])),
+                        Edge::new((1, 3), Some(vec![0, 1, 0, 0])),
+                        Edge::new((2, 3), Some(vec![1, 0, 1, 0])),
+                        Edge::new((2, 3), Some(vec![0, 0, -1, 1])),
+                        Edge::new((2, 3), Some(vec![0, 0, 0, -1])),
+                    ],
                     node_symmetry: 1,
-                    edge_symmetry: 6
-                }
+                    edge_symmetry: 6,
+                    momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                          String::from("l1"), String::from("l2")],
+                },
             ]
         };
         assert_eq!(topologies, topologies_ref);
@@ -405,7 +447,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_3point_4_vertices() {
         let nodes: Vec<usize> = [vec![1_usize; 2], vec![3_usize; 4]].into_iter().flatten().collect_vec();
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 2, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 10);
     }
@@ -413,7 +457,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_3point_6_vertices() {
         let nodes: Vec<usize> = [vec![1_usize; 2], vec![3_usize; 6]].into_iter().flatten().collect_vec();
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 3, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 66);
     }
@@ -421,7 +467,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_3point_8_vertices() {
         let nodes: Vec<usize> = [vec![1_usize; 2], vec![3_usize; 8]].into_iter().flatten().collect_vec();
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 4, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 511);
     }
@@ -429,7 +477,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_3point_10_vertices() {
         let nodes: Vec<usize> = [vec![1_usize; 2], vec![3_usize; 10]].into_iter().flatten().collect_vec();
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 6, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 4536);
     }
@@ -437,7 +487,9 @@ mod test {
     #[test]
     fn topology_workspace_generate_test_3point_12_vertices() {
         let nodes: Vec<usize> = [vec![1_usize; 2], vec![3_usize; 12]].into_iter().flatten().collect_vec();
-        let mut workspace = TopologyWorkspace::from_nodes(2, &nodes);
+        let selector = TopologySelector::new();
+        let mut workspace = TopologyWorkspace::from_nodes(2, 6, &nodes);
+        workspace.topology_selector = selector;
         let topologies = workspace.generate();
         assert_eq!(topologies.inner_ref().len(), 45519);
     }

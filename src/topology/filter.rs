@@ -1,10 +1,12 @@
+use std::fmt::Formatter;
 use std::ops::Range;
+use std::sync::Arc;
 use itertools::Itertools;
 use crate::topology::filter::SelectionCriterion::*;
 use crate::topology::Topology;
 
 /// Possible criteria, which are used by a [TopologySelector] to decide whether a diagram is kept.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SelectionCriterion {
     /// Only keep topologies for which the count of nodes with `degree` is in `selection`
     NodeDegree {degree: usize, selection: Vec<usize>},
@@ -12,6 +14,25 @@ pub enum SelectionCriterion {
     NodePartition(Vec<(usize, usize)>),
     /// Only keep topologies with the specified number of one-particle-irreducible components
     OPIComponents(usize),
+    /// Only keep topologies for which the custom function returns `true`
+    CustomCriterion(Arc<dyn Fn(&Topology) -> bool + Sync + Send>)
+}
+
+impl std::fmt::Debug for SelectionCriterion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectionCriterion::NodeDegree {degree, selection} => { 
+                f.debug_tuple("NodeDegree").field(degree).field(selection).finish()
+            },
+            SelectionCriterion::NodePartition(partition) => { 
+                f.debug_tuple("NodePartition").field(partition).finish() 
+            },
+            SelectionCriterion::OPIComponents(n) => { 
+                f.debug_tuple("OPIComponents").field(n).finish() 
+            },
+            SelectionCriterion::CustomCriterion(_) => { f.debug_tuple("CustomCriterion").finish() }
+        }
+    }
 }
 
 /// A struct that decides whether a topology is to be kept or discarded. Only topologies for which
@@ -23,6 +44,11 @@ pub struct TopologySelector {
 }
 
 impl TopologySelector {
+    
+    /// Create a new [TopologySelector] which selects every diagram.
+    pub fn new() -> Self {
+        return Self {criteria: Vec::new()};
+    }
     
     /// Add a [SelectionCriterion] to the selector.
     pub fn add_criterion(&mut self, criterion: SelectionCriterion) {
@@ -93,17 +119,18 @@ impl TopologySelector {
             if !match criterion {
                 NodeDegree { degree, selection} => {
                     selection.iter().map(|count|  {
-                        topo.node_degrees.iter().filter(|deg| **deg == *degree).count() == *count
+                        topo.nodes.iter().filter(|node| node.degree == *degree).count() == *count
                     }).any(|x| x)
                 },
                 NodePartition(partition) => {
                     partition.iter().map(|(degree, count)|  {
-                        topo.node_degrees.iter().filter(|deg| **deg == *degree).count() == *count
+                        topo.nodes.iter().filter(|node| node.degree == *degree).count() == *count
                     }).all(|x| x)
                 }
                 OPIComponents(count) => {
                     topo.count_opi() == *count
                 }
+                CustomCriterion(f) => f(topo),
             } {
                 return false;
             }
