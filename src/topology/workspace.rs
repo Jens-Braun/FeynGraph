@@ -381,6 +381,7 @@ mod test {
             data: vec![
                 Topology {
                     n_external: 2,
+                    n_loops: 2,
                     nodes: vec![
                         Node::new(1, vec![2]), 
                         Node::new(1, vec![3]),
@@ -398,9 +399,11 @@ mod test {
                     edge_symmetry: 4,
                     momentum_labels: vec![String::from("p1"), String::from("p2"), 
                                           String::from("l1"), String::from("l2")],
+                    bridges: vec![(2, 3)]
                 },
                 Topology {
                     n_external: 2,
+                    n_loops: 2,
                     nodes: vec![
                         Node::new(1, vec![2]),
                         Node::new(1, vec![2]),
@@ -418,9 +421,11 @@ mod test {
                     edge_symmetry: 4,
                     momentum_labels: vec![String::from("p1"), String::from("p2"),
                                           String::from("l1"), String::from("l2")],
+                    bridges: vec![]
                 },
                 Topology {
                     n_external: 2,
+                    n_loops: 2,
                     nodes: vec![
                         Node::new(1, vec![2]),
                         Node::new(1, vec![3]),
@@ -438,6 +443,7 @@ mod test {
                     edge_symmetry: 6,
                     momentum_labels: vec![String::from("p1"), String::from("p2"),
                                           String::from("l1"), String::from("l2")],
+                    bridges: vec![]
                 },
             ]
         };

@@ -63,11 +63,13 @@ impl Edge {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Topology {
     n_external: usize,
+    n_loops: usize,
     nodes: Vec<Node>,
     edges: Vec<Edge>,
     node_symmetry: usize,
     edge_symmetry: usize,
     momentum_labels: Vec<String>,
+    bridges: Vec<(usize, usize)>
 }
 
 impl Topology {
@@ -81,7 +83,6 @@ impl Topology {
             }
         }
         
-        let n_momenta = workspace.n_external + workspace.n_loops;
         let nodes = workspace.nodes.iter().enumerate().map(|(i, topo_node)| Node::from_matrix(
             topo_node.max_connections,
             &workspace.adjacency_matrix,
@@ -97,115 +98,11 @@ impl Topology {
                     edges.push(Edge::empty((i, j)));
                 }
             }
-        }
+        }        
         
-        // Momentum Assignment
-        let mut remaining_nodes = nodes.iter().map(|node| node.adjacent_nodes.len()).collect_vec();
-        let mut current_loop_momentum: usize = workspace.n_external;
-        
-        // First assign loop momenta to self-loops
-        for edge in edges.iter_mut().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1) {
-            let mut momenta = vec![0; n_momenta];
-            momenta[current_loop_momentum] = 1;
-            edge.momenta = Some(momenta);
-            current_loop_momentum += 1;
-            // Only decrease the number of remaining neighboring nodes if not done before, otherwise
-            // the number will be decreased multiple times for nodes with multiple self-loops
-            if nodes[edge.connected_nodes.0].adjacent_nodes.len() == remaining_nodes[edge.connected_nodes.0] {
-                remaining_nodes[edge.connected_nodes.0] -= 1;
-            }
-        }
-        
-        // External momenta
-        for edge in edges.iter_mut().take(workspace.n_external) {
-            let mut momenta = vec![0; n_momenta];
-            momenta[edge.connected_nodes.0] = 1;
-            edge.momenta = Some(momenta);
-            remaining_nodes[edge.connected_nodes.0] -= 1;
-            remaining_nodes[edge.connected_nodes.1] -= 1;
-        }
-        
-        // Remaining internal momenta
-        while remaining_nodes.iter().any(|x| *x > 0) {
-            // Always assign the node with the most momentum information
-            let current_node = remaining_nodes.iter().position_min_by_key(
-                |x| if **x > 0 {**x} else {usize::MAX}
-            ).unwrap();
-            
-            // Momentum currently flowing into current_node
-            let mut momenta = edges.iter()
-                .filter(|edge| edge.momenta.is_some())
-                .filter(|edge| edge.connected_nodes.0 == current_node || edge.connected_nodes.1 == current_node)
-                .filter(|edge| edge.connected_nodes.0 != edge.connected_nodes.1)
-                .fold(vec![0; n_momenta], |acc, edge| {
-                    if edge.connected_nodes.1 == current_node {
-                        acc.iter().zip((*edge.momenta.as_ref().unwrap()).iter()).map(|(x, y)| *x + *y).collect_vec()
-                    } else {
-                        acc.iter().zip((*edge.momenta.as_ref().unwrap()).iter()).map(|(x, y)| *x - *y).collect_vec()
-                    }
-                });
-            // Next edge to which the momentum is assigned
-            let mut current_edges = edges.iter_mut().filter(|edge|
-                edge.momenta == None && (
-                    edge.connected_nodes.0 == current_node ||
-                        edge.connected_nodes.1 == current_node
-                )
-            ).collect_vec();
-            let connected_node = if current_edges[0].connected_nodes.0 == current_node {
-                current_edges[0].connected_nodes.1
-            } else {
-                current_edges[0].connected_nodes.0
-            };
-            current_edges = current_edges.into_iter().filter(
-                |edge| {
-                    (edge.connected_nodes.0 == current_node && edge.connected_nodes.1 == connected_node) ||
-                        (edge.connected_nodes.1 == current_node && edge.connected_nodes.0 == connected_node)
-                }
-            ).collect_vec();
-            
-            // If there is more than one connection open, assign all at the same time
-            if current_edges.len() > 1 {
-                let n_edges = current_edges.len();
-                momenta[current_loop_momentum] = 1;
-                current_loop_momentum += 1;
-                for (i, edge) in current_edges.into_iter().enumerate() {
-                    // k_1 = p + l_1
-                    if i == 0 {
-                        edge.momenta = Some(momenta.clone());
-                    } else {
-                        // k_N = -l_{N-1}
-                        if i == n_edges - 1 {
-                            let mut momenta = vec![0; n_momenta];
-                            momenta[current_loop_momentum - 1] = -1;
-                            edge.momenta = Some(momenta);
-                            remaining_nodes[edge.connected_nodes.0] -= 1;
-                            remaining_nodes[edge.connected_nodes.1] -= 1;
-                        } else {
-                            // k_i = l_i - l_{i-1} for 1 < i < N
-                            let mut momenta = vec![0; n_momenta];
-                            momenta[current_loop_momentum - 1] = -1;
-                            momenta[current_loop_momentum] = 1;
-                            current_loop_momentum += 1;
-                            edge.momenta = Some(momenta);
-                        }
-                    }
-                }
-            } else {
-                current_edges[0].momenta = Some(momenta);
-                remaining_nodes[current_edges[0].connected_nodes.0] -= 1;
-                remaining_nodes[current_edges[0].connected_nodes.1] -= 1;
-            }
-        }
-        
-        // Use global momentum conservation to reduce momenta
-        for edge in edges.iter_mut() {
-            if edge.momenta.as_ref().unwrap().iter().take(workspace.n_external).all(|x| x.abs() == 1) {
-                edge.momenta.as_mut().unwrap().iter_mut().take(workspace.n_external).for_each(|x| *x = 0);
-            }
-        }
-        
-        return Topology {
+        let mut topo = Topology {
             n_external: workspace.n_external,
+            n_loops: workspace.n_loops,
             nodes,
             edges,
             node_symmetry,
@@ -214,6 +111,168 @@ impl Topology {
                 (1..=workspace.n_external).map(|i| format!("p{}", i)).collect_vec(),
                 (1..=workspace.n_loops).map(|i| format!("l{}", i)).collect_vec(),
             ].into_iter().flatten().collect_vec(),
+            bridges: Vec::new(),
+        };
+        topo.assign_momenta();
+        return topo;
+    }
+    
+    fn assign_momenta(&mut self) {
+        let mut current_loop_momentum = self.n_external;
+        let n_momenta = self.n_external + self.n_loops;
+        // First assign loop momenta to self-loops
+        for edge in self.edges.iter_mut().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1) {
+            let mut momenta = vec![0; n_momenta];
+            momenta[current_loop_momentum] = 1;
+            edge.momenta = Some(momenta);
+            current_loop_momentum += 1;
+        }
+        
+        let mut visited = vec![false; self.nodes.len()];
+        let mut distance = vec![0; self.nodes.len()];
+        let mut shortest_distance = vec![0; self.nodes.len()];
+        let mut momentum_distance = vec![Vec::new(); self.nodes.len()];
+        let mut momenta = vec![0; self.momentum_labels.len()];
+        
+        let step = 0;
+        self.momentum_dfs(self.nodes[0].adjacent_nodes[0], 0, &mut visited, &mut distance, 
+                          &mut shortest_distance, &mut momentum_distance,
+                          step, &mut current_loop_momentum, &mut momenta);
+
+        // External momenta
+        for edge in self.edges.iter_mut().take(self.n_external) {
+            let mut momenta = vec![0; n_momenta];
+            momenta[edge.connected_nodes.0] = 1;
+            edge.momenta = Some(momenta);
+        }
+        
+        for edge in self.edges.iter_mut() {
+            if !(self.nodes[edge.connected_nodes.0].degree == 1 || self.nodes[edge.connected_nodes.1].degree == 1)
+                && edge.momenta.as_ref().unwrap()[self.n_external - 1] != 0 {
+                for i in 0..self.n_external {
+                    edge.momenta.as_mut().unwrap()[i] -= edge.momenta.as_ref().unwrap()[self.n_external - 1];
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn momentum_dfs(&mut self,
+                    node: usize,
+                    parent: usize,
+                    visited: &mut Vec<bool>,
+                    distance: &mut Vec<usize>,
+                    shortest_distance: &mut Vec<usize>,
+                    momentum_distance: &mut Vec<Vec<usize>>,
+                    mut step: usize,
+                    current_loop_momentum: &mut usize,
+                    momenta: &mut Vec<i8>) {
+        step += 1;
+        distance[node] = step;
+        shortest_distance[node] = step;
+        momentum_distance[node] = vec![step; self.n_external + self.n_loops];
+        visited[node] = true;
+        *momenta = vec![0; momenta.len()];
+        let mut local_momenta = vec![0; momenta.len()];
+        for connected_node in self.nodes[node].adjacent_nodes.clone().into_iter() {
+            if connected_node < self.n_external {
+                local_momenta[connected_node] = -1;
+                continue;
+            }
+            if connected_node == node || self.edges.iter().filter(
+                |edge| edge.connected_nodes == (node, connected_node)  || edge.connected_nodes == (connected_node, node)
+            ).any(|edge| edge.momenta.is_some()) {
+                continue;
+            }
+            if connected_node == parent {
+                if self.get_multiplicity(node, connected_node) > 1 {
+                    shortest_distance[node] = min(shortest_distance[node], shortest_distance[parent]);
+                }
+                continue;
+            }
+            
+            let invert_direction = node > connected_node;
+            
+            if visited[connected_node] {
+                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
+                momentum_distance[node][*current_loop_momentum] = min(
+                    momentum_distance[node][*current_loop_momentum],
+                    momentum_distance[connected_node][*current_loop_momentum],
+                );
+                let mut momentum = vec![0; self.n_external + self.n_loops];
+                momentum[*current_loop_momentum] = 1;
+                *current_loop_momentum += 1;
+                if !invert_direction {
+                    self.assign_momentum(node, connected_node, momentum, current_loop_momentum);
+                } else {
+                    self.assign_momentum(node, connected_node,
+                                         momentum.clone().into_iter().map(|x| -x).collect(),
+                                         current_loop_momentum);
+                }
+            } else {
+                self.momentum_dfs(connected_node, node, visited, distance, shortest_distance, 
+                                  momentum_distance, step, current_loop_momentum, momenta);
+                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
+                let mut current_momentum = momenta.clone();
+                for l in self.n_external..(self.n_external+self.n_loops) {
+                    if momentum_distance[connected_node][l] <= momentum_distance[node][l] {
+                        current_momentum[l] = 1;
+                    }
+                    momentum_distance[node][l] = min(
+                        momentum_distance[node][l],
+                        momentum_distance[connected_node][l]
+                    );
+                }
+                
+                if !invert_direction {
+                    self.assign_momentum(node, connected_node, current_momentum, current_loop_momentum);
+                } else {
+                    self.assign_momentum(node, connected_node, 
+                                         current_momentum.clone().into_iter().map(|x| -x).collect(), 
+                                         current_loop_momentum);
+                }
+                
+                if shortest_distance[connected_node] > distance[node] {
+                    self.bridges.push((node, connected_node));
+                }
+            }
+        }
+        *momenta = momenta.into_iter().zip(local_momenta).map(|(x, y)| *x + y).collect();
+    }
+    
+    fn assign_momentum(&mut self, first_node: usize, second_node: usize, momentum: Vec<i8>, 
+                       current_loop_momentum: &mut usize) {
+        let n_momenta = self.n_external + self.n_loops;
+        let current_edges = self.edges.iter_mut().filter(
+            |other_edge| 
+                other_edge.connected_nodes == (first_node, second_node) ||
+                    other_edge.connected_nodes == (second_node, first_node)
+        ).collect_vec();
+        let n_edges = current_edges.len();
+        for (i, edge) in current_edges.into_iter().enumerate() {
+            // k_1 = p + l_1
+            if i == 0 {
+                let mut momentum = momentum.clone();
+                if n_edges > 1 {
+                    momentum[*current_loop_momentum] = 1;
+                    *current_loop_momentum += 1;
+                }
+                edge.momenta = Some(momentum);
+            } else {
+                // k_N = -l_{N-1}
+                if i == n_edges - 1 {
+                    let mut momenta = vec![0; n_momenta];
+                    momenta[*current_loop_momentum - 1] = -1;
+                    edge.momenta = Some(momenta);
+                } else {
+                    // k_i = l_i - l_{i-1} for 1 < i < N
+                    let mut momenta = vec![0; n_momenta];
+                    momenta[*current_loop_momentum - 1] = -1;
+                    momenta[*current_loop_momentum] = 1;
+                    *current_loop_momentum += 1;
+                    edge.momenta = Some(momenta);
+                }
+            }
         }
     }
 
@@ -223,47 +282,8 @@ impl Topology {
         ).count();
     }
     
-    #[allow(clippy::too_many_arguments)]
-    fn bridge_dfs(&self, 
-                  node: usize, 
-                  parent: usize,
-                  visited: &mut Vec<bool>, 
-                  distance: &mut Vec<usize>, 
-                  shortest_distance: &mut Vec<usize>, 
-                  mut step: usize, 
-                  bridges: &mut Vec<(usize, usize)>) {
-        step += 1;
-        distance[node] = step;
-        shortest_distance[node] = step;
-        visited[node] = true;
-        for connected_node in self.nodes[node].adjacent_nodes.iter().cloned() {
-            if connected_node == node { continue; }
-            if connected_node < self.n_external || connected_node == parent {
-                if self.get_multiplicity(node, connected_node) > 1 {
-                    shortest_distance[node] = min(shortest_distance[node], shortest_distance[parent]);
-                }
-                continue;
-            }
-            if visited[connected_node] {
-                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
-            } else {
-                self.bridge_dfs(connected_node, node, visited, distance, shortest_distance, step, bridges);
-                shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
-                if shortest_distance[connected_node] > distance[node] {
-                    bridges.push((node, connected_node));
-                }
-            }
-        }
-    }
-    
     pub fn bridges(&self) -> Vec<(usize, usize)> {
-        let mut bridges = Vec::new();
-        let mut visited = vec![false; self.nodes.len()];
-        let mut distance = vec![0; self.nodes.len()];
-        let mut shortest_distance = vec![0; self.nodes.len()];
-        let step = 0;
-        self.bridge_dfs(self.n_external, 0, &mut visited, &mut distance, &mut shortest_distance, step, &mut bridges);
-        return bridges;
+        return self.bridges.clone();
     }
     
     pub fn count_opi(&self) -> usize {
@@ -576,15 +596,85 @@ mod tests {
         }
         let topo = Topology {
             n_external: 4,
+            n_loops: 4,
             nodes: (0..10).map(|i| Node::from_matrix(degrees[i], &adjacency_matrix, i)).collect_vec(),
             edges,
             node_symmetry: 1,
             edge_symmetry: 1,
             momentum_labels: vec!["p1", "p2", "p3", "p4", "l1", "l2", "l3", "l4"]
                 .into_iter().map(|x| x.to_string()).collect_vec(),
+            bridges: vec![(5, 6), (8, 9)]
         };
         println!("{:#?}", topo);
         assert_eq!(topo.bridges().into_iter().collect::<HashSet<(usize, usize)>>(), 
                    HashSet::from([(5, 6), (8, 9)]));
+    }
+    
+    #[test]
+    fn topology_momentum_assignment_test() {
+        let topo_ref = Topology {
+            n_external: 4,
+            n_loops: 2,
+            nodes: vec![
+                Node::new(1, vec![6]),
+                Node::new(1, vec![4]),
+                Node::new(1, vec![5]),
+                Node::new(1, vec![7]),
+                Node::new(3, vec![1, 5, 6]),
+                Node::new(4, vec![2, 4, 6, 7]),
+                Node::new(4, vec![0, 4, 5, 7]),
+                Node::new(3, vec![3, 5, 6])
+            ],
+            edges: vec![
+                Edge::new((0, 6), Some(vec![1, 0, 0, 0, 0, 0])),
+                Edge::new((1, 4), Some(vec![0, 1, 0, 0, 0, 0])),
+                Edge::new((2, 5), Some(vec![0, 0, 1, 0, 0, 0])),
+                Edge::new((3, 7), Some(vec![0, 0, 0, 1, 0, 0])),
+                Edge::new((4, 5), Some(vec![1, 1, 0, 0, 1, 1])),
+                Edge::new((4, 6), Some(vec![-1, 0, 0, 0, -1, -1])),
+                Edge::new((5, 6), Some(vec![0, 0, 0, 0, 1, 0])),
+                Edge::new((5, 7), Some(vec![1, 1, 1, 0, 0, 1])),
+                Edge::new((6, 7), Some(vec![0, 0, 0, 0, 0, -1])),
+            ],
+            node_symmetry: 1,
+            edge_symmetry: 4,
+            momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                  String::from("p3"), String::from("p4"),
+                                  String::from("l1"), String::from("l2")],
+            bridges: vec![]
+        };
+        let mut topo = Topology {
+            n_external: 4,
+            n_loops: 2,
+            nodes: vec![
+                Node::new(1, vec![6]),
+                Node::new(1, vec![4]),
+                Node::new(1, vec![5]),
+                Node::new(1, vec![7]),
+                Node::new(3, vec![1, 5, 6]),
+                Node::new(4, vec![2, 4, 6, 7]),
+                Node::new(4, vec![0, 4, 5, 7]),
+                Node::new(3, vec![3, 5, 6])
+            ],
+            edges: vec![
+                Edge::new((0, 6), None),
+                Edge::new((1, 4), None),
+                Edge::new((2, 5), None),
+                Edge::new((3, 7), None),
+                Edge::new((4, 5), None),
+                Edge::new((4, 6), None),
+                Edge::new((5, 6), None),
+                Edge::new((5, 7), None),
+                Edge::new((6, 7), None),
+            ],
+            node_symmetry: 1,
+            edge_symmetry: 4,
+            momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                  String::from("p3"), String::from("p4"),
+                                  String::from("l1"), String::from("l2")],
+            bridges: vec![]
+        };
+        topo.assign_momenta();
+        assert_eq!(topo, topo_ref);
     }
 }
