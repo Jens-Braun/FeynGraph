@@ -4,6 +4,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 use crate::topology::filter::SelectionCriterion::*;
 use crate::topology::Topology;
+use crate::diagram::filter::DiagramSelector;
 
 /// Possible criteria, which are used by a [TopologySelector] to decide whether a diagram is kept.
 #[derive(Clone)]
@@ -168,5 +169,15 @@ impl TopologySelector {
 impl Default for TopologySelector {
     fn default() -> Self {
         return Self { criteria: vec![OPIComponents(1)]};
+    }
+}
+
+impl From<&DiagramSelector> for TopologySelector {
+    fn from(diagram_selector: &DiagramSelector) -> Self {
+        let mut selector =  TopologySelector::new();
+        if diagram_selector.opi {
+            selector.add_opi_count(1);
+        }
+        return selector;
     }
 }

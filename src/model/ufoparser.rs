@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path};
+use indexmap::IndexMap;
 use pest::Parser;
 use pest_derive::Parser;
 use crate::model::{LineStyle, Model, ModelError, Particle, Vertex};
@@ -11,10 +12,11 @@ use crate::model::ModelError::{ContentError};
 pub(crate) struct UFOParser;
 
 impl UFOParser {
-    fn parse_particles(path: &Path) -> Result<HashMap<String, Particle>, ModelError> {
-        let mut particles: HashMap<String, Particle> = HashMap::new();
+    fn parse_particles(path: &Path) -> Result<IndexMap<String, Particle>, ModelError> {
+        let mut particles: IndexMap<String, Particle> = IndexMap::new();
         let particle_py_content = std::fs::read_to_string(path.join("particles.py"))?;
         let parsed_content = UFOParser::parse(Rule::particles_py, &particle_py_content)?.next().unwrap();
+        let mut required_anti_particles: Vec<(String, String)> = Vec::new();
         for particle_rule in parsed_content.into_inner() {
             match particle_rule.as_rule() {
                 Rule::particle => {
@@ -28,10 +30,10 @@ impl UFOParser {
                     let position = particle_rule.line_col();
                     for property in particle_rule.into_inner() {
                         match property.as_rule() {
+                            Rule::name => { name = Some(property.as_str().trim_matches(['\"', '\''])) }
                             Rule::property_pdg_code => {
                                 pdg_code = Some(property.into_inner().next().unwrap().as_str().parse::<isize>().unwrap());
                             },
-                            Rule::property_name => {name = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\'']))},
                             Rule::property_texname => {texname = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\'']))},
                             Rule::property_antitexname => {antitexname = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\'']))},
                             Rule::property_line => {
@@ -96,10 +98,22 @@ impl UFOParser {
                         linestyle.unwrap(),
                     ));
                 }
-                Rule::anti_particle => (),
+                Rule::anti_particle => {
+                    let mut inner_rule = particle_rule.into_inner();
+                    let anti_name = inner_rule.next().unwrap().as_str().to_string();
+                    let particle_name = inner_rule.next().unwrap().as_str().to_string();
+                    required_anti_particles.push((anti_name, particle_name));
+                },
                 Rule::EOI => (),
                 _ => unreachable!()
             }
+        }
+        for (anti_name, particle) in required_anti_particles {
+            let anti = particles.get(&particle)
+                .ok_or_else(|| ContentError(format!("Model contains antiparticle of {}, but {} does not exist", &particle, &particle)))?
+                .clone()
+                .into_anti(anti_name.clone());
+            particles.insert(anti_name, anti);
         }
         return Ok(particles);
     }
@@ -133,8 +147,8 @@ impl UFOParser {
         return Ok(coupling_orders);
     }
 
-    fn parse_couplings(path: &Path) -> Result<HashMap<String, HashMap<String, usize>>, ModelError> {
-        let mut couplings: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    fn parse_couplings(path: &Path) -> Result<IndexMap<String, HashMap<String, usize>>, ModelError> {
+        let mut couplings: IndexMap<String, HashMap<String, usize>> = IndexMap::new();
         let couplings_py_content = std::fs::read_to_string(path.join("couplings.py"))?;
         let parsed_content = UFOParser::parse(Rule::couplings_py, &couplings_py_content)?.next().unwrap();
         for couping_rule in parsed_content.into_inner() {
@@ -174,8 +188,8 @@ impl UFOParser {
         return Ok(couplings);
     }
 
-    fn parse_vertices(path: &Path) -> Result<HashMap<String, Vertex>, ModelError> {
-        let mut vertices: HashMap<String, Vertex> = HashMap::new();
+    fn parse_vertices(path: &Path) -> Result<IndexMap<String, Vertex>, ModelError> {
+        let mut vertices: IndexMap<String, Vertex> = IndexMap::new();
         let coupling_map = Self::parse_couplings(path)?;
         let vertices_py_content = std::fs::read_to_string(path.join("vertices.py"))?;
         let parsed_content = UFOParser::parse(Rule::vertices_py, &vertices_py_content)?.next().unwrap();
@@ -267,6 +281,7 @@ impl UFOParser {
 mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use indexmap::IndexMap;
     use crate::model::{Model, ufoparser::UFOParser, Particle, Vertex, LineStyle};
 
     #[test]
@@ -275,7 +290,7 @@ mod tests {
         let model = UFOParser::parse_ufo_model(&path).unwrap();
         println!("{:#?}", model);
         let model_ref = Model {
-            particles: HashMap::from([
+            particles: IndexMap::from([
                 (String::from("u"), Particle::new(
                     "u", 9000001, "u", "u~", LineStyle::Straight
                 )),
@@ -287,10 +302,19 @@ mod tests {
                 )),
                 (String::from("G"), Particle::new(
                     "G", 9000004, "G", "G", LineStyle::Curly
-                ))
+                )),
+                (String::from("u__tilde__"), Particle::new(
+                    "u__tilde__", -9000001, "u~", "u", LineStyle::Straight
+                )),
+                (String::from("c__tilde__"), Particle::new(
+                    "c__tilde__", -9000002, "c~", "c", LineStyle::Straight
+                )),
+                (String::from("t__tilde__"), Particle::new(
+                    "t__tilde__", -9000003, "t~", "t", LineStyle::Straight
+                )),
 
             ]),
-            vertices: HashMap::from([
+            vertices: IndexMap::from([
                 ("V_1".to_string(), Vertex {
                     name: "V_1".to_string(),
                     particles: vec!["G".to_string(); 3],

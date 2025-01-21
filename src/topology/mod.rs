@@ -3,9 +3,11 @@
 
 use std::cmp::min;
 use std::fmt::Write;
+use std::ops::{Deref, Index};
 use itertools::Itertools;
 use rayon::prelude::*;
 use crate::model::TopologyModel;
+use crate::topology::components::NodeClassification;
 use crate::topology::workspace::TopologyWorkspace;
 use crate::topology::filter::TopologySelector;
 use crate::topology::matrix::SymmetricMatrix;
@@ -62,14 +64,15 @@ impl Edge {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Topology {
-    n_external: usize,
-    n_loops: usize,
-    nodes: Vec<Node>,
-    edges: Vec<Edge>,
-    node_symmetry: usize,
-    edge_symmetry: usize,
-    momentum_labels: Vec<String>,
-    bridges: Vec<(usize, usize)>
+    pub(crate) n_external: usize,
+    pub(crate) n_loops: usize,
+    pub(crate) nodes: Vec<Node>,
+    pub(crate) edges: Vec<Edge>,
+    pub(crate) node_symmetry: usize,
+    pub(crate) edge_symmetry: usize,
+    pub(crate) momentum_labels: Vec<String>,
+    pub(crate) bridges: Vec<(usize, usize)>,
+    pub(crate) node_classification: NodeClassification,
 }
 
 impl Topology {
@@ -112,14 +115,17 @@ impl Topology {
                 (1..=workspace.n_loops).map(|i| format!("l{}", i)).collect_vec(),
             ].into_iter().flatten().collect_vec(),
             bridges: Vec::new(),
+            node_classification: workspace.node_classification.clone()
         };
         topo.assign_momenta();
         return topo;
     }
     
+    /// Assign momenta to the edges and find the bridges of the topology
     fn assign_momenta(&mut self) {
         let mut current_loop_momentum = self.n_external;
         let n_momenta = self.n_external + self.n_loops;
+        
         // First assign loop momenta to self-loops
         for edge in self.edges.iter_mut().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1) {
             let mut momenta = vec![0; n_momenta];
@@ -135,6 +141,8 @@ impl Topology {
         let mut momenta = vec![0; self.momentum_labels.len()];
         
         let step = 0;
+        // Traverse the topology in depth-first order. The algorithm is a modified version of Tarjan's
+        // bridge-finding algorithm, which keeps track of which loops the current edge is part of.
         self.momentum_dfs(self.nodes[0].adjacent_nodes[0], 0, &mut visited, &mut distance, 
                           &mut shortest_distance, &mut momentum_distance,
                           step, &mut current_loop_momentum, &mut momenta);
@@ -146,6 +154,7 @@ impl Topology {
             edge.momenta = Some(momenta);
         }
         
+        // Use global momentum conservation to eliminate the last external momentum
         for edge in self.edges.iter_mut() {
             if !(self.nodes[edge.connected_nodes.0].degree == 1 || self.nodes[edge.connected_nodes.1].degree == 1)
                 && edge.momenta.as_ref().unwrap()[self.n_external - 1] != 0 {
@@ -168,33 +177,41 @@ impl Topology {
                     current_loop_momentum: &mut usize,
                     momenta: &mut Vec<i8>) {
         step += 1;
+        // Mark the current node as visited and initialize the distances
         distance[node] = step;
         shortest_distance[node] = step;
         momentum_distance[node] = vec![step; self.n_external + self.n_loops];
         visited[node] = true;
-        *momenta = vec![0; momenta.len()];
         let mut local_momenta = vec![0; momenta.len()];
-        for connected_node in self.nodes[node].adjacent_nodes.clone().into_iter() {
+        for mut connected_node in self.nodes[node].adjacent_nodes.clone().into_iter() {
+            // External node -> accumulate the momentum for the edge on the way back, ignore otherwise
             if connected_node < self.n_external {
                 local_momenta[connected_node] = -1;
                 continue;
             }
+            // Ignore self-loops and edges to which a momentum is already assigned
             if connected_node == node || self.edges.iter().filter(
                 |edge| edge.connected_nodes == (node, connected_node)  || edge.connected_nodes == (connected_node, node)
             ).any(|edge| edge.momenta.is_some()) {
                 continue;
             }
+            // Parent node -> if there are multiple connections between the current node and the parent node,
+            // the current edge cannot be a bridge, ignore otherwise
             if connected_node == parent {
                 if self.get_multiplicity(node, connected_node) > 1 {
                     shortest_distance[node] = min(shortest_distance[node], shortest_distance[parent]);
                 }
                 continue;
             }
-            
+            // Invert momentum, because the current direction is opposite to the momentum flow
             let invert_direction = node > connected_node;
             
             if visited[connected_node] {
+                // Node has already been visited -> found a new loop
                 shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
+                // Assign a new loop momentum to the current edge (node, connected_node)
+                // All nodes on the way back are assigned the dfs-depth of connected_node until
+                // connected_node is reached again, which closes the loop
                 momentum_distance[node][*current_loop_momentum] = min(
                     momentum_distance[node][*current_loop_momentum],
                     momentum_distance[connected_node][*current_loop_momentum],
@@ -210,11 +227,21 @@ impl Topology {
                                          current_loop_momentum);
                 }
             } else {
+                // Unknown node -> go deeper
+                let mut accumulated_momenta = vec![0; momenta.len()];
                 self.momentum_dfs(connected_node, node, visited, distance, shortest_distance, 
-                                  momentum_distance, step, current_loop_momentum, momenta);
+                                  momentum_distance, step, current_loop_momentum, &mut accumulated_momenta);
                 shortest_distance[node] = min(shortest_distance[node], shortest_distance[connected_node]);
-                let mut current_momentum = momenta.clone();
+
+                // All external momenta picked up on the way back up to the current node
+                let mut current_momentum = accumulated_momenta.clone();
+
+                // Add to total momentum flow of the current node
+                *momenta = momenta.into_iter().zip(accumulated_momenta).map(|(x, y)| *x + y).collect();
                 for l in self.n_external..(self.n_external+self.n_loops) {
+                    // Check if the current edge is part of the l-th loop
+                    // The distance of connected_node is the one of the node which initiated the loop,
+                    // therefore the loop is not closed yet if the distance of node is different
                     if momentum_distance[connected_node][l] <= momentum_distance[node][l] {
                         current_momentum[l] = 1;
                     }
@@ -228,7 +255,7 @@ impl Topology {
                     self.assign_momentum(node, connected_node, current_momentum, current_loop_momentum);
                 } else {
                     self.assign_momentum(node, connected_node, 
-                                         current_momentum.clone().into_iter().map(|x| -x).collect(), 
+                                         current_momentum.clone().into_iter().map(|x| -x).collect(),
                                          current_loop_momentum);
                 }
                 
@@ -237,9 +264,12 @@ impl Topology {
                 }
             }
         }
+        // Accumulate all external momenta flowing into the current node for the remaining way back
         *momenta = momenta.into_iter().zip(local_momenta).map(|(x, y)| *x + y).collect();
     }
     
+    /// Assign `momentum` to the edges connecting `first_node` and `second_node`. If there are
+    /// multiple edges connecting the nodes, additional loop momenta are assigned.
     fn assign_momentum(&mut self, first_node: usize, second_node: usize, momentum: Vec<i8>, 
                        current_loop_momentum: &mut usize) {
         let n_momenta = self.n_external + self.n_loops;
@@ -282,17 +312,35 @@ impl Topology {
         ).count();
     }
     
+    /// Return the bridges of the topology.
     pub fn bridges(&self) -> Vec<(usize, usize)> {
         return self.bridges.clone();
     }
     
+    /// Count the number of one-particle-irreducible components of the topology.
     pub fn count_opi(&self) -> usize {
         return self.bridges().len()+1;
     }
     
+    pub fn get_node(&self, i: usize) -> &Node { return &self.nodes[i]; }
+    
     pub fn nodes_iter(&self) -> impl Iterator<Item=&Node> {return self.nodes.iter(); }
+    
+    pub fn get_edge(&self, i: usize) -> &Edge { return &self.edges[i]; }
 
     pub fn edges_iter(&self) -> impl Iterator<Item=&Edge> {return self.edges.iter(); }
+    
+    pub fn adjacent_nodes(&self, i: usize) -> &Vec<usize> { return &self.nodes[i].adjacent_nodes; }
+    
+    pub fn n_nodes(&self) -> usize { return self.nodes.len(); }
+    
+    pub fn n_edges(&self) -> usize { return self.edges.len(); }
+    
+    pub(crate) fn get_classification(&self) -> &NodeClassification { return &self.node_classification; }
+    
+    pub(crate) fn get_node_symmetry(&self) -> usize { return self.node_symmetry; }
+    
+    pub(crate) fn get_edge_symmetry(&self) -> usize { return self.edge_symmetry; }
     
     fn momentum_string(&self, edge_index: usize) -> String {
         let mut result = String::with_capacity(5*self.momentum_labels.len());
@@ -368,7 +416,7 @@ impl TopologyContainer {
         self.data.push(topology);
     }
 
-    fn inner_ref(&self) -> &Vec<Topology> {
+    pub(crate) fn inner_ref(&self) -> &Vec<Topology> {
         return &self.data;
     }
 
@@ -408,6 +456,21 @@ impl From<Vec<TopologyContainer>> for TopologyContainer {
             result.inner_ref_mut().append(&mut container.data);
         }
         return result;
+    }
+}
+
+impl Index<usize> for TopologyContainer {
+    type Output = Topology;
+    fn index(&self, i: usize) -> &Self::Output {
+        return &self.data[i];
+    }
+}
+
+impl Deref for TopologyContainer {
+    type Target = Vec<Topology>;
+
+    fn deref(&self) -> &Self::Target {
+        return &self.data;
     }
 }
 
@@ -603,7 +666,8 @@ mod tests {
             edge_symmetry: 1,
             momentum_labels: vec!["p1", "p2", "p3", "p4", "l1", "l2", "l3", "l4"]
                 .into_iter().map(|x| x.to_string()).collect_vec(),
-            bridges: vec![(5, 6), (8, 9)]
+            bridges: vec![(5, 6), (8, 9)],
+            node_classification: NodeClassification::empty()
         };
         println!("{:#?}", topo);
         assert_eq!(topo.bridges().into_iter().collect::<HashSet<(usize, usize)>>(), 
@@ -641,7 +705,8 @@ mod tests {
             momentum_labels: vec![String::from("p1"), String::from("p2"),
                                   String::from("p3"), String::from("p4"),
                                   String::from("l1"), String::from("l2")],
-            bridges: vec![]
+            bridges: vec![],
+            node_classification: NodeClassification::empty()
         };
         let mut topo = Topology {
             n_external: 4,
@@ -672,7 +737,76 @@ mod tests {
             momentum_labels: vec![String::from("p1"), String::from("p2"),
                                   String::from("p3"), String::from("p4"),
                                   String::from("l1"), String::from("l2")],
-            bridges: vec![]
+            bridges: vec![],
+            node_classification: NodeClassification::empty()
+        };
+        topo.assign_momenta();
+        assert_eq!(topo, topo_ref);
+    }
+
+    #[test]
+    fn topology_momentum_assignment_test_2() {
+        let topo_ref = Topology {
+            n_external: 4,
+            n_loops: 1,
+            nodes: vec![
+                Node::new(1, vec![4]),
+                Node::new(1, vec![4]),
+                Node::new(1, vec![6]),
+                Node::new(1, vec![6]),
+                Node::new(3, vec![0, 1, 5]),
+                Node::new(3, vec![4, 6, 7]),
+                Node::new(3, vec![2, 3, 5]),
+                Node::new(3, vec![5, 7])
+            ],
+            edges: vec![
+                Edge::new((0, 4), Some(vec![1, 0, 0, 0, 0])),
+                Edge::new((1, 4), Some(vec![0, 1, 0, 0, 0])),
+                Edge::new((2, 6), Some(vec![0, 0, 1, 0, 0])),
+                Edge::new((3, 6), Some(vec![0, 0, 0, 1, 0])),
+                Edge::new((4, 5), Some(vec![1, 1, 0, 0, 0])),
+                Edge::new((5, 6), Some(vec![1, 1, 0, 0, 0])),
+                Edge::new((5, 7), Some(vec![0, 0, 0, 0, 0])),
+                Edge::new((7, 7), Some(vec![0, 0, 0, 0, 1])),
+            ],
+            node_symmetry: 1,
+            edge_symmetry: 2,
+            momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                  String::from("p3"), String::from("p4"),
+                                  String::from("l1")],
+            bridges: vec![(5, 6), (5, 7), (4, 5)],
+            node_classification: NodeClassification::empty()
+        };
+        let mut topo = Topology {
+            n_external: 4,
+            n_loops: 1,
+            nodes: vec![
+                Node::new(1, vec![4]),
+                Node::new(1, vec![4]),
+                Node::new(1, vec![6]),
+                Node::new(1, vec![6]),
+                Node::new(3, vec![0, 1, 5]),
+                Node::new(3, vec![4, 6, 7]),
+                Node::new(3, vec![2, 3, 5]),
+                Node::new(3, vec![5, 7])
+            ],
+            edges: vec![
+                Edge::new((0, 4), None),
+                Edge::new((1, 4), None),
+                Edge::new((2, 6), None),
+                Edge::new((3, 6), None),
+                Edge::new((4, 5), None),
+                Edge::new((5, 6), None),
+                Edge::new((5, 7), None),
+                Edge::new((7, 7), None),
+            ],
+            node_symmetry: 1,
+            edge_symmetry: 2,
+            momentum_labels: vec![String::from("p1"), String::from("p2"),
+                                  String::from("p3"), String::from("p4"),
+                                  String::from("l1")],
+            bridges: vec![],
+            node_classification: NodeClassification::empty()
         };
         topo.assign_momenta();
         assert_eq!(topo, topo_ref);

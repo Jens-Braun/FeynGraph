@@ -23,7 +23,7 @@ impl TopologyNode {
 /// current topological classification of the nodes. The classification only takes into account the topological
 /// properties, i.e. the degree of the nodes, their current number of connections and in which other classes
 /// these connections end.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct NodeClassification {
     /// Boundaries of the node classifications. The $n$-th class has boundaries `boundaries[$n$]` and 
     /// `boundaries[$n+1$]`, the last entry of `boundaries` is always the number of nodes plus one.
@@ -34,6 +34,14 @@ pub(crate) struct NodeClassification {
 }
 
 impl NodeClassification {
+    /// Create an empty node classification
+    pub(crate) fn empty() -> Self {
+        return Self {
+            boundaries: Vec::new(),
+            matrix: Vec::new(),
+        }
+    }
+    
     /// Create a new classification of a list of node degrees. The degrees are assumed to be sorted in ascending 
     /// order. The initial classification is only based on the degrees, where nodes with identical degrees are 
     /// placed in the same class. Nodes with degree $1$ are assumed to be external and are therefore placed

@@ -19,7 +19,7 @@ pub struct TopologyWorkspace{
     /// Total number of edges remaining to be added to the topology
     remaining_edges: usize,
     /// Current node classification
-    node_classification: NodeClassification,
+    pub(crate) node_classification: NodeClassification,
     topology_buffer: Option<TopologyContainer>,
     /// [TopologySelector] deciding whether a found topology is kept
     pub(crate) topology_selector: TopologySelector,
@@ -399,7 +399,16 @@ mod test {
                     edge_symmetry: 4,
                     momentum_labels: vec![String::from("p1"), String::from("p2"), 
                                           String::from("l1"), String::from("l2")],
-                    bridges: vec![(2, 3)]
+                    bridges: vec![(2, 3)],
+                    node_classification: NodeClassification {
+                        boundaries: vec![0, 1, 2, 3, 4],
+                        matrix: vec![
+                            vec![0, 0, 1, 0],
+                            vec![0, 0, 0, 1],
+                            vec![1, 0, 2, 1],
+                            vec![0, 1, 1, 2]
+                        ]
+                    }
                 },
                 Topology {
                     n_external: 2,
@@ -421,7 +430,16 @@ mod test {
                     edge_symmetry: 4,
                     momentum_labels: vec![String::from("p1"), String::from("p2"),
                                           String::from("l1"), String::from("l2")],
-                    bridges: vec![]
+                    bridges: vec![],
+                    node_classification: NodeClassification {
+                        boundaries: vec![0, 1, 2, 3, 4],
+                        matrix: vec![
+                            vec![0, 0, 1, 0],
+                            vec![0, 0, 1, 0],
+                            vec![1, 1, 0, 2],
+                            vec![0, 0, 2, 2]
+                        ]
+                    }
                 },
                 Topology {
                     n_external: 2,
@@ -443,7 +461,16 @@ mod test {
                     edge_symmetry: 6,
                     momentum_labels: vec![String::from("p1"), String::from("p2"),
                                           String::from("l1"), String::from("l2")],
-                    bridges: vec![]
+                    bridges: vec![],
+                    node_classification: NodeClassification {
+                        boundaries: vec![0, 1, 2, 3, 4],
+                        matrix: vec![
+                            vec![0, 0, 1, 0],
+                            vec![0, 0, 0, 1],
+                            vec![1, 0, 0, 3],
+                            vec![0, 1, 3, 0]
+                        ]
+                    }
                 },
             ]
         };
