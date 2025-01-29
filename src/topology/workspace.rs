@@ -12,7 +12,7 @@ pub struct TopologyWorkspace{
     pub(crate) n_loops: usize,
     /// List of nodes in ascending order by their degrees
     pub(crate) nodes: Vec<TopologyNode>,
-    pub(crate) adjacency_matrix: SymmetricMatrix<usize>,
+    pub(crate) adjacency_matrix: SymmetricMatrix,
     /// List containing the current spanning forest of the nodes
     connection_forest: Vec<Option<usize>>,
     pub(crate) connection_components: usize,

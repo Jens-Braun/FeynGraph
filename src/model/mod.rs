@@ -3,8 +3,8 @@ use std::path::Path;
 use itertools::Itertools;
 use thiserror::Error;
 use indexmap::IndexMap;
+use crate::model::Statistic::Fermi;
 use crate::model::ufoparser::{Rule, UFOParser};
-use crate::topology::Topology;
 
 mod ufoparser;
 
@@ -31,6 +31,12 @@ pub enum LineStyle {
     Double
 }
 
+#[derive(PartialEq, Debug, Hash, Clone)]
+pub enum Statistic {
+    Fermi,
+    Bose
+}
+
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub struct Particle {
     name: String,
@@ -39,6 +45,7 @@ pub struct Particle {
     antitexname: String,
     linestyle: LineStyle,
     self_anti: bool,
+    statistic: Statistic,
 }
 
 impl Particle {
@@ -58,6 +65,7 @@ impl Particle {
             antitexname: self.texname,
             linestyle: self.linestyle,
             self_anti: self.self_anti,
+            statistic: self.statistic,
         }
     }
 }
@@ -67,7 +75,8 @@ impl Particle {
                pdg_code: isize,
                texname: impl Into<String>,
                antitexname: impl Into<String>,
-               linestyle: LineStyle
+               linestyle: LineStyle,
+               statistic: Statistic
     ) -> Self {
         let texname = texname.into();
         let antitexname = antitexname.into();
@@ -78,23 +87,26 @@ impl Particle {
             texname,
             antitexname,
             linestyle,
-            self_anti
+            self_anti,
+            statistic
         }
     }
     
     pub fn self_anti(&self) -> bool {
         return self.self_anti;
     }
+
+    pub fn is_fermi(&self) -> bool { return self.statistic == Fermi; }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Vertex {
-    name: String,
-    particles: Vec<String>,
-    couplings_orders: HashMap<String, usize>,
+pub struct InteractionVertex {
+    pub(crate) name: String,
+    pub(crate) particles: Vec<String>,
+    pub(crate) couplings_orders: HashMap<String, usize>,
 }
 
-impl Vertex {
+impl InteractionVertex {
     pub fn particles_iter(&self) -> impl Iterator<Item = &String> {
         return self.particles.iter();
     } 
@@ -112,7 +124,7 @@ impl Vertex {
     }
 }
 
-impl std::fmt::Display for Vertex {
+impl std::fmt::Display for InteractionVertex {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}[ ", self.name)?;
         for p in self.particles.iter() {
@@ -126,7 +138,7 @@ impl std::fmt::Display for Vertex {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Model {
     particles: IndexMap<String, Particle>,
-    vertices: IndexMap<String, Vertex>,
+    vertices: IndexMap<String, InteractionVertex>,
     coupling_orders: Vec<String>
 }
 
@@ -146,10 +158,10 @@ impl Model {
     }
 
     pub fn normalize(&self, particle_index: usize) -> usize {
-        if self.particles[particle_index].pdg_code < 0 {
-            return self.get_anti(particle_index);
+        return if self.particles[particle_index].pdg_code < 0 {
+            self.get_anti(particle_index)
         } else {
-            return particle_index;
+            particle_index
         }
     }
 
@@ -160,17 +172,29 @@ impl Model {
     pub fn get_particle_name(&self, name: &str) -> Option<&Particle> {
         return self.particles.get(name);
     }
+
+    pub fn find_particle(&self, name: &str) -> Result<&Particle, ModelError> {
+        return if let Some(particle) = self.particles.get(name) {
+            Ok(particle)
+        } else {
+            Err(ModelError::ContentError(format!("Particle '{}' not found in model", name)))
+        }
+    }
     
     pub fn get_particle_index(&self, key: &String) -> usize {
         return self.particles.get_index_of(key).unwrap();
     }
     
-    pub fn get_vertex(&self, index: usize) -> &Vertex {
+    pub fn get_vertex(&self, index: usize) -> &InteractionVertex {
         return &self.vertices[index];
     }
     
-    pub fn vertices_iter(&self) -> impl Iterator<Item = &Vertex> {
+    pub fn vertices_iter(&self) -> impl Iterator<Item = &InteractionVertex> {
         return self.vertices.values();
+    }
+
+    pub fn n_vertices(&self) -> usize {
+        return self.vertices.len();
     }
 
     /// Check if adding `vertex` to the diagram is allowed by the maximum power of the coupling constants

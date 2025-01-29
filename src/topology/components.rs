@@ -65,7 +65,7 @@ impl NodeClassification {
 
     /// Construct the classification matrix for the current boundaries from the adjacencies given in 
     /// `adjacency_matrix`.
-    fn update_classification_matrix(&mut self, adjacency_matrix: &SymmetricMatrix<usize>) {
+    fn update_classification_matrix(&mut self, adjacency_matrix: &SymmetricMatrix) {
         let n_classes = self.n_classes();
         if n_classes != self.matrix[0].len() {
             for row in &mut self.matrix {
@@ -149,7 +149,7 @@ impl NodeClassification {
     /// are in the same class. If $N_1 < N_2$, the class containing $N_1$ and $N_2$ is split such, that they are
     /// in different classes. If there is a node pair with $N_1 > N_2$, the connections in `adjacency_matrix`
     /// are inconsistent with the classification, and `adjacency_matrix` is rejected by returning `None`.
-    pub(crate) fn update_classification(&self, adjacency_matrix: &SymmetricMatrix<usize>) -> Option<Self> {
+    pub(crate) fn update_classification(&self, adjacency_matrix: &SymmetricMatrix) -> Option<Self> {
         let mut classification = (*self).clone();
         let mut new_boundaries: Vec<(usize, usize)> = Vec::new();
         let mut rerun = true;

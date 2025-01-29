@@ -1,24 +1,23 @@
 use std::cmp::Ordering;
-use num_traits::Num;
 
 /// A symmetric matrix of dimension $n$. The full symmetric matrix is represented by the upper
 /// triangular part, which is stored in `data` as a flattened array with $\frac{n(n+1)}{2}$ entries.
 /// The indices run from $0$ to $n-1$.
 #[derive(PartialEq, Clone)]
-pub struct SymmetricMatrix<T: Copy + Num + Ord> {
+pub struct SymmetricMatrix {
     /// Dimension of the matrix
     pub dimension: usize,
     /// Flattened upper triangular part of the matrix
-    data: Vec<T>,
+    data: Vec<usize>,
 }
 
-impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
+impl SymmetricMatrix {
     /// Return an $n$-dimensional symmetric matrix with only zeroes as entries.
     #[inline]
     pub fn zero(dimension: usize) -> Self {
         return Self {
             dimension,
-            data: vec![T::zero(); dimension*(dimension+1)/2]
+            data: vec![0; dimension*(dimension+1)/2]
         };
     }
 
@@ -27,8 +26,8 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
     pub fn identity(dimension: usize) -> Self {
         let mut data = Vec::with_capacity(dimension*(dimension+1)/2);
         for i in 0..dimension {
-            data.push(T::one());
-            data.append(&mut vec![T::zero(); dimension-i-1])
+            data.push(1);
+            data.append(&mut vec![0; dimension-i-1])
         }
         return Self {
             dimension,
@@ -38,14 +37,14 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
 
     /// Build $n$-dimensional matrix from Vec.
     #[inline]
-    pub fn from_vec(dimension: usize, data: Vec<T>) -> Self {
+    pub fn from_vec(dimension: usize, data: Vec<usize>) -> Self {
         assert_eq!(dimension * (dimension + 1)/2, data.len());
         return Self { dimension, data };
     }
 
     /// Return element $A_{ij}$, where $i$ and $j$ run from $0$ to $n-1$.
     #[inline]
-    pub fn get(&self, i: usize, j: usize) -> &T {
+    pub fn get(&self, i: usize, j: usize) -> &usize {
         return if j >= i {
             &self.data[i * self.dimension + j - i*(i+1)/2]
         } else {
@@ -55,7 +54,7 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
 
     /// Return mutable element $A_{ij}$, where $i$ and $j$ run from $0$ to $n-1$.
     #[inline]
-    pub fn get_mut(&mut self, i: usize, j: usize) -> &mut T {
+    pub fn get_mut(&mut self, i: usize, j: usize) -> &mut usize {
         return if j >= i {
             &mut self.data[i * self.dimension + j - i*(i+1)/2]
         } else {
@@ -81,7 +80,7 @@ impl<T: Copy + Num + Ord> SymmetricMatrix<T> {
     }
 }
 
-impl<T: std::fmt::Debug + Copy + Num + Ord> std::fmt::Debug for SymmetricMatrix<T> {
+impl std::fmt::Debug for SymmetricMatrix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         writeln!(f, r"SymmetricMatrix {{")?;
         writeln!(f, "    dimension: {},", self.dimension)?;

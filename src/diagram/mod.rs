@@ -1,10 +1,8 @@
 use std::ops::Deref;
 use std::fmt::Write;
 use itertools::Itertools;
-use crate::diagram::components::Propagator;
 use crate::diagram::filter::DiagramSelector;
-use crate::model::{Model, Particle, TopologyModel, Vertex};
-use crate::topology::filter::TopologySelector;
+use crate::model::{Model, Particle, TopologyModel, InteractionVertex};
 use crate::topology::{Topology, TopologyGenerator};
 
 use rayon::prelude::*;
@@ -14,7 +12,50 @@ mod components;
 pub mod filter;
 mod workspace;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Propagator {
+    pub(crate) vertices: (usize, usize),
+    pub(crate) particle: Particle,
+    pub(crate) momentum: Vec<i8>
+}
+
+impl Propagator {
+    pub fn new(vertices: (usize, usize), particle: Particle, momentum: Vec<i8>) -> Self {
+        return Self {
+            vertices,
+            particle,
+            momentum
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vertex {
+    pub(crate) propagators: Vec<usize>,
+    pub(crate) interaction: InteractionVertex,
+}
+
+impl Vertex {
+    pub fn new(propagators: Vec<usize>, interaction: InteractionVertex) -> Self {
+        return Self {
+            propagators,
+            interaction
+        }
+    }
+}
+
+impl std::fmt::Display for Vertex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}[ ", self.interaction.name)?;
+        for p in self.interaction.particles.iter() {
+            write!(f, "{} ", p)?;
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct Diagram {
     incoming_particles: Vec<Particle>,
     outgoing_particles:Vec<Particle>,
@@ -23,6 +64,8 @@ pub struct Diagram {
     vertex_symmetry: usize,
     propagator_symmetry: usize,
     momentum_labels: Vec<String>,
+    bridges: Vec<usize>,
+    sign: i8
 }
 
 impl Diagram {
@@ -35,7 +78,9 @@ impl Diagram {
                     if candidate.degree == 1 {
                         None
                     } else {
-                        Some(workspace.model.get_vertex(candidate.candidates[0]).clone())
+                        Some(Vertex::new(candidate.edges.clone(),
+                                         workspace.model.get_vertex(candidate.candidates[0]).clone()
+                        ))
                     }
                 }).collect_vec(),
             propagators: workspace.propagator_candidates.iter().enumerate()
@@ -48,7 +93,16 @@ impl Diagram {
                 ).collect_vec(),
             vertex_symmetry: workspace.topology.get_node_symmetry(),
             propagator_symmetry: workspace.topology.get_edge_symmetry(),
-            momentum_labels: workspace.topology.momentum_labels.clone()
+            momentum_labels: workspace.topology.momentum_labels.clone(),
+            bridges: workspace.topology.bridges.iter().map(
+                |(v, w)| {
+                    workspace.topology.edges.iter().enumerate()
+                        .find_map(|(i, edge)|
+                            if edge.connected_nodes == (*v, *w)
+                                || edge.connected_nodes == (*w, *v) {Some(i)} else {None}
+                        ).unwrap()
+                }).collect_vec(),
+            sign: workspace.calculate_sign()
         };
     }
 
@@ -73,6 +127,14 @@ impl Diagram {
             }
         }
         return result;
+    }
+
+    pub fn propagators_iter(&self) -> impl Iterator<Item = &Propagator> {
+        return self.propagators.iter();
+    }
+
+    pub fn count_opi_components(&self) -> usize {
+        return self.bridges.len() + 1;
     }
 }
 
@@ -131,6 +193,24 @@ impl DiagramContainer {
     
     pub fn len(&self) -> usize {
         return self.data.len();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        return self.data.is_empty();
+    }
+
+    pub fn get(&self, i: usize) -> &Diagram {
+        return &self.data[i];
+    }
+
+    /// Search for topologies which would be selected by `selector`. Returns the index of the first selected diagram
+    /// or `None` if no diagram is selected.
+    pub fn query(&self, selector: &DiagramSelector) -> Option<usize> {
+        return if let Some((i, _)) = self.data.iter().find_position(|diagram| selector.select(diagram)) {
+            Some(i)
+        } else {
+            None
+        }
     }
 }
 
@@ -192,12 +272,12 @@ impl DiagramGenerator {
         }
     }
     
-    pub fn generate(&mut self) -> DiagramContainer {
-        let mut topo_generator = TopologyGenerator::new(
+    pub fn generate(&self) -> DiagramContainer {
+        let topo_generator = TopologyGenerator::new(
             self.n_external,
             self.n_loops,
             TopologyModel::from(&self.model),
-            Some(TopologySelector::from(&self.selector)),
+            Some(self.selector.as_topology_selector()),
         );
         let topologies = topo_generator.generate();
         let mut containers: Vec<DiagramContainer> = Vec::new();
@@ -211,18 +291,10 @@ impl DiagramGenerator {
             );
             return assign_workspace.assign();
         }).collect_into_vec(&mut containers);
-        let counts = containers
-            .iter()
-            .map(|container| container.len())
-            .counts()
-            .into_iter()
-            .sorted()
-            .collect_vec();
-        println!("{:#?}", counts);
         return DiagramContainer::from(containers);
     }
 
-    pub fn assign_topology(&mut self, topology: &Topology) -> DiagramContainer {
+    pub fn assign_topology(&self, topology: &Topology) -> DiagramContainer {
         let mut assign_workspace = AssignWorkspace::new(
             topology,
             &self.model,
@@ -233,7 +305,7 @@ impl DiagramGenerator {
         return assign_workspace.assign();
     }
 
-    pub fn assign_topologies(&mut self, topologies: &[Topology]) -> DiagramContainer {
+    pub fn assign_topologies(&self, topologies: &[Topology]) -> DiagramContainer {
         let mut containers: Vec<DiagramContainer> = Vec::new();
         topologies.into_par_iter().map(|topology| {
             let mut assign_workspace = AssignWorkspace::new(
@@ -245,14 +317,6 @@ impl DiagramGenerator {
             );
             return assign_workspace.assign();
         }).collect_into_vec(&mut containers);
-        let counts = containers
-            .iter()
-            .map(|container| container.len())
-            .counts()
-            .into_iter()
-            .sorted()
-            .collect_vec();
-        println!("{:#?}", counts);
         return DiagramContainer::from(containers);
     }
 }
@@ -261,7 +325,7 @@ impl DiagramGenerator {
 mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
-    use crate::topology::filter::SelectionCriterion::CustomCriterion;
+    use crate::topology::filter::TopologySelector;
     use super::*;
     
     #[test]
@@ -270,7 +334,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = particles_in.clone();
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             0,
@@ -290,7 +354,7 @@ mod tests {
             model.get_particle_name("u").unwrap().clone(),
             model.get_particle_name("u__tilde__").unwrap().clone()
         ];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             0,
@@ -310,7 +374,7 @@ mod tests {
             model.get_particle_name("u").unwrap().clone(),
             model.get_particle_name("u__tilde__").unwrap().clone()
         ];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             1,
@@ -330,7 +394,7 @@ mod tests {
             model.get_particle_name("u").unwrap().clone(),
             model.get_particle_name("u__tilde__").unwrap().clone()
         ];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             2,
@@ -350,7 +414,7 @@ mod tests {
             model.get_particle_name("u").unwrap().clone(),
             model.get_particle_name("u__tilde__").unwrap().clone()
         ];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             3,
@@ -367,7 +431,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_name("u").unwrap().clone()];
         let particle_out = vec![model.get_particle_name("u").unwrap().clone()];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             2,
@@ -384,7 +448,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
         let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             2,
@@ -401,7 +465,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
         let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             3,
@@ -416,10 +480,10 @@ mod tests {
     pub fn diagram_generator_qcd_g_prop_opi_3loop() {
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let mut selector = DiagramSelector::default();
-        selector.set_opi();
+        selector.add_opi_count(1);
         let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
         let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             3,
@@ -434,17 +498,17 @@ mod tests {
     pub fn diagram_generator_qcd_g_prop_no_self_loops_3loop() {
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let mut topo_selector = TopologySelector::new();
-        topo_selector.add_criterion(CustomCriterion(
+        topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {
                 !topo.edges_iter().any(|edge| edge.connected_nodes.0 == edge.connected_nodes.1)
             })
-        ));
+        );
         let topo_generator = TopologyGenerator::new(2, 3, (&model).into(), Some(topo_selector));
         let topologies = topo_generator.generate();
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
         let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
-        let mut generator = DiagramGenerator::new(
+        let generator = DiagramGenerator::new(
             particles_in,
             particle_out,
             3,
@@ -453,5 +517,42 @@ mod tests {
         );
         let diagrams = generator.assign_topologies(&topologies);
         assert_eq!(diagrams.len(), 951);
+    }
+
+    #[test]
+    fn diagram_generator_sm_u_prop_1l_test() {
+        let model = Model::from_ufo(&PathBuf::from("/home/jens/Programs/gosam-private/examples/model/Standard_Model_UFO")).unwrap();
+        let topo_selector = TopologySelector::new();
+        let topo_generator = TopologyGenerator::new(2, 1, (&model).into(), Some(topo_selector));
+        let topologies = topo_generator.generate();
+        let selector = DiagramSelector::default();
+        let particles_in = vec![model.get_particle_name("u").unwrap().clone()];
+        let particle_out = vec![model.get_particle_name("u").unwrap().clone()];
+        let generator = DiagramGenerator::new(
+            particles_in,
+            particle_out,
+            1,
+            model,
+            Some(selector)
+        );
+        let diagrams = generator.assign_topology(&topologies[1]);
+        assert_eq!(diagrams.len(), 37);
+    }
+
+    #[test]
+    pub fn diagram_generator_sign_test() {
+        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let particles_in = vec![model.get_particle_name("u").unwrap().clone(); 2];
+        let particle_out = vec![model.get_particle_name("u").unwrap().clone(); 2];
+        let generator = DiagramGenerator::new(
+            particles_in,
+            particle_out,
+            0,
+            model,
+            None
+        );
+        let diags = generator.generate();
+        assert_eq!(diags.len(), 2);
+        assert_eq!(diags[0].sign, -diags[1].sign);
     }
 }

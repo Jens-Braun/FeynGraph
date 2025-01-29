@@ -18,6 +18,7 @@ pub(crate) mod components;
 pub mod filter;
 pub(crate) mod workspace;
 
+/// A struct representing a topological node
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node {
     pub degree: usize,
@@ -32,7 +33,7 @@ impl Node {
         }
     }
     
-    fn from_matrix(degree: usize, matrix: &SymmetricMatrix<usize>, node_index: usize) -> Self {
+    fn from_matrix(degree: usize, matrix: &SymmetricMatrix, node_index: usize) -> Self {
         return Self {
             degree,
             adjacent_nodes: (0..matrix.dimension).filter(|i| *matrix.get(node_index, *i) > 0).collect_vec()
@@ -40,6 +41,7 @@ impl Node {
     }
 }
 
+/// A struct representing a topological edge
 #[derive(Debug, PartialEq, Clone)]
 pub struct Edge {
     pub connected_nodes: (usize, usize),
@@ -76,7 +78,7 @@ pub struct Topology {
 }
 
 impl Topology {
-    pub fn from(workspace: &TopologyWorkspace, node_symmetry: usize) -> Self {
+    fn from(workspace: &TopologyWorkspace, node_symmetry: usize) -> Self {
         let mut edge_symmetry = 1;
         for i in 0..workspace.adjacency_matrix.dimension {
             edge_symmetry *= 2_usize.pow((*workspace.adjacency_matrix.get(i, i)/2) as u32);
@@ -183,7 +185,7 @@ impl Topology {
         momentum_distance[node] = vec![step; self.n_external + self.n_loops];
         visited[node] = true;
         let mut local_momenta = vec![0; momenta.len()];
-        for mut connected_node in self.nodes[node].adjacent_nodes.clone().into_iter() {
+        for connected_node in self.nodes[node].adjacent_nodes.clone().into_iter() {
             // External node -> accumulate the momentum for the edge on the way back, ignore otherwise
             if connected_node < self.n_external {
                 local_momenta[connected_node] = -1;
@@ -318,22 +320,29 @@ impl Topology {
     }
     
     /// Count the number of one-particle-irreducible components of the topology.
-    pub fn count_opi(&self) -> usize {
+    pub fn count_opi_componenets(&self) -> usize {
         return self.bridges().len()+1;
     }
-    
+
+    /// Return a reference to the topology's `i`-th node
     pub fn get_node(&self, i: usize) -> &Node { return &self.nodes[i]; }
-    
+
+    /// Return an iterator over the topology's edges
     pub fn nodes_iter(&self) -> impl Iterator<Item=&Node> {return self.nodes.iter(); }
-    
+
+    /// Return a reference to the `i`-th edge
     pub fn get_edge(&self, i: usize) -> &Edge { return &self.edges[i]; }
 
+    /// Return an iterator over the topology's edges
     pub fn edges_iter(&self) -> impl Iterator<Item=&Edge> {return self.edges.iter(); }
-    
+
+    /// Return the ids of the edges connected to node `i`, including `i` if it is connected to itself via a self-loop
     pub fn adjacent_nodes(&self, i: usize) -> &Vec<usize> { return &self.nodes[i].adjacent_nodes; }
-    
+
+    /// Return the number of nodes
     pub fn n_nodes(&self) -> usize { return self.nodes.len(); }
-    
+
+    /// Return the number of edges
     pub fn n_edges(&self) -> usize { return self.edges.len(); }
     
     pub(crate) fn get_classification(&self) -> &NodeClassification { return &self.node_classification; }
@@ -423,15 +432,18 @@ impl TopologyContainer {
     fn inner_ref_mut(&mut self) -> &mut Vec<Topology> {
         return &mut self.data;
     }
-    
+
+    /// Return the number of topologies in the container
     pub fn len(&self) -> usize {
         return self.data.len();
     }
-    
+
+    /// Check whether the container is empty or not
     pub fn is_empty(&self) -> bool {
         return self.data.is_empty();
     }
 
+    /// Return a reference to the `i`-th diagram in the container
     pub fn get(&self, i: usize) -> &Topology {
         return &self.data[i];
     }
@@ -507,6 +519,8 @@ pub struct TopologyGenerator {
 }
 
 impl TopologyGenerator {
+    /// Create a new topology generator for `n_external` external legs, `n_loops` loops within `model`. Whether a
+    /// topology is kept or discarded during generation is determined by `selector`.
     pub fn new(n_external: usize, n_loops: usize, model: TopologyModel, selector: Option<TopologySelector>) -> Self {
         return if let Some(selector) = selector {
             Self {
@@ -565,7 +579,6 @@ impl TopologyGenerator {
 mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
-    use crate::topology::filter::SelectionCriterion::CustomCriterion;
     use super::*;
     
     #[test]
@@ -580,7 +593,7 @@ mod tests {
             }
             return true;
         };
-        selector.add_criterion(CustomCriterion(Arc::new(filter)));
+        selector.add_custom_function(Arc::new(filter));
         let generator = TopologyGenerator::new(2, 1, model, Some(selector));
         let topologies = generator.generate();
         assert_eq!(topologies.len(), 1);
@@ -605,7 +618,8 @@ mod tests {
     #[test]
     fn topology_generator_3_loop_opi_test() {
         let model = TopologyModel::from(vec![3, 4]);
-        let selector = TopologySelector::default();
+        let mut selector = TopologySelector::default();
+        selector.add_opi_count(1);
         let generator = TopologyGenerator::new(4, 3, model, Some(selector));
         let topologies = generator.generate();
         assert_eq!(topologies.inner_ref().len(), 6166);
@@ -615,6 +629,7 @@ mod tests {
     fn topology_generator_3_loop_opi_partition_test() {
         let model = TopologyModel::from(vec![3, 4]);
         let mut selector = TopologySelector::default();
+        selector.add_opi_count(1);
         selector.add_node_partition(vec![(3, 4), (4, 2)]);
         let generator = TopologyGenerator::new(4, 3, model, Some(selector));
         let topologies = generator.generate();
@@ -624,7 +639,8 @@ mod tests {
     #[test]
     fn topology_generator_2_loop_degree_6_test() {
         let model = TopologyModel::from(vec![3, 4, 5, 6]);
-        let selector = TopologySelector::default();
+        let mut selector = TopologySelector::default();
+        selector.add_opi_count(1);
         let generator = TopologyGenerator::new(4, 2, model, Some(selector));
         let topologies = generator.generate();
         assert_eq!(topologies.inner_ref().len(), 404);

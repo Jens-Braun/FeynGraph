@@ -96,17 +96,6 @@ impl<'a> AssignWorkspace<'a> {
         }
         self.select_vertex();
         let container = std::mem::take(&mut self.diagram_buffer);
-
-        if container.len() == 10 {
-            println!("----------------------------------------------------------------");
-            println!("Topology:{} \n n_diagrams: {}", self.topology, container.len());
-            println!("Classification: {:?}", self.topology.node_classification);
-            for diag in container.iter() {
-                println!("{}", diag);
-            }
-            println!("----------------------------------------------------------------");
-        }
-
         return container;
     }
     
@@ -165,18 +154,20 @@ impl<'a> AssignWorkspace<'a> {
     
     fn assign_vertex(&mut self, vertex: usize) {
         if self.vertex_candidates[vertex].candidates.len() == 1 {
+            self.update_coupling_orders(self.vertex_candidates[vertex].candidates[0]);
             self.select_vertex();
+            self.restore_coupling_orders(self.vertex_candidates[vertex].candidates[0]);
         } else {
             let current_vertex_candidates = self.vertex_candidates.clone();
             let current_propagator_candidates = self.propagator_candidates.clone();
-            let current_vertex_classification = self.vertex_classification.clone();
             let candidates = self.vertex_candidates[vertex].candidates.clone();
             for candidate in candidates {
                 self.vertex_candidates[vertex].candidates = vec![candidate];
+                self.update_coupling_orders(self.vertex_candidates[vertex].candidates[0]);
                 self.select_vertex();
+                self.restore_coupling_orders(self.vertex_candidates[vertex].candidates[0]);
                 self.vertex_candidates = current_vertex_candidates.clone();
                 self.propagator_candidates = current_propagator_candidates.clone();
-                self.vertex_classification = current_vertex_classification.clone();
             }
         }
     }
@@ -256,7 +247,7 @@ impl<'a> AssignWorkspace<'a> {
         if self.vertex_candidates[v].edges.iter().enumerate().any(
             |(other_leg, cmp_edge)| {
                 if self.propagator_candidates[*cmp_edge].particle.is_some()
-                    && self.topology.edges[*cmp_edge].connected_nodes.1 == w {
+                    && self.topology.edges[*cmp_edge].connected_nodes == (v, w) {
                     let other_particle = self.propagator_candidates[*cmp_edge].particle.unwrap();
                     (ref_leg < other_leg && p < other_particle) || (ref_leg > other_leg && p > other_particle)
                 } else {
@@ -283,9 +274,32 @@ impl<'a> AssignWorkspace<'a> {
             }
             return true;
         });
-        //if self.vertex_candidates[vertex].candidates.len() == 1 {
-        //   self.vertex_classification.update_classification(self.topology, &self.vertex_candidates);
-        //}
+    }
+
+    fn update_coupling_orders(&mut self, vertex_id: usize) {
+        let vertex = self.model.get_vertex(vertex_id);
+        if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
+            for (coupling, power) in vertex.get_coupling_orders() {
+                if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
+                    *remaining_power -= power;
+                } else { continue; }
+            }
+        } else {
+            return;
+        }
+    }
+
+    fn restore_coupling_orders(&mut self, vertex_id: usize) {
+        let vertex = self.model.get_vertex(vertex_id);
+        if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
+            for (coupling, power) in vertex.get_coupling_orders() {
+                if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
+                    *remaining_power += power;
+                } else { continue; }
+            }
+        } else {
+            return;
+        }
     }
     
     fn get_connected_particles(&self, vertex: usize) -> Vec<usize> {
@@ -375,6 +389,70 @@ impl<'a> AssignWorkspace<'a> {
         }
         return Ordering::Equal;
     }
+
+    fn trace_fermi_line(&self, prop: usize, visited: &mut Vec<bool>) -> (usize, usize) {
+        let initial_vertex;
+        let mut to_visit: Vec<usize> = Vec::new();
+        if self.topology.nodes[self.topology.edges[prop].connected_nodes.0].degree == 1 {
+            initial_vertex = self.topology.edges[prop].connected_nodes.0;
+            to_visit.push(self.topology.edges[prop].connected_nodes.0);
+        } else {
+            initial_vertex = self.topology.edges[prop].connected_nodes.1;
+            to_visit.push(self.topology.edges[prop].connected_nodes.0);
+        }
+        let mut parent = initial_vertex;
+        while !to_visit.is_empty() {
+            let current = to_visit.pop().unwrap();
+            for edge in self.vertex_candidates[current].edges.iter() {
+                if visited[*edge] { continue; }
+                visited[*edge] = true;
+                if !self.model.get_particle(*self.propagator_candidates[*edge].particle.as_ref().unwrap()).is_fermi() {
+                    continue;
+                }
+                let connected_vertex = if self.topology.edges[*edge].connected_nodes.0 == parent {
+                    self.topology.edges[*edge].connected_nodes.1
+                } else {
+                    self.topology.edges[*edge].connected_nodes.0
+                };
+                if connected_vertex == initial_vertex || self.topology.nodes[connected_vertex].degree == 1 {
+                    return (initial_vertex, connected_vertex);
+                }
+                parent = current;
+                to_visit.push(connected_vertex);
+            }
+        }
+        return (initial_vertex, initial_vertex);
+    }
+
+    pub(crate) fn calculate_sign(&self) -> i8 {
+        let mut visited = vec![false; self.propagator_candidates.len()];
+        let mut external_fermions = Vec::new();
+        for external_node in self.vertex_candidates.iter().take(self.topology.n_external) {
+            let edge = external_node.edges[0];
+            if visited[edge]
+                || !self.model.get_particle(self.propagator_candidates[edge].particle.unwrap()).is_fermi() {
+                continue;
+            }
+            let (initial_vertex, final_vertex) = self.trace_fermi_line(edge, &mut visited);
+            external_fermions.push(initial_vertex);
+            external_fermions.push(final_vertex);
+        }
+        let mut n_ext_swap: usize = 0;
+        for i in 0..external_fermions.len() {
+            for j in i+1..external_fermions.len() {
+                if external_fermions[i] < external_fermions[j] {
+                    n_ext_swap += 1;
+                }
+            }
+        }
+        let mut fermi_loops: usize = 0;
+        for edge in 0..self.propagator_candidates.len() {
+            if visited[edge] { continue; }
+            let _ = self.trace_fermi_line(edge, &mut visited);
+            fermi_loops += 1;
+        }
+        return if (n_ext_swap + fermi_loops) % 2 == 0 { 1 } else { -1 };
+    }
 }
 
 #[cfg(test)]
@@ -385,7 +463,6 @@ mod tests {
     use crate::diagram::filter::DiagramSelector;
     use crate::diagram::workspace::AssignWorkspace;
     use crate::model::{Model, TopologyModel};
-    use crate::topology::filter::SelectionCriterion::CustomCriterion;
     use crate::topology::filter::TopologySelector;
 
     #[test]
@@ -590,16 +667,16 @@ mod tests {
     #[test]
     pub fn workspace_qcd_g_prop_3loop() {
         let mut topo_selector = TopologySelector::new();
-        topo_selector.add_criterion(CustomCriterion(
+        topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {
                 !topo.edges_iter().any(|edge| edge.connected_nodes.0 == edge.connected_nodes.1)
             })
-        ));
-        topo_selector.add_criterion(CustomCriterion(
+        );
+        topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {
                 topo.edges_iter().any(|edge| edge.momenta.as_ref().unwrap().iter().all(|x| *x == 0))
             })
-        ));
+        );
         let topos = TopologyGenerator::new(
             2,
             3,
@@ -619,7 +696,7 @@ mod tests {
             &particle_out,
         );
         let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 4);
+        assert_eq!(diagrams.len(), 1);
     }
 
     #[test]

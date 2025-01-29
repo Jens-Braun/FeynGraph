@@ -1,12 +1,13 @@
+from __future__ import absolute_import
 # This file was automatically created by FeynRules 2.3.49
 # Mathematica version: 14.1.0 for Microsoft Windows (64-bit) (July 16, 2024)
 # Date: Fri 22 Nov 2024 21:03:30
 
 
-from object_library import all_vertices, Vertex
-import particles as P
-import couplings as C
-import lorentz as L
+from .object_library import all_vertices, Vertex
+from . import particles as P
+from . import couplings as C
+from . import lorentz as L
 
 
 V_1 = Vertex(name = 'V_1',

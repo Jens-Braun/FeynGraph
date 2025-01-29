@@ -3,9 +3,10 @@ use std::path::{Path};
 use indexmap::IndexMap;
 use pest::Parser;
 use pest_derive::Parser;
-use crate::model::{LineStyle, Model, ModelError, Particle, Vertex};
+use crate::model::{LineStyle, Model, ModelError, Particle, InteractionVertex};
 use log::warn;
 use crate::model::ModelError::{ContentError};
+use crate::model::Statistic::{Bose, Fermi};
 
 #[derive(Parser)]
 #[grammar = "model/ufo_model.pest"]
@@ -27,6 +28,7 @@ impl UFOParser {
                     let mut linestyle = None;
                     let mut spin = None;
                     let mut color = None;
+                    let mut statistic = Bose;
                     let position = particle_rule.line_col();
                     for property in particle_rule.into_inner() {
                         match property.as_rule() {
@@ -90,12 +92,18 @@ impl UFOParser {
                             }
                         }
                     }
+                    if let Some(spin) = spin {
+                        if spin == -1 || spin % 2 == 0 {
+                            statistic = Fermi;
+                        }
+                    }
                     particles.insert(name.unwrap().into(), Particle::new(
                         name.unwrap(),
                         pdg_code.unwrap(),
                         texname.unwrap(),
                         antitexname.unwrap(),
                         linestyle.unwrap(),
+                        statistic
                     ));
                 }
                 Rule::anti_particle => {
@@ -188,8 +196,8 @@ impl UFOParser {
         return Ok(couplings);
     }
 
-    fn parse_vertices(path: &Path) -> Result<IndexMap<String, Vertex>, ModelError> {
-        let mut vertices: IndexMap<String, Vertex> = IndexMap::new();
+    fn parse_vertices(path: &Path) -> Result<IndexMap<String, InteractionVertex>, ModelError> {
+        let mut vertices: IndexMap<String, InteractionVertex> = IndexMap::new();
         let coupling_map = Self::parse_couplings(path)?;
         let vertices_py_content = std::fs::read_to_string(path.join("vertices.py"))?;
         let parsed_content = UFOParser::parse(Rule::vertices_py, &vertices_py_content)?.next().unwrap();
@@ -232,7 +240,7 @@ impl UFOParser {
                             0 => return Err(ContentError(format!("Property 'order' required for vertex {}", &name))),
                             1 => {
                                 vertices.insert(name.clone(),
-                                    Vertex {
+                                                InteractionVertex {
                                         name,
                                         particles,
                                         couplings_orders: coupling_orders_vec.pop().unwrap()
@@ -244,7 +252,7 @@ impl UFOParser {
                                 splitting into {} vertices.", &name, n);
                                 for i in 0..n {
                                     vertices.insert(format!("{}_{}", &name, i),
-                                        Vertex {
+                                                    InteractionVertex {
                                             name: format!("{}_{}", &name, i),
                                             particles: particles.clone(),
                                             couplings_orders: coupling_orders_vec.pop().unwrap()
@@ -282,7 +290,7 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use indexmap::IndexMap;
-    use crate::model::{Model, ufoparser::UFOParser, Particle, Vertex, LineStyle};
+    use crate::model::{Model, ufoparser::UFOParser, Particle, InteractionVertex, LineStyle, Statistic};
 
     #[test]
     fn ufo_parse_test() {
@@ -292,50 +300,50 @@ mod tests {
         let model_ref = Model {
             particles: IndexMap::from([
                 (String::from("u"), Particle::new(
-                    "u", 9000001, "u", "u~", LineStyle::Straight
+                    "u", 9000001, "u", "u~", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("c"), Particle::new(
-                    "c", 9000002, "c", "c~", LineStyle::Straight
+                    "c", 9000002, "c", "c~", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("t"), Particle::new(
-                    "t", 9000003, "t", "t~", LineStyle::Straight
+                    "t", 9000003, "t", "t~", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("G"), Particle::new(
-                    "G", 9000004, "G", "G", LineStyle::Curly
+                    "G", 9000004, "G", "G", LineStyle::Curly, Statistic::Bose
                 )),
                 (String::from("u__tilde__"), Particle::new(
-                    "u__tilde__", -9000001, "u~", "u", LineStyle::Straight
+                    "u__tilde__", -9000001, "u~", "u", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("c__tilde__"), Particle::new(
-                    "c__tilde__", -9000002, "c~", "c", LineStyle::Straight
+                    "c__tilde__", -9000002, "c~", "c", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("t__tilde__"), Particle::new(
-                    "t__tilde__", -9000003, "t~", "t", LineStyle::Straight
+                    "t__tilde__", -9000003, "t~", "t", LineStyle::Straight, Statistic::Fermi
                 )),
 
             ]),
             vertices: IndexMap::from([
-                ("V_1".to_string(), Vertex {
+                ("V_1".to_string(), InteractionVertex {
                     name: "V_1".to_string(),
                     particles: vec!["G".to_string(); 3],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
-                ("V_2".to_string(), Vertex {
+                ("V_2".to_string(), InteractionVertex {
                     name: "V_2".to_string(),
                     particles: vec!["G".to_string(); 4],
                     couplings_orders: HashMap::from([("QCD".to_string(), 2)])
                 }), 
-                ("V_3".to_string(), Vertex {
+                ("V_3".to_string(), InteractionVertex {
                     name: "V_3".to_string(),
                     particles: vec!["u__tilde__".to_string(), "u".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
-                ("V_4".to_string(), Vertex {
+                ("V_4".to_string(), InteractionVertex {
                     name: "V_4".to_string(),
                     particles: vec!["c__tilde__".to_string(), "c".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
-                ("V_5".to_string(), Vertex {
+                ("V_5".to_string(), InteractionVertex {
                     name: "V_5".to_string(),
                     particles: vec!["t__tilde__".to_string(), "t".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])

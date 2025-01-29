@@ -7,6 +7,7 @@
 ##
 ##
 
+from builtins import object
 import cmath
 import re
 
@@ -25,7 +26,7 @@ class UFOBaseClass(object):
         for i, name in enumerate(self.require_args):
             setattr(self, name, args[i])
     
-        for (option, value) in options.items():
+        for (option, value) in list(options.items()):
             setattr(self, option, value)
 
     def get(self, name):
@@ -43,7 +44,7 @@ class UFOBaseClass(object):
 
     def nice_string(self):
         """ return string with the full information """
-        return '\n'.join(['%s \t: %s' %(name, value) for name, value in self.__dict__.items()])
+        return '\n'.join(['%s \t: %s' %(name, value) for name, value in list(self.__dict__.items())])
 
     def __repr__(self):
         replacements = [
@@ -133,7 +134,7 @@ class Particle(UFOBaseClass):
         if self.selfconjugate:
             raise Exception('%s has no anti particle.' % self.name) 
         outdic = {}
-        for k,v in self.__dict__.items():
+        for k,v in list(self.__dict__.items()):
             if k not in self.require_args_all:                
                 outdic[k] = -v
         if self.color in [1,8]:
@@ -252,7 +253,7 @@ class Coupling(UFOBaseClass):
         parameter or just a string which can possibly contain CTparameter defining the Laurent serie."""
         
         if isinstance(self.value,dict):
-            if -x in self.value.keys():
+            if -x in list(self.value.keys()):
                 return self.value[-x]
             else:
                 return 'ZERO'
@@ -265,9 +266,9 @@ class Coupling(UFOBaseClass):
                if not CTparam:
                    CTparam=param
                else:
-                   raise UFOError, "UFO does not support yet more than one occurence of CTParameters in the couplings values."
+                   raise UFOError("UFO does not support yet more than one occurence of CTParameters in the couplings values.")
            elif numberOfMatches>1:
-               raise UFOError, "UFO does not support yet more than one occurence of CTParameters in the couplings values."
+               raise UFOError("UFO does not support yet more than one occurence of CTParameters in the couplings values.")
 
         if not CTparam:
             if x==0:

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # This file is part of the UFO.
 #
 # This file contains definitions for functions that
@@ -12,7 +13,7 @@ __date__ = "22 July 2010"
 __author__ = "claude.duhr@durham.ac.uk"
 
 import cmath
-from object_library import all_functions, Function
+from .object_library import all_functions, Function
 
 #
 # shortcuts for functions from cmath

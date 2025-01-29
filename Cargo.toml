@@ -8,8 +8,7 @@ name = "feyngraph"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-num-traits = "0.2"
-itertools = "0.13"
+itertools = "0.14"
 rayon = "1"
 pest = "2"
 pest_derive = "2"
