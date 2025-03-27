@@ -3,23 +3,27 @@ use std::path::Path;
 use itertools::Itertools;
 use thiserror::Error;
 use indexmap::IndexMap;
+use crate::model::qgraf_parser::QGRAFParser;
 use crate::model::Statistic::Fermi;
-use crate::model::ufoparser::{Rule, UFOParser};
+use crate::model::ufo_parser::{UFOParser};
 
-mod ufoparser;
+mod ufo_parser;
+mod qgraf_parser;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Error, Debug)]
 pub enum ModelError {
-    #[error("Encountered illegal model option '{0}'")]
+    #[error("Encountered illegal model option: {0}")]
     ContentError(String),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
-    #[error("Error while parsing UFO model")]
-    ParseError(#[from] pest::error::Error<Rule>),
+    #[error("Error while parsing UFO model" )]
+    UFOParseError(#[from] pest::error::Error<ufo_parser::Rule>),
+    #[error("Error while parsing QGRAF model")]
+    QGRAFParseError(#[from] pest::error::Error<qgraf_parser::Rule>),
 }
 
-#[derive(PartialEq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Hash, Clone, Eq)]
 pub enum LineStyle {
     Dashed,
     Dotted,
@@ -31,35 +35,41 @@ pub enum LineStyle {
     Double
 }
 
-#[derive(PartialEq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Hash, Clone, Eq)]
 pub enum Statistic {
     Fermi,
     Bose
 }
 
-#[derive(Debug, PartialEq, Hash, Clone)]
+#[derive(Debug, PartialEq, Hash, Clone, Eq)]
 pub struct Particle {
     name: String,
+    anti_name: String,
     pdg_code: isize,
     texname: String,
     antitexname: String,
     linestyle: LineStyle,
     self_anti: bool,
-    statistic: Statistic,
+    statistic: Statistic
 }
 
 impl Particle {
     pub fn get_name(&self) -> &String {
         return &self.name;
     }
+
+    pub fn get_anti_name(&self) -> &String { return &self.anti_name; }
+
+    pub fn get_pdg(&self) -> isize { return self.pdg_code; }
     
     pub fn is_anti(&self) -> bool {
         return self.pdg_code <= 0;
     }
     
-    pub fn into_anti(self, anti_name: String) -> Particle {
+    pub fn into_anti(self) -> Particle {
         return Self {
-            name: anti_name,
+            name: self.anti_name,
+            anti_name: self.name,
             pdg_code: -self.pdg_code,
             texname: self.antitexname,
             antitexname: self.texname,
@@ -72,6 +82,7 @@ impl Particle {
 
 impl Particle {
     pub fn new(name: impl Into<String>,
+               anti_name: impl Into<String>,
                pdg_code: isize,
                texname: impl Into<String>,
                antitexname: impl Into<String>,
@@ -83,12 +94,13 @@ impl Particle {
         let self_anti = texname == antitexname;
         return Self {
             name: name.into(),
+            anti_name: anti_name.into(),
             pdg_code,
             texname,
             antitexname,
             linestyle,
             self_anti,
-            statistic
+            statistic,
         }
     }
     
@@ -146,6 +158,8 @@ impl Model {
     pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
         return UFOParser::parse_ufo_model(path);
     }
+
+    pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {return QGRAFParser::parse_qgraf_model(path); }
     
     pub fn get_anti(&self, particle_index: usize) -> usize {
         return if self.particles[particle_index].self_anti {

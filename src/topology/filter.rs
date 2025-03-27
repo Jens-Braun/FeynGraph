@@ -17,6 +17,10 @@ pub struct TopologySelector {
     pub(crate) node_partition: Vec<Vec<(usize, usize)>>,
     /// Only keep topologies with the specified number of one-particle-irreducible components
     pub(crate) opi_components: Vec<usize>,
+    /// Only keep topologies with the specified number of self-loops
+    pub(crate) self_loops: Vec<usize>,
+    /// Only keep topologies with no self-energy insertions on external legs.
+    pub(crate) on_shell: bool,
     /// Only keep topologies for which the given custom function returns `true`
     pub(crate) custom_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
 }
@@ -29,6 +33,8 @@ impl TopologySelector {
             node_degrees: Vec::new(),
             node_partition: Vec::new(),
             opi_components: Vec::new(),
+            self_loops: Vec::new(),
+            on_shell: false,
             custom_functions: Vec::new()
         };
     }
@@ -82,6 +88,15 @@ impl TopologySelector {
         self.opi_components.push(count);
     }
 
+    /// Add a criterion to only keep topologies with `count` self loops. A self-loop is defined as an edge which ends
+    /// on the same node it started on.
+    pub fn add_self_loop_count(&mut self, count: usize) { self.self_loops.push(count); }
+
+    /// Toggle the on-shell criterion. If true, only topologies with no self-energy insertions on external legs are
+    /// kept. This implementation considers internal edges carrying a single external momentum and no loop momentum,
+    /// which is equivalent to a self-energy insertion on an external edge.
+    pub fn set_on_shell(&mut self) { self.on_shell = !self.on_shell; }
+
     /// Add a criterion to keep only diagrams for which the given function returns `true`.
     pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&Topology) -> bool + Sync + Send>) {
         self.custom_functions.push(function);
@@ -92,6 +107,8 @@ impl TopologySelector {
         self.node_degrees.clear();
         self.node_partition.clear();
         self.opi_components.clear();
+        self.self_loops.clear();
+        self.on_shell = false;
         self.custom_functions.clear();
     }
     
@@ -99,6 +116,8 @@ impl TopologySelector {
         return self.select_node_degrees(topo)
             && self.select_node_partition(topo)
             && self.select_opi_components(topo)
+            && self.select_self_loops(topo)
+            && self.select_on_shell(topo)
             && self.select_custom_criteria(topo);
     }
 
@@ -126,6 +145,16 @@ impl TopologySelector {
     fn select_opi_components(&self, topo: &Topology) -> bool {
         if self.opi_components.is_empty() { return true; }
         return self.opi_components.iter().any(|opi_count| *opi_count == topo.count_opi_componenets());
+    }
+
+    fn select_self_loops(&self, topo: &Topology) -> bool {
+        if self.self_loops.is_empty() { return true; }
+        return self.self_loops.iter().any(|opi_count| *opi_count == topo.count_self_loops());
+    }
+
+    fn select_on_shell(&self, topo: &Topology) -> bool {
+        if !self.on_shell { return true; }
+        return topo.on_shell();
     }
 
     fn select_custom_criteria(&self, topo: &Topology) -> bool {

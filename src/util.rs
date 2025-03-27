@@ -1,4 +1,12 @@
 use itertools::{izip, Itertools};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Invalid input: {0}")]
+    InputError(String),
+}
+
 pub(crate) fn generate_permutations(partition_sizes: &[usize]) -> impl Iterator<Item = Vec<usize>> {
     return izip!(
         partition_sizes.iter().scan(1usize,

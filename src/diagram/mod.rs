@@ -7,12 +7,15 @@ use crate::topology::{Topology, TopologyGenerator};
 
 use rayon::prelude::*;
 use crate::diagram::workspace::AssignWorkspace;
+use crate::util::Error;
+use crate::util::factorial;
 
 mod components;
 pub mod filter;
 mod workspace;
+mod view;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Propagator {
     pub(crate) vertices: (usize, usize),
     pub(crate) particle: Particle,
@@ -25,6 +28,14 @@ impl Propagator {
             vertices,
             particle,
             momentum
+        }
+    }
+
+    pub(crate) fn invert(self) -> Self {
+        return Self {
+            vertices: (self.vertices.1, self.vertices.0),
+            particle: self.particle.into_anti(),
+            momentum: self.momentum.into_iter().map(|x| -x).collect(),
         }
     }
 }
@@ -69,7 +80,33 @@ pub struct Diagram {
 }
 
 impl Diagram {
-    fn from(workspace: &AssignWorkspace) -> Self {
+    fn from(workspace: &AssignWorkspace, vertex_symmetry: usize) -> Self {
+        let propagators = workspace.propagator_candidates.iter().enumerate()
+            .map(|(i, candidate)| {
+                Propagator::new(
+                    workspace.topology.get_edge(i).connected_nodes,
+                    workspace.model.get_particle(candidate.particle.unwrap()).clone(),
+                    workspace.topology.get_edge(i).momenta.as_ref().unwrap().iter().enumerate().map(
+                        |(i, x)| if i >= workspace.incoming_particles.len()
+                            && i < workspace.incoming_particles.len() + workspace.outgoing_particles.len() {
+                            -*x
+                        } else {
+                            *x
+                        }
+                    ).collect_vec(),
+                )
+            }
+            ).collect_vec();
+        let mut propagator_symmetry = 1;
+        for ((vertices, _), count) in
+            propagators.iter().counts_by(|prop| (prop.vertices, prop.particle.get_pdg())) {
+            if vertices.0 == vertices.1 {
+                propagator_symmetry *= 2_usize.pow(count as u32);
+                propagator_symmetry *= factorial(count);
+            } else {
+                propagator_symmetry *= factorial(count);
+            }
+        }
         return Diagram {
             incoming_particles: workspace.incoming_particles.clone(),
             outgoing_particles: workspace.outgoing_particles.clone(),
@@ -83,16 +120,9 @@ impl Diagram {
                         ))
                     }
                 }).collect_vec(),
-            propagators: workspace.propagator_candidates.iter().enumerate()
-                .map(|(i, candidate)|
-                    Propagator::new(
-                        workspace.topology.get_edge(i).connected_nodes,
-                        workspace.model.get_particle(candidate.particle.unwrap()).clone(),
-                        workspace.topology.get_edge(i).momenta.as_ref().unwrap().clone(),
-                    )
-                ).collect_vec(),
-            vertex_symmetry: workspace.topology.get_node_symmetry(),
-            propagator_symmetry: workspace.topology.get_edge_symmetry(),
+            propagators,
+            vertex_symmetry,
+            propagator_symmetry,
             momentum_labels: workspace.topology.momentum_labels.clone(),
             bridges: workspace.topology.bridges.iter().map(
                 |(v, w)| {
@@ -106,23 +136,35 @@ impl Diagram {
         };
     }
 
-    fn momentum_string(&self, edge_index: usize) -> String {
+    pub fn momentum_string(&self, propagator_index: usize, invert: bool) -> String {
         let mut result = String::with_capacity(5*self.momentum_labels.len());
         let mut first: bool = true;
-        for (i, coefficient) in self.propagators[edge_index].momentum.iter().enumerate() {
+        let sign = if invert { -1 } else { 1 };
+        for (i, coefficient) in self.propagators[propagator_index].momentum.iter().enumerate() {
             if *coefficient == 0 { continue; }
             if first {
-                write!(&mut result, "{}*{} ", coefficient, self.momentum_labels[i]).unwrap();
-                first = false;
-            } else {
-                match coefficient.signum() {
+                match *coefficient * sign {
                     1 => {
-                        write!(&mut result, "+ {}*{} ", coefficient, self.momentum_labels[i]).unwrap();
+                        write!(&mut result, "{}", self.momentum_labels[i]).unwrap();
                     },
                     -1 => {
-                        write!(&mut result, "- {}*{} ", coefficient.abs(), self.momentum_labels[i]).unwrap();
+                        write!(&mut result, "-{}", self.momentum_labels[i]).unwrap();
                     },
-                    _ => unreachable!()
+                    x if x < 0 => write!(&mut result, "- {}*{}", x.abs(), self.momentum_labels[i]).unwrap(),
+                    x => write!(&mut result, "{}*{}", x, self.momentum_labels[i]).unwrap()
+                }
+                first = false;
+            } else {
+                write!(&mut result, " ").unwrap();
+                match *coefficient * sign {
+                    1 => {
+                        write!(&mut result, "+ {}", self.momentum_labels[i]).unwrap();
+                    },
+                    -1 => {
+                        write!(&mut result, "- {}", self.momentum_labels[i]).unwrap();
+                    },
+                    x if x < 0 => write!(&mut result, "- {}*{}", x.abs(), self.momentum_labels[i]).unwrap(),
+                    x => write!(&mut result, "+ {}*{}", x, self.momentum_labels[i]).unwrap()
                 }
             }
         }
@@ -133,9 +175,33 @@ impl Diagram {
         return self.propagators.iter();
     }
 
+    pub fn incoming_iter(&self) -> impl Iterator<Item = &Propagator> {
+        return self.propagators.iter().take(self.incoming_particles.len());
+    }
+
+    pub fn outgoing_iter(&self) -> impl Iterator<Item = &Propagator> {
+        return self.propagators.iter().skip(self.incoming_particles.len()).take(self.outgoing_particles.len());
+    }
+
     pub fn count_opi_components(&self) -> usize {
         return self.bridges.len() + 1;
     }
+
+    pub fn get_sign(&self) -> i8 { return self.sign; }
+
+    pub fn get_symmetry_factor(&self) -> usize { return self.vertex_symmetry * self.propagator_symmetry; }
+
+    pub fn get_n_in(&self) -> usize { return self.incoming_particles.len(); }
+
+    pub fn get_n_out(&self) -> usize { return self.outgoing_particles.len(); }
+
+    pub fn get_n_ext(&self) -> usize { return self.incoming_particles.len() + self.outgoing_particles.len(); }
+
+    pub fn vertices_iter(&self) -> impl Iterator<Item = &Vertex> { return self.vertices.iter(); }
+
+    pub fn get_vertex(&self, vertex: usize) -> &Vertex { return &self.vertices[vertex-self.get_n_ext()]; }
+
+    pub fn get_propagator(&self, propagator: usize) -> &Propagator { return &self.propagators[propagator]; }
 }
 
 impl std::fmt::Display for Diagram {
@@ -161,11 +227,12 @@ impl std::fmt::Display for Diagram {
                      propagator.particle.get_name(),
                      propagator.vertices.0,
                      propagator.vertices.1,
-                     self.momentum_string(i)
+                     self.momentum_string(i, false)
             )?;
         }
         writeln!(f, "    ]")?;
         writeln!(f, "    SymmetryFactor: 1/{}", self.vertex_symmetry * self.propagator_symmetry)?;
+        writeln!(f, "    Sign: {}", if self.sign == 1 {"+"} else {"-"})?;
         writeln!(f, "}}")?;
         Ok(())
     }
@@ -246,6 +313,7 @@ pub struct DiagramGenerator {
     outgoing_particles: Vec<Particle>,
     n_external: usize,
     n_loops: usize,
+    momentum_labels: Option<Vec<String>>,
 }
 
 impl DiagramGenerator {
@@ -268,17 +336,32 @@ impl DiagramGenerator {
             incoming_particles,
             outgoing_particles,
             n_external,
-            n_loops
+            n_loops,
+            momentum_labels: None,
         }
     }
-    
+
+    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), Error> {
+        if !labels.len() == self.n_external + self.n_loops {
+            return Err(Error::InputError(
+                format!("Found {} momenta, but n_external + n_loops = {} are required",
+                        labels.len(), self.n_external + self.n_loops)
+            ));
+        }
+        self.momentum_labels = Some(labels);
+        return Ok(());
+    }
+
     pub fn generate(&self) -> DiagramContainer {
-        let topo_generator = TopologyGenerator::new(
+        let mut topo_generator = TopologyGenerator::new(
             self.n_external,
             self.n_loops,
             TopologyModel::from(&self.model),
             Some(self.selector.as_topology_selector()),
         );
+        if let Some(ref labels) = self.momentum_labels {
+            topo_generator.set_momentum_labels(labels.clone()).unwrap();
+        }
         let topologies = topo_generator.generate();
         let mut containers: Vec<DiagramContainer> = Vec::new();
         topologies.inner_ref().into_par_iter().map(|topology| {
@@ -352,7 +435,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let generator = DiagramGenerator::new(
             particles_in,
@@ -372,7 +455,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let generator = DiagramGenerator::new(
             particles_in,
@@ -392,7 +475,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let generator = DiagramGenerator::new(
             particles_in,
@@ -412,7 +495,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let generator = DiagramGenerator::new(
             particles_in,
@@ -521,7 +604,7 @@ mod tests {
 
     #[test]
     fn diagram_generator_sm_u_prop_1l_test() {
-        let model = Model::from_ufo(&PathBuf::from("/home/jens/Programs/gosam-private/examples/model/Standard_Model_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/Standard_Model_UFO")).unwrap();
         let topo_selector = TopologySelector::new();
         let topo_generator = TopologyGenerator::new(2, 1, (&model).into(), Some(topo_selector));
         let topologies = topo_generator.generate();
@@ -554,5 +637,32 @@ mod tests {
         let diags = generator.generate();
         assert_eq!(diags.len(), 2);
         assert_eq!(diags[0].sign, -diags[1].sign);
+    }
+
+    #[test]
+    fn diagram_generator_sign_1l_test() {
+        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let mut topo_selector = TopologySelector::new();
+        topo_selector.add_custom_function(
+            Arc::new(|topo: &Topology| -> bool {
+                !topo.edges_iter().any(|edge| edge.connected_nodes.0 == edge.connected_nodes.1)
+            })
+        );
+        let topo_generator = TopologyGenerator::new(4, 1, (&model).into(), Some(topo_selector));
+        let topologies = topo_generator.generate();
+        let selector = DiagramSelector::default();
+        let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
+        let particle_out = vec![model.get_particle_name("u").unwrap().clone(),
+                                model.get_particle_name("u~").unwrap().clone()];
+        let generator = DiagramGenerator::new(
+            particles_in,
+            particle_out,
+            1,
+            model,
+            Some(selector)
+        );
+        let diagrams = generator.assign_topology(&topologies[33]);
+        println!("{}", &topologies[33]);
+        assert_eq!(diagrams.len(), 4);
     }
 }

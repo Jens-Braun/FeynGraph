@@ -23,6 +23,8 @@ pub struct TopologyWorkspace{
     topology_buffer: Option<TopologyContainer>,
     /// [TopologySelector] deciding whether a found topology is kept
     pub(crate) topology_selector: TopologySelector,
+    /// List of names of the momenta
+    pub(crate) momentum_labels: Vec<String>,
 }
 
 impl TopologyWorkspace {
@@ -46,7 +48,16 @@ impl TopologyWorkspace {
             node_classification,
             topology_buffer: None,
             topology_selector: TopologySelector::default(),
+            momentum_labels: vec![
+                (1..=n_external).map(|i| format!("p{}", i)).collect_vec(),
+                (1..=n_loops).map(|i| format!("l{}", i)).collect_vec(),
+            ].into_iter().flatten().collect_vec()
         }
+    }
+
+    /// Set the names of the momenta
+    pub(crate) fn set_momentum_labels(&mut self, labels: Vec<String>) {
+        self.momentum_labels = labels;
     }
 
     /// Return the root of the spanning tree to which `node` belongs. Flattens the tree in the process.

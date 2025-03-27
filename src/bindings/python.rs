@@ -1,21 +1,20 @@
+#![cfg(not(doctest))]
+
+use std::collections::HashMap;
 use pyo3::prelude::*;
-use pyo3::exceptions::{PyIOError, PySyntaxError};
+use pyo3::exceptions::{PyIOError, PyIndexError, PySyntaxError, PyValueError};
 use std::path::PathBuf;
 use std::sync::Arc;
 use itertools::Itertools;
-use pyo3::types::PyFunction;
-use crate::{
-    model::{
-        ModelError, Model, TopologyModel
-    }, 
-    topology::{
-        Node, Edge, Topology, TopologyContainer, TopologyGenerator, 
-        filter::TopologySelector
-    },
-    diagram::{
-        DiagramContainer, DiagramGenerator, Diagram, filter::DiagramSelector, Propagator, Vertex
-    }
-};
+use pyo3::types::{PyDict, PyFunction};
+use crate::{model::{
+    ModelError, Model, TopologyModel, Particle
+}, topology::{
+    Node, Edge, Topology, TopologyContainer, TopologyGenerator,
+    filter::TopologySelector
+}, diagram::{
+    DiagramContainer, DiagramGenerator, Diagram, filter::DiagramSelector, Propagator, Vertex
+}, util};
 
 #[pymodule]
 #[allow(non_snake_case)]
@@ -34,6 +33,7 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDiagramContainer>()?;
     m.add_class::<PyDiagramSelector>()?;
     m.add_function(wrap_pyfunction!(set_threads, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_diagrams, m)?)?;
     return Ok(());
 }
 
@@ -46,12 +46,73 @@ fn set_threads(n_threads: usize) {
     rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global().unwrap();
 }
 
-impl std::convert::From<ModelError> for PyErr {
+/// Convenience function for diagram generation. This function only requires the minimal set of input information,
+/// the incoming particles and the outgoing particles. Sensible defaults are provided for all other variables.
+///
+/// Examples
+/// --------
+///
+/// .. code-block:: python
+///
+///     import feyngraph as fg
+///     diagrams = fg.generate_diagrams(["u", "u__tilde__"], ["u", "u__tilde"], 2)
+///     assert(len(diagrams), 4632)
+///
+///
+/// :param particles_in: list of incoming particles, specified by name
+/// :type particles_in: List[str]
+/// :param particles_out: list of outgoing particles, specified by name
+/// :type particles_out: List[str]
+/// :param n_loops: number of loops in the generated diagrams [default: 0]
+/// :type n_loops: int
+/// :param model: model used in diagram generation [default: SM in Feynman gauge]
+/// :type model: Model
+/// :param diagram_selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
+/// :type diagram_selector: DiagramSelector
+///
+#[pyfunction]
+#[pyo3(signature = (
+    particles_in,
+    particles_out,
+    n_loops = 0,
+    model = PyModel::from_ufo(PathBuf::from("tests/Standard_Model_UFO")).unwrap(),
+    diagram_selector = None,
+))]
+fn generate_diagrams(
+    py: Python<'_>,
+    particles_in: Vec<String>,
+    particles_out: Vec<String>,
+    n_loops: usize,
+    model: PyModel,
+    diagram_selector: Option<PyDiagramSelector>,
+) -> PyResult<PyDiagramContainer> {
+    let mut selector;
+    if let Some(in_selector) = diagram_selector {
+        selector = in_selector;
+    } else {
+        selector = PyDiagramSelector::new();
+        if n_loops > 0 {
+            selector.select_opi_components(1);
+        }
+    }
+    return Ok(PyDiagramGenerator::new(particles_in, particles_out, n_loops, model, Some(selector))?.generate(py));
+}
+
+impl From<ModelError> for PyErr {
     fn from(err: ModelError) -> PyErr {
         match err {
             ModelError::IOError(_) => PyIOError::new_err(err.to_string()),
-            ModelError::ParseError(_) => PySyntaxError::new_err(err.to_string()),
+            ModelError::UFOParseError(_) => PySyntaxError::new_err(err.to_string()),
+            ModelError::QGRAFParseError(_) => PySyntaxError::new_err(err.to_string()),
             ModelError::ContentError(_) => PySyntaxError::new_err(err.to_string()),
+        }
+    }
+}
+
+impl From<util::Error> for PyErr {
+    fn from(err: util::Error) -> PyErr {
+        match err {
+            util::Error::InputError(_) => PyValueError::new_err(err.to_string()),
         }
     }
 }
@@ -106,10 +167,50 @@ impl PyModel {
         return Ok(Self(Model::from_ufo(&path)?));
     }
 
+    /// Import a model in QGRAF's model format. The parser is not exhaustive in the options QGRAF supports and is only
+    /// intended for backwards compatibility, especially for the models included in GoSam. UFO models should be
+    /// preferred whenever possible.
+    ///
+    /// :param path:
+    /// :type path: str
+    #[staticmethod]
+    fn from_qgraf(path: PathBuf) -> PyResult<Self> {
+        return Ok(Self(Model::from_qgraf(&path)?));
+    }
+
     /// Cast the full model down to a topological model used by `TopologyGenerator`.
     fn as_topology_model(&self) -> PyTopologyModel {
         return PyTopologyModel(TopologyModel::from(&self.0));
     }
+
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+}
+
+/// Internal representation of a Particle in FeynGraph.
+#[derive(Clone)]
+#[pyclass]
+#[pyo3(name = "Particle")]
+struct PyParticle(Particle);
+
+#[pymethods]
+impl PyParticle {
+    /// Get the particle's name
+    fn get_name(&self) -> String { return self.0.get_name().clone(); }
+
+    /// Get the name of the particle's anti particle
+    fn get_anti_name(&self) -> String { return self.0.get_anti_name().clone(); }
+
+    /// Return true if the particle is classified as an anti-particle (PDG-ID < 0)
+    fn is_anti(&self) -> bool { return self.0.is_anti(); }
+
+    /// Return true if the particle obeys Fermi-Dirac statistics
+    fn is_fermi(&self) -> bool { return self.0.is_fermi() }
 
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
@@ -141,6 +242,7 @@ struct PyTopologySelector(TopologySelector);
 /// - opi components: select only topologies for which the number of one-particle-irreducible components matches any of
 /// the given counts
 /// - custom functions: select only topologies for which any of the given custom functions return `true`
+///
 #[pymethods]
 impl PyTopologySelector {
     /// Create a new topology selector, which contains no criteria and thus selects every diagram.
@@ -349,8 +451,11 @@ impl PyTopologyContainer {
     fn __len__(&self) -> usize {
         return self.0.len();
     }
-    fn __getitem__(&self, i: usize) -> PyTopology {
-        return PyTopology((*self.0.get(i)).clone());
+    fn __getitem__(&self, i: usize) -> PyResult<PyTopology> {
+        if i >= self.0.len() {
+            return Err(PyIndexError::new_err("Index out of bounds"));
+        }
+        return Ok(PyTopology((*self.0.get(i)).clone()));
     }
 }
 
@@ -427,8 +532,10 @@ impl PyPropagator {
         return self.0.vertices.clone();
     }
 
-    /// Get the momentum of the propagator, represented as the coefficients of the respective momentum. The first $N$
-    /// entries are the $N$ external momenta, the remaining integrals are the loop momenta.
+    fn get_particle(&self) -> PyParticle { return PyParticle(self.0.particle.clone()); }
+
+    /// Get the momentum of the propagator, represented as the coefficients of the respective momentum. The first :math:`N`
+    /// entries are the :math:`N` external momenta, the remaining integrals are the loop momenta.
     ///
     /// Example
     /// -------
@@ -444,6 +551,7 @@ impl PyPropagator {
     fn get_momentum(&self) -> Vec<i8> {
         return self.0.momentum.clone();
     }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }
@@ -468,6 +576,20 @@ impl PyVertex {
     fn __str__(&self) -> String {
         return format!("{:?}", self.0);
     }
+
+    /// Get the indices of all propagators connected to the vertex
+    fn get_propagator_ids(&self) -> Vec<usize> {
+        return self.0.propagators.clone();
+    }
+
+    /// Get the vertex degree
+    fn get_degree(&self) -> usize { return self.0.interaction.get_degree(); }
+
+    /// Get a dictionary of coupling orders of this interaction vertex
+    fn get_coupling_orders(&self) -> HashMap<String, usize> { return self.0.interaction.couplings_orders.clone(); }
+
+    /// Get a list of names of the fields incoming to this interaction vertex
+    fn get_fields(&self) -> Vec<String> { return self.0.interaction.particles.clone(); }
 }
 
 /// The class representing a Feynman diagram
@@ -486,11 +608,99 @@ impl PyDiagram {
         return format!("{}", self.0);
     }
 
-    /// Get all propagators of the diagram, including external legs
+    /// Get the number of the diagram's external legs
+    fn get_n_ext(&self) -> usize {
+        return self.0.get_n_ext();
+    }
+
+    /// Get the string formatted momentum of the `prop`-th incoming propagator.
+    fn get_inc_momentum_str(&self, prop: usize) -> String {
+        return self.0.momentum_string(prop, false);
+    }
+
+    /// Get the string formatted momentum of the `prop`-th outgoing propagator.
+    fn get_out_momentum_str(&self, prop: usize) -> String {
+        return self.0.momentum_string(self.0.get_n_in() + prop, true);
+    }
+
+    /// Get the string formatted momentum of the `prop`-th internal propagator.
+    fn get_prop_momentum_str(&self, prop: usize) -> String {
+        return self.0.momentum_string(self.0.get_n_ext() + prop, false);
+    }
+
+    /// Get the string formatted momentum of the propagator connected to the `leg`-th leg of `vertex`.
+    fn get_vert_momentum_str(&self, vertex: usize, leg: usize) -> String {
+        return
+            if self.0.get_propagator(self.0.get_vertex(vertex + self.0.get_n_ext()).propagators[leg]).vertices.0
+                == vertex + self.0.get_n_ext() {
+            self.0.momentum_string(self.0.get_vertex(vertex + self.0.get_n_ext()).propagators[leg], true)
+        } else {
+            self.0.momentum_string(self.0.get_vertex(vertex + self.0.get_n_ext()).propagators[leg], false)
+        }
+    }
+
+    /// Get all internal propagators of the diagram
     ///
     /// :rtype: list[Propagator]
     fn get_propagators(&self) -> Vec<PyPropagator> {
-        return self.0.propagators_iter().map(|prop| PyPropagator(prop.clone())).collect_vec();
+        return self.0.propagators_iter().skip(self.0.get_n_ext()).map(|prop| PyPropagator(prop.clone())).collect_vec();
+    }
+
+    /// Get the `propagator`-th propagator
+    fn get_propagator(&self, propagator: usize) -> PyPropagator {
+        return PyPropagator(self.0.get_propagator(propagator).clone());
+    }
+
+    /// Get all vertices of the diagram
+    fn get_vertices(&self) -> Vec<PyVertex> {
+        return self.0.vertices_iter().map(|v| PyVertex(v.clone())).collect_vec();
+    }
+
+    /// Get all incoming legs of the diagram
+    fn get_incoming(&self) -> Vec<PyPropagator> {
+        return self.0.incoming_iter().map(|prop| PyPropagator(prop.clone())).collect_vec();
+    }
+
+    /// Get all outgoing legs of the diagram
+    fn get_outgoing(&self) -> Vec<PyPropagator> {
+        return self.0.outgoing_iter().map(|prop| PyPropagator(prop.clone().invert())).collect_vec();
+    }
+
+    /// Get the relative sign of the diagram
+    ///
+    /// :rtype: int
+    fn get_sign(&self) -> i8 { return self.0.get_sign(); }
+
+    /// Get the total symmetry factor of the diagram. Here, symmetry factor means the number of diagrams which are
+    /// equivalent to the given one, i.e. :math:`N_\mathrm{symmetry} \in ℕ`.
+    fn get_symmetry_factor(&self) -> usize { return self.0.get_symmetry_factor(); }
+
+    /// Get the `propagator`-th propagators' ray index with respect to its `leg`-th leg. The ray index is defined as
+    /// follows: let `v` be the vertex to which `propagator` is connected at its `leg`-th leg. The ray index then is
+    /// the index of `v`'s leg (the leg index is *from the vertex' perspective* here), to which `propagator` is
+    /// connected. The ray index is *zero-indexed*.
+    fn get_ray_index(&self, propagator: usize, leg: usize) -> usize {
+        return self.0.get_vertex(
+            if leg == 0 {self.0.get_propagator(propagator).vertices.0} else {self.0.get_propagator(propagator).vertices.1}
+        ).propagators.iter().position(|prop| *prop == propagator).unwrap();
+    }
+
+    /// Get the ray index of the `propagator`-th incoming field with respect to the vertex at leg `leg` of the
+    /// propagator. The ray index is *zero-indexed*.
+    fn get_inc_ray_index(&self, propagator: usize, leg: usize) -> usize {
+        return self.get_ray_index(propagator, leg);
+    }
+
+    /// Get the ray index of the `propagator`-th outgoing field with respect to the vertex at leg `leg` of the
+    /// propagator. The ray index is *zero-indexed*.
+    fn get_out_ray_index(&self, propagator: usize, leg: usize) -> usize {
+        return self.get_ray_index(self.0.get_n_in() + propagator, leg);
+    }
+
+    /// Get the ray index of the `propagator`-th internal field with respect to the vertex at leg `leg` of the
+    /// propagator. The ray index is *zero-indexed*.
+    fn get_prop_ray_index(&self, propagator: usize, leg: usize) -> usize {
+        return self.get_ray_index(self.0.get_n_ext() + propagator, leg);
     }
 }
 
@@ -515,13 +725,22 @@ impl PyDiagramSelector {
         return Self(DiagramSelector::default());
     }
 
-    /// Add a constraints to only select diagrams with `opi_count` one-particle-irreducible components.
+    /// Add a constraint to only select diagrams with `opi_count` one-particle-irreducible components.
     ///
     /// :param opi_count:
     /// :type opi_count: int
     fn select_opi_components(&mut self, opi_count: usize) {
         self.0.add_opi_count(opi_count);
     }
+
+    /// Add a constraint to only select diagrams with `count` self-loops. A self-loop is defined as an edge which ends
+    /// on the same node it started on.
+    fn select_self_loops(&mut self, count: usize) { self.0.add_self_loop_count(count); }
+
+    /// Add a constraint to only select on-shell diagrams. On-shell diagrams are defined as diagrams with no self-energy
+    /// insertions on external legs. This implementation considers internal edges carrying a single external momentum
+    /// and no loop momentum, which is equivalent to a self-energy insertion on an external propagator.
+    fn select_on_shell(&mut self) { self.0.set_on_shell(); }
 
     /// Add a constraint to only select diagrams for which the given function returns `true`. The function receives
     /// a single diagrams as input and should return a boolean.
@@ -552,6 +771,28 @@ impl PyDiagramSelector {
             })
         )
     }
+
+    /// Add a constraint to only select diagrams for which the power of `coupling` sums to `power`.
+    ///
+    /// :param coupling: name of the coupling
+    /// :type coupling: str
+    /// :param power: power of the coupling
+    /// :type power: int
+    fn add_coupling_power(&mut self, coupling: String, power: usize) {
+        self.0.add_coupling_power(&coupling, power);
+    }
+
+    /// Add a constraint to only select diagrams which contain exactly `count` propagators of the field `particle`.
+    fn add_propagator_count(&mut self, particle: String, count: usize) {
+        self.0.add_propagator_count(&particle, count);
+    }
+
+    /// Add a constraint to only select diagrams which contain exactly `count` vertices of the fields `particles`.
+    fn add_vertex_count(&mut self, particles: Vec<String>, count: usize) {
+        self.0.add_vertex_count(particles, count);
+    }
+
+    fn __deepcopy__(&self, _memo: Py<PyDict>) -> Self { return self.clone(); }
 }
 
 /// The class representing a list of diagrams.
@@ -575,8 +816,11 @@ impl PyDiagramContainer {
     fn __len__(&self) -> usize {
         return self.0.len();
     }
-    fn __getitem__(&self, i: usize) -> PyDiagram {
-        return PyDiagram((*self.0.get(i)).clone());
+    fn __getitem__(&self, i: usize) -> PyResult<PyDiagram> {
+        if i >= self.0.len() {
+            return Err(PyIndexError::new_err("Index out of bounds"));
+        }
+        return Ok(PyDiagram((*self.0.get(i)).clone()));
     }
 }
 
@@ -630,6 +874,13 @@ impl PyDiagramGenerator {
         } else {
             Ok(Self(DiagramGenerator::new(incoming, outgoing, n_loops, model.0, None)))
         }
+    }
+
+    /// Set the names of the momenta. The first `n_external` ones are the external momenta, the remaining ones are
+    /// the loop momenta. Returns an error if the number of labels does not match the diagram.
+    fn set_momentum_labels(&mut self, labels: Vec<String>) -> PyResult<()> {
+        self.0.set_momentum_labels(labels)?;
+        return Ok(());
     }
 
     /// Generate the diagrams of the given process
@@ -694,5 +945,30 @@ mod tests {
             generator.generate(py)
         });        
         assert_eq!(topologies.__len__(), 1);
+    }
+
+    #[test]
+    fn py_ray_test() {
+        let model = Model::from_ufo(&PathBuf::from("tests/Standard_Model_UFO")).unwrap();
+        let selector = DiagramSelector::default();
+        let particles_in = vec![
+            model.get_particle_name("b").unwrap().clone(),
+            model.get_particle_name("g").unwrap().clone()
+        ];
+        let particles_out = vec![
+            model.get_particle_name("H").unwrap().clone(),
+            model.get_particle_name("b").unwrap().clone()
+        ];
+        let generator = DiagramGenerator::new(
+            particles_in,
+            particles_out,
+            0,
+            model,
+            Some(selector)
+        );
+        let diagrams = generator.generate();
+        let diagram = PyDiagram(diagrams[0].clone());
+        println!("{}", diagram.get_prop_ray_index(0, 0));
+        assert_eq!(diagrams.len(), 2);
     }
 }

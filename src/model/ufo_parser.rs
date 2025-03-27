@@ -13,26 +13,30 @@ use crate::model::Statistic::{Bose, Fermi};
 pub(crate) struct UFOParser;
 
 impl UFOParser {
-    fn parse_particles(path: &Path) -> Result<IndexMap<String, Particle>, ModelError> {
+    fn parse_particles(path: &Path) -> Result<(IndexMap<String, Particle>, HashMap<String, String>), ModelError> {
         let mut particles: IndexMap<String, Particle> = IndexMap::new();
+        let mut particle_id_map: HashMap<String, String> = HashMap::new();
         let particle_py_content = std::fs::read_to_string(path.join("particles.py"))?;
         let parsed_content = UFOParser::parse(Rule::particles_py, &particle_py_content)?.next().unwrap();
-        let mut required_anti_particles: Vec<(String, String)> = Vec::new();
         for particle_rule in parsed_content.into_inner() {
             match particle_rule.as_rule() {
                 Rule::particle => {
+                    let position = particle_rule.line_col();
+                    let mut properties = particle_rule.into_inner();
+                    let particle_id = properties.next().unwrap().as_str().trim_matches(['\"', '\'']).to_string();
                     let mut pdg_code = None;
                     let mut name = None;
+                    let mut antiname = None;
                     let mut texname = None;
                     let mut antitexname = None;
                     let mut linestyle = None;
-                    let mut spin = None;
+                    let mut twospin = None;
                     let mut color = None;
                     let mut statistic = Bose;
-                    let position = particle_rule.line_col();
-                    for property in particle_rule.into_inner() {
+                    for property in properties {
                         match property.as_rule() {
-                            Rule::name => { name = Some(property.as_str().trim_matches(['\"', '\''])) }
+                            Rule::property_name => { name = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\''])) },
+                            Rule::property_antiname=> { antiname = Some(property.into_inner().next().unwrap().as_str().trim_matches(['\"', '\''])) },
                             Rule::property_pdg_code => {
                                 pdg_code = Some(property.into_inner().next().unwrap().as_str().parse::<isize>().unwrap());
                             },
@@ -52,22 +56,24 @@ impl UFOParser {
                                 })
                             },
                             Rule::property_spin => {
-                                spin = Some(property.into_inner().next().unwrap().as_str().parse::<isize>().unwrap());
+                                twospin = Some(property.into_inner().next().unwrap().as_str().parse::<i8>().unwrap()-1);
                             },
                             Rule::property_color => {
-                                color = Some(property.into_inner().next().unwrap().as_str().parse::<usize>().unwrap());
+                                color = Some(property.into_inner().next().unwrap().as_str().parse::<u8>().unwrap());
                             },
+                            Rule::property_mass => (),
+                            Rule::property_width => (),
                             _ => ()
                         }
                     }
                     if linestyle.is_none() {
-                        if spin.is_none() || color.is_none() {
+                        if twospin.is_none() || color.is_none() {
                             return Err(ContentError(format!("Illegal particle definition in model {:#?} at position {:?}: \
                             either 'line' or 'spin' and 'color' is required", path, position)));
                         }
-                        linestyle = match spin.unwrap() {
-                            1 => Some(LineStyle::Dashed),
-                            2 => {
+                        linestyle = match twospin.unwrap() {
+                            0 => Some(LineStyle::Dashed),
+                            1 => {
                                 if texname != antitexname {
                                     Some(LineStyle::Straight)
                                 } else if color == Some(1) {
@@ -76,54 +82,60 @@ impl UFOParser {
                                     Some(LineStyle::Scurly)
                                 }
                             },
-                            3 => {
+                            2 => {
                                 if color == Some(1) {
                                     Some(LineStyle::Wavy)
                                 } else {
                                     Some(LineStyle::Curly)
                                 }
                             }
-                            5 => Some(LineStyle::Double),
-                            -1 => Some(LineStyle::Dotted),
+                            4 => Some(LineStyle::Double),
+                            -2 => Some(LineStyle::Dotted),
                             _ => {
-                                warn!("Found spin '{}' for particle {} in model {:#?}, \
-                                for which 'linestle' is undefined. Defaulting to 'dashed'.", &spin.unwrap(), &name.unwrap(), path);
+                                warn!("Found twospin '{}' for particle {} in model {:#?}, \
+                                for which 'linestle' is undefined. Defaulting to 'dashed'.", &twospin.unwrap(), &name.unwrap(), path);
                                 Some(LineStyle::Dashed)
                             }
                         }
                     }
-                    if let Some(spin) = spin {
-                        if spin == -1 || spin % 2 == 0 {
+                    if let Some(spin) = twospin {
+                        if spin == -2 || spin % 2 == 1 {
                             statistic = Fermi;
                         }
                     }
-                    particles.insert(name.unwrap().into(), Particle::new(
+                    if let None = antiname {
+                        antiname = Some(name.unwrap())
+                    }
+                    let particle = Particle::new(
                         name.unwrap(),
+                        antiname.unwrap(),
                         pdg_code.unwrap(),
                         texname.unwrap(),
                         antitexname.unwrap(),
                         linestyle.unwrap(),
                         statistic
-                    ));
+                    );
+                    particles.insert(name.unwrap().into(), particle.clone());
+                    particle_id_map.insert(particle_id, name.unwrap().into());
+                    if name != antiname {
+                        let anti = particle.clone().into_anti();
+                        particles.insert(antiname.unwrap().into(), anti);
+                    }
                 }
                 Rule::anti_particle => {
-                    let mut inner_rule = particle_rule.into_inner();
-                    let anti_name = inner_rule.next().unwrap().as_str().to_string();
-                    let particle_name = inner_rule.next().unwrap().as_str().to_string();
-                    required_anti_particles.push((anti_name, particle_name));
+                    let mut properties = particle_rule.into_inner();
+                    let anti_id = properties.next().unwrap().as_str().trim_matches(['\"', '\'']).to_string();
+                    let part_id = properties.next().unwrap().as_str().trim_matches(['\"', '\'']).to_string();
+                    if !particle_id_map.contains_key(&part_id) {
+                        return Err(ContentError(format!("Model contains anti particle {} of particle {}, but {} does not exist", anti_id, part_id, part_id)));
+                    }
+                    particle_id_map.insert(anti_id, particles[particle_id_map.get(&part_id).unwrap()].anti_name.clone());
                 },
                 Rule::EOI => (),
                 _ => unreachable!()
             }
         }
-        for (anti_name, particle) in required_anti_particles {
-            let anti = particles.get(&particle)
-                .ok_or_else(|| ContentError(format!("Model contains antiparticle of {}, but {} does not exist", &particle, &particle)))?
-                .clone()
-                .into_anti(anti_name.clone());
-            particles.insert(anti_name, anti);
-        }
-        return Ok(particles);
+        return Ok((particles, particle_id_map));
     }
 
     fn parse_coupling_orders(path: &Path) -> Result<Vec<String>, ModelError> {
@@ -196,7 +208,7 @@ impl UFOParser {
         return Ok(couplings);
     }
 
-    fn parse_vertices(path: &Path) -> Result<IndexMap<String, InteractionVertex>, ModelError> {
+    fn parse_vertices(path: &Path, id_map: &HashMap<String, String>) -> Result<IndexMap<String, InteractionVertex>, ModelError> {
         let mut vertices: IndexMap<String, InteractionVertex> = IndexMap::new();
         let coupling_map = Self::parse_couplings(path)?;
         let vertices_py_content = std::fs::read_to_string(path.join("vertices.py"))?;
@@ -216,7 +228,7 @@ impl UFOParser {
                             },
                             Rule::property_particles => {
                                 for particle in property.into_inner() {
-                                    particles.push(particle.as_str().to_string());
+                                    particles.push(id_map.get(&particle.as_str().to_string()).unwrap().clone());
                                 }
                             },
                             Rule::property_couplings => {
@@ -274,9 +286,9 @@ impl UFOParser {
     }
 
     pub(crate) fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
-        let particles = Self::parse_particles(path)?;
+        let (particles, particle_id_map) = Self::parse_particles(path)?;
         let coupling_orders = Self::parse_coupling_orders(path)?;
-        let vertices = Self::parse_vertices(path)?;
+        let vertices = Self::parse_vertices(path, &particle_id_map)?;
         return Ok(Model {
             particles,
             vertices,
@@ -290,7 +302,7 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
     use indexmap::IndexMap;
-    use crate::model::{Model, ufoparser::UFOParser, Particle, InteractionVertex, LineStyle, Statistic};
+    use crate::model::{Model, ufo_parser::UFOParser, Particle, InteractionVertex, LineStyle, Statistic};
 
     #[test]
     fn ufo_parse_test() {
@@ -300,25 +312,25 @@ mod tests {
         let model_ref = Model {
             particles: IndexMap::from([
                 (String::from("u"), Particle::new(
-                    "u", 9000001, "u", "u~", LineStyle::Straight, Statistic::Fermi
+                    "u", "u~", 9000001, "u", "u~", LineStyle::Straight, Statistic::Fermi
+                )),
+                (String::from("u~"), Particle::new(
+                    "u~", "u", -9000001, "u~", "u", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("c"), Particle::new(
-                    "c", 9000002, "c", "c~", LineStyle::Straight, Statistic::Fermi
+                    "c", "c~", 9000002, "c", "c~", LineStyle::Straight, Statistic::Fermi
+                )),
+                (String::from("c~"), Particle::new(
+                    "c~", "c", -9000002, "c~", "c", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("t"), Particle::new(
-                    "t", 9000003, "t", "t~", LineStyle::Straight, Statistic::Fermi
+                    "t", "t~", 9000003, "t", "t~", LineStyle::Straight, Statistic::Fermi
+                )),
+                (String::from("t~"), Particle::new(
+                    "t~", "t", -9000003, "t~", "t", LineStyle::Straight, Statistic::Fermi
                 )),
                 (String::from("G"), Particle::new(
-                    "G", 9000004, "G", "G", LineStyle::Curly, Statistic::Bose
-                )),
-                (String::from("u__tilde__"), Particle::new(
-                    "u__tilde__", -9000001, "u~", "u", LineStyle::Straight, Statistic::Fermi
-                )),
-                (String::from("c__tilde__"), Particle::new(
-                    "c__tilde__", -9000002, "c~", "c", LineStyle::Straight, Statistic::Fermi
-                )),
-                (String::from("t__tilde__"), Particle::new(
-                    "t__tilde__", -9000003, "t~", "t", LineStyle::Straight, Statistic::Fermi
+                    "G", "G", 9000004, "G", "G", LineStyle::Curly, Statistic::Bose
                 )),
 
             ]),
@@ -335,17 +347,17 @@ mod tests {
                 }), 
                 ("V_3".to_string(), InteractionVertex {
                     name: "V_3".to_string(),
-                    particles: vec!["u__tilde__".to_string(), "u".to_string(), "G".to_string()],
+                    particles: vec!["G".to_string(), "u".to_string(), "u~".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_4".to_string(), InteractionVertex {
                     name: "V_4".to_string(),
-                    particles: vec!["c__tilde__".to_string(), "c".to_string(), "G".to_string()],
+                    particles: vec!["G".to_string(), "c".to_string(), "c~".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_5".to_string(), InteractionVertex {
                     name: "V_5".to_string(),
-                    particles: vec!["t__tilde__".to_string(), "t".to_string(), "G".to_string()],
+                    particles: vec!["G".to_string(), "t".to_string(), "t~".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 })
             ]),

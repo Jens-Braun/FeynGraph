@@ -105,8 +105,8 @@ impl<'a> AssignWorkspace<'a> {
         ).unwrap();
         
         if self.vertex_candidates[next_vertex].remaining_legs == 0 {
-            if let Some(_) = self.is_representative() {
-                let diagram = Diagram::from(&self);
+            if let Some(vertex_symmetry) = self.is_representative() {
+                let diagram = Diagram::from(&self, vertex_symmetry);
                 if self.selector.select(&diagram) {
                     self.diagram_buffer.inner_ref_mut().push(diagram);
                 }
@@ -393,14 +393,9 @@ impl<'a> AssignWorkspace<'a> {
     fn trace_fermi_line(&self, prop: usize, visited: &mut Vec<bool>) -> (usize, usize) {
         let initial_vertex;
         let mut to_visit: Vec<usize> = Vec::new();
-        if self.topology.nodes[self.topology.edges[prop].connected_nodes.0].degree == 1 {
-            initial_vertex = self.topology.edges[prop].connected_nodes.0;
-            to_visit.push(self.topology.edges[prop].connected_nodes.0);
-        } else {
-            initial_vertex = self.topology.edges[prop].connected_nodes.1;
-            to_visit.push(self.topology.edges[prop].connected_nodes.0);
-        }
-        let mut parent = initial_vertex;
+        initial_vertex = self.topology.edges[prop].connected_nodes.0;
+        to_visit.push(self.topology.edges[prop].connected_nodes.1);
+        visited[prop] = true;
         while !to_visit.is_empty() {
             let current = to_visit.pop().unwrap();
             for edge in self.vertex_candidates[current].edges.iter() {
@@ -409,7 +404,7 @@ impl<'a> AssignWorkspace<'a> {
                 if !self.model.get_particle(*self.propagator_candidates[*edge].particle.as_ref().unwrap()).is_fermi() {
                     continue;
                 }
-                let connected_vertex = if self.topology.edges[*edge].connected_nodes.0 == parent {
+                let connected_vertex = if self.topology.edges[*edge].connected_nodes.0 == current {
                     self.topology.edges[*edge].connected_nodes.1
                 } else {
                     self.topology.edges[*edge].connected_nodes.0
@@ -417,7 +412,6 @@ impl<'a> AssignWorkspace<'a> {
                 if connected_vertex == initial_vertex || self.topology.nodes[connected_vertex].degree == 1 {
                     return (initial_vertex, connected_vertex);
                 }
-                parent = current;
                 to_visit.push(connected_vertex);
             }
         }
@@ -440,14 +434,17 @@ impl<'a> AssignWorkspace<'a> {
         let mut n_ext_swap: usize = 0;
         for i in 0..external_fermions.len() {
             for j in i+1..external_fermions.len() {
-                if external_fermions[i] < external_fermions[j] {
+                if external_fermions[i] > external_fermions[j] {
                     n_ext_swap += 1;
                 }
             }
         }
         let mut fermi_loops: usize = 0;
         for edge in 0..self.propagator_candidates.len() {
-            if visited[edge] { continue; }
+            if visited[edge]
+                || !self.model.get_particle(self.propagator_candidates[edge].particle.unwrap()).is_fermi() {
+                continue;
+            }
             let _ = self.trace_fermi_line(edge, &mut visited);
             fermi_loops += 1;
         }
@@ -578,7 +575,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let mut workspace = AssignWorkspace::new(
             &topo,
@@ -627,7 +624,7 @@ mod tests {
         let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
         let particle_out = vec![
             model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u__tilde__").unwrap().clone()
+            model.get_particle_name("u~").unwrap().clone()
         ];
         let mut workspace = AssignWorkspace::new(
             &topo,

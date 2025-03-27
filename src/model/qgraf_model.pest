@@ -1,0 +1,17 @@
+COMMENT = _{single_line_comment}
+single_line_comment = { "%" ~ (!NEWLINE ~ ANY)* }
+WHITESPACE = _{" " | "\t" | NEWLINE}
+
+sign = @{"+"|"-"|"+1"|"-1"}
+name = @{(ASCII_ALPHANUMERIC | "_")+}
+int = @{"-"? ~ (!WHITESPACE ~ ASCII_DIGIT)+}
+string = @{("\"" | "\'") ~ (!("\"" | "\'") ~ ASCII)* ~ ("\"" | "\'")}
+
+property_value = {int | string | ("(" ~ (int | string ~ ","?)* ~ ")")}
+property = {name ~ "=" ~ property_value}
+
+propagator = {"[" ~ name ~ "," ~ name ~ "," ~ sign ~ ((!";" ~ ASCII)+ ~ ","?)* ~ (";" ~ (property ~ ","?)*)? ~ "]"}
+vertex = {"[" ~ (name ~ ","?){3,} ~ (";" ~ (property ~ ","?)*)? ~ "]"}
+misc_statement = {"[" ~ (!"]" ~ ANY)* ~ "]"}
+
+file = {SOI ~ ((!(vertex | propagator | misc_statement) ~ ANY)* ~ (vertex | propagator | misc_statement))* ~ ANY* ~ EOI}

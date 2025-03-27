@@ -6,3 +6,6 @@ tests/form
 tests/qgraf
 tests/grc
 *.log
+doc/doctrees
+doc/html
+tests/python

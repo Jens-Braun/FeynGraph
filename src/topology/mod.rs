@@ -11,7 +11,7 @@ use crate::topology::components::NodeClassification;
 use crate::topology::workspace::TopologyWorkspace;
 use crate::topology::filter::TopologySelector;
 use crate::topology::matrix::SymmetricMatrix;
-use crate::util::{factorial, find_partitions};
+use crate::util::{factorial, find_partitions, Error};
 
 pub(crate) mod matrix;
 pub(crate) mod components;
@@ -103,8 +103,7 @@ impl Topology {
                     edges.push(Edge::empty((i, j)));
                 }
             }
-        }        
-        
+        }
         let mut topo = Topology {
             n_external: workspace.n_external,
             n_loops: workspace.n_loops,
@@ -112,10 +111,7 @@ impl Topology {
             edges,
             node_symmetry,
             edge_symmetry,
-            momentum_labels: vec![
-                (1..=workspace.n_external).map(|i| format!("p{}", i)).collect_vec(),
-                (1..=workspace.n_loops).map(|i| format!("l{}", i)).collect_vec(),
-            ].into_iter().flatten().collect_vec(),
+            momentum_labels: workspace.momentum_labels.clone(),
             bridges: Vec::new(),
             node_classification: workspace.node_classification.clone()
         };
@@ -324,6 +320,34 @@ impl Topology {
         return self.bridges().len()+1;
     }
 
+    /// Count the number of self-loops in the topology. A self-loop is defined as an edge which ends on the same
+    /// node it started on.
+    pub fn count_self_loops(&self) -> usize {
+        return self.edges.iter().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1).count();
+    }
+
+    /// Return `true` if the topology is on-shell, i.e. contains no self-energy insertions on an external edge. This
+    /// implementation considers internal edges carrying a single external momentum and no loop momentum, which is
+    /// equivalent to a self-energy insertion on an external edge.
+    pub fn on_shell(&self) -> bool {
+        return !self.edges.iter().any(|edge| {
+            return if edge.connected_nodes.0 >= self.n_external && edge.connected_nodes.1 >= self.n_external && // internal edge
+                edge.momenta.as_ref().unwrap().iter().skip(self.n_external).all(|x| *x == 0) { // no loop momentum
+                let ext_count = edge.momenta.as_ref().unwrap().iter().take(self.n_external).filter(|x| **x != 0).count();
+                match ext_count {
+                    1 => true,
+                    n if n+1 == self.n_external => { // Try with momentum conservation
+                        edge.momenta.as_ref().unwrap().iter()
+                            .take(self.n_external).map(|x| x.abs() as usize).sum::<usize>()+1 == self.n_external
+                    },
+                    _ => false
+                }
+            } else {
+                false
+            }
+        });
+    }
+
     /// Return a reference to the topology's `i`-th node
     pub fn get_node(&self, i: usize) -> &Node { return &self.nodes[i]; }
 
@@ -516,6 +540,7 @@ pub struct TopologyGenerator {
     n_loops: usize,
     model: TopologyModel,
     selector: TopologySelector,
+    momentum_labels: Option<Vec<String>>,
 }
 
 impl TopologyGenerator {
@@ -527,16 +552,31 @@ impl TopologyGenerator {
                 n_external,
                 n_loops,
                 model,
-                selector
+                selector,
+                momentum_labels: None
             }
         } else {
             Self {
                 n_external,
                 n_loops,
                 model,
-                selector: TopologySelector::default()
+                selector: TopologySelector::default(),
+                momentum_labels: None
             }
         }
+    }
+
+    /// Set the names of the momenta. The first `n_external` ones are the external momenta, the remaining ones are
+    /// the loop momenta. Returns an error if the number of labels does not match the topology.
+    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), Error> {
+        if !labels.len() == self.n_external + self.n_loops {
+            return Err(Error::InputError(
+                format!("Found {} momenta, but n_external + n_loops = {} are required",
+                        labels.len(), self.n_external + self.n_loops)
+            ));
+        }
+        self.momentum_labels = Some(labels);
+        return Ok(());
     }
     
     /// Generate the topologies.
@@ -569,6 +609,9 @@ impl TopologyGenerator {
             nodes.append(&mut internal_nodes);
             let mut workspace = TopologyWorkspace::from_nodes(self.n_external, self.n_loops, &nodes);
             workspace.topology_selector = self.selector.clone();
+            if let Some(ref labels) = self.momentum_labels {
+                workspace.set_momentum_labels(labels.clone());
+            }
             return workspace.generate();
         }).collect_into_vec(&mut containers);
         return TopologyContainer::from(containers);
