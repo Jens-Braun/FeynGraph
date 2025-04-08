@@ -15,8 +15,9 @@ pest_derive = "2"
 log = "0.4"
 thiserror = "2"
 indexmap = "2"
-pyo3 = { version = "0.23", features = ["auto-initialize"], optional = true}
-pyo3-ffi = { version = "0.23", optional = true }
+either = "1"
+pyo3 = { version = "0.24", features = ["auto-initialize", "either"], optional = true}
+pyo3-ffi = { version = "0.24", optional = true }
 pyo3-log = { version = "0.12", optional = true}
 
 [features]

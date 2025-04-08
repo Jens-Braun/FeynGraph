@@ -1,0 +1,340 @@
+"""
+A modern Feynman diagram generation toolkit.
+"""
+
+from __future__ import annotations
+from typing import Optional, Callable
+
+from feyngraph.topology import Topology
+
+def set_threads(n_threads: int):
+    """
+    Set the number of threads FeynGraph will use. The default is the maximum number of available threads.
+    
+    :param n_threads: number of threads to use
+    :type n_threads: int
+    """
+
+def generate_diagrams(
+        particles_in: list[str], 
+        particles_out: list[str], 
+        n_loops: int,
+        model: Optional[Model],
+        diagram_selector: Optional[DiagramSelector]
+        ) -> DiagramContainer :
+    """
+    Convenience function for diagram generation. This function only requires the minimal set of input information,
+    the incoming particles and the outgoing particles. Sensible defaults are provided for all other variables.
+    
+    Examples
+    --------
+    
+    .. code-block:: python
+    
+        import feyngraph as fg
+        diagrams = fg.generate_diagrams(["u", "u__tilde__"], ["u", "u__tilde"], 2)
+        assert(len(diagrams), 4632)
+    
+    
+    :param particles_in: list of incoming particles, specified by name
+    :param particles_out: list of outgoing particles, specified by name
+    :param n_loops: number of loops in the generated diagrams [default: 0]
+    :param model: model used in diagram generation [default: SM in Feynman gauge]
+    :param diagram_selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
+    
+    """
+
+class Diagram:
+    """The Feynman diagram class."""
+
+    def incoming(self) -> list[Leg]:
+        """Get a list of the incoming legs."""
+
+    def outgoing(self) -> list[Leg]:
+        """Get a list of the outgoing legs."""
+
+    def propagators(self) -> list[Propagator]:
+        """Get a list of the internal propagators."""
+
+    def propagator(self, index: int) -> Propagator:
+        """Get the propagator with index `index`."""
+    
+    def vertex(self, index: int) -> Vertex:
+        """Get the vertex with index `index`."""
+
+    def vertices(self) -> list[int]:
+        """Get a list of the internal vertices."""
+
+    def loop_vertices(self, index: int) -> list[Vertex]:
+        """Get a list of the vertices beloning to the `index`-th loop."""
+
+    def chord(self, index: int) -> list[Propagator]:
+        """Get a list of the propagators belonging to the `index`-th loop."""
+
+    def bridges(self) -> list[Propagator]:
+        """Get a list of the bridge propagators."""
+
+    def n_ext(self) -> int:
+        """Get  the number of external legs."""
+
+    def symmetry_factor(self) -> int:
+        """Get the diagram's symmetry factor."""
+
+    def sign(self) -> int:
+        """Get the diagram's relative sign."""
+
+class Leg:
+    """The class representing an external leg."""
+
+    def vertex(self) -> Vertex:
+        """Get the vertex this leg is attached to."""
+
+    def particle(self) -> Particle:
+        """Get the particle assigned to this leg."""
+
+    def ray_index(self) -> int:
+        """
+        Get the external leg's ray index, i.e. the index of the leg of the vertex to which the external leg is
+        connected to (_from the vertex perspective_)
+    """
+
+class Propagator:
+    """The class representing an internal propagator."""
+
+    def vertices(self) -> list[Vertex]:
+        """Get a list of vertices the propagator is connected to."""
+
+    def vertex(self, index: int) -> Vertex:
+        """Get the `index`-th vertex the propagator is connected to."""
+
+    def particle(self) -> Particle:
+        """Get the particle assigned to the propagator."""
+
+    def momentum(self) -> list[int]:
+        """
+        Get the internal representation of the propagator's momentum. The function returns a list of integers, where
+        the `i`-th entry is the coefficient of the `i`-th momentum. The first `n_ext` momenta are external, the
+        remaining momenta are the `n_loops` loop momenta.
+        """
+    
+    def momentum_str(self) -> str:
+        """Get the string-formatted momentum flowing through the propagator."""
+
+    def ray_index(self, index: int) -> int:
+        """
+        Get the propagators ray index with respect to the `index`-th vertex it is connected to, i.e. the index of the
+        leg of the `index`-th vertex to which the propagator is connected to.
+        """
+
+    def id(self) -> int:
+        """Get the propagagtors internal id"""
+
+class Vertex:
+    """The class representing an internal vertex."""
+
+    def propagators(self) -> list[Leg | Propagator]:
+        """Get the propagators connected to this vertex."""
+
+    def propagators_ordered(self) -> list[Leg | Propagator]:
+        """
+        Get the propagators connected to this vertex ordered such, that the sequence of particles matches the
+        definition of the interaction in the model.
+        """
+    
+    def interaction(self) -> InteractionVertex:
+        """Get the interaction assigned to the vertex."""
+
+    def particles_ordered(self) -> list[Particle]:
+        """
+        Get the particles flowing into this vertex ordered such, that the sequence of particles matches the
+        definition of the interaction in the model.
+        """
+
+    def match_particles(self) -> bool:
+        """Check whether the given particle names match the interaction of the vertex."""
+    
+    def id(self) -> int:
+        """Get the vertex' internal id"""
+        
+    def degree(self) -> int:
+        """Get the vertex' degree"""
+
+class DiagramContainer:
+    """A container of Feynman diagrams and accompanying information"""
+
+    def query(self, selector: DiagramSelector) -> None | int:
+        """
+        Query whether there is a diagram in the container, which would be selected by `selector`.
+        
+        :return: None if no diagram is selected, the position of the first selected diagram otherwise
+        """
+
+class DiagramSelector:
+    """
+    A selector class which determines whether a diagram is to be kept or to be discarded. Multiple criteria can
+    be specified. The available critera are
+    
+    - opi components: select only diagrams for which the number of one-particle-irreducible components matches any of
+    the given counts
+    - custom functions: select only diagrams for which any of the given custom functions return `true`
+    - self loops: select only diagrams which contain the specified number of self-loops
+    - on-shell: select only diagrams with on-shell external legs
+    - coupling powers: select only diagrams of the given power in the given coupling
+    - propagator count: select only diagrams with the specified number of propagators of the given field
+    - vertex count: select only diagrams with the specified number of vertices with the given fields
+
+    For more precise definitions of each criterion, see the respective function.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        selector = DiagramSelector()
+        selector.select_on_shell()
+        selector.select_self_loops(0)
+        selector.add_coupling_power("QCD", 2)
+        selector.add_coupling_power("QED", 0)
+        selector.add_propagator_count("t", 0)
+    """
+
+    def select_opi_components(self, opi_count: int) :
+        """
+        Add a constraint to only select diagrams with `opi_count` one-particle-irreducible components.
+        """
+    
+    def select_self_loops(self, count: int):
+        """
+        Add a constraint to only select diagrams with `count` self-loops. A self-loop is defined as an edge which ends
+        on the same node it started on.
+        """
+
+    def select_on_shell(self):
+        """
+        Add a constraint to only select on-shell diagrams. On-shell diagrams are defined as diagrams with no self-energy
+        insertions on external legs. This implementation considers internal edges carrying a single external momentum
+        and no loop momentum, which is equivalent to a self-energy insertion on an external propagator.
+        """
+    
+    def add_custom_function(self, py_function: Callable[[Diagram], bool]):
+        """
+        Add a constraint to only select diagrams for which the given function returns `true`. The function receives
+        a single diagrams as input and should return a boolean.
+        
+        Examples
+        --------
+        
+        .. code-block:: python
+        
+            def s_channel(diag: feyngraph.topology.Diagram) -> bool:
+                n_momenta = len(diag.get_propagators()[0].get_momentum()) # Total number of momenta in the process
+                s_momentum = [1, 1]+ [0]*(n_momenta-2) # e.g. = [1, 1, 0, 0] for n_momenta = 4
+                return any(propagator.get_momentum() == s_momentum for propagator in diag.get_propagators())
+        
+            selector = feyngraph.topology.DiagramSelector()
+            selector.add_custom_function(s_channel)
+        """
+    
+    def add_coupling_power(self, coupling: str, power: int):
+        """
+        Add a constraint to only select diagrams for which the power of `coupling` sums to `power`.
+        """
+    
+    def add_propagator_count(self, particle: str, count: int):
+        """
+        Add a constraint to only select diagrams which contain exactly `count` propagators of the field `particle`.
+        """
+    
+    def add_vertex_count(self, particles: list[str], count: int):
+        """
+        Add a constraint to only select diagrams which contain exactly `count` vertices of the fields `particles`.
+        """
+
+class DiagramGenerator:
+    """
+    The main class used to generate Feynman diagrams.
+    
+    Examples
+    --------
+    
+    .. code-block:: python
+    
+        model = Model.from_ufo("tests/Standard_Model_UFO")
+        selector = DiagramSelector()
+        selector.set_opi_components(1)
+        diags = DiagramGenerator(["g", "g"], ["u", "u__tilde__", "g"], 1, model, selector).generate()
+        assert(len(diags), 51)
+    """
+
+    def __new__(
+            cls, 
+            incoming: list[str], 
+            outgoing: list[str], 
+            n_loops: int, 
+            model: Model, 
+            selector: DiagramSelector
+            ) -> DiagramGenerator:
+        """
+        Create a new Diagram generator for the given process
+        """
+    
+    def set_momentum_labels(self, labels: list[str]):
+        """
+        Set the names of the momenta. The first `n_external` ones are the external momenta, the remaining ones are
+        the loop momenta. Returns an error if the number of labels does not match the diagram.
+        """
+    
+    def generate(self) -> DiagramContainer:
+        """
+        Generate the diagrams of the given process
+        """
+    
+    def assign_topology(self, topo: Topology) -> DiagramContainer:
+        """
+        Assign particles and interactions to the given topology.
+        """
+
+class Model:
+    """
+    Internal representation of a model in FeynGraph
+    """
+
+    @staticmethod
+    def from_ufo(path: str) -> Model:
+        """
+        Import a model in the UFO format. The path should specify the folder containing the model's `.py` files.
+        """
+    
+    @staticmethod
+    def from_qgraf(path: str) -> Model:
+        """
+        Import a model in QGRAF's model format. The parser is not exhaustive in the options QGRAF supports and is only
+        intended for backwards compatibility, especially for the models included in GoSam. UFO models should be
+        preferred whenever possible.
+        """
+    
+class Particle:
+    """
+    Internal representation of a particle in FeynGraph.
+    """
+
+    def name(self) -> str:
+        """Get the particle's name"""
+    
+    def anti_name(self) -> str:
+        """Get the name of the particle's anti particle"""
+    
+    def is_anti(self) -> bool:
+        """Return true, if the particle is an anti particle (PDG ID < 0)"""
+    
+    def is_fermi(self) -> bool:
+        """Return true if the particle obeys Fermi-Dirac statistics"""
+
+class InteractionVertex:
+    """Internal representaion of an interaction vertex."""
+
+    def coupling_orders(self):
+        """Get a list of coupling orders of the interaction"""
+
+    def particles(self):
+        """Get a list of particles flowing into the vertex"""

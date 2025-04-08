@@ -44,19 +44,19 @@ impl Node {
 /// A struct representing a topological edge
 #[derive(Debug, PartialEq, Clone)]
 pub struct Edge {
-    pub connected_nodes: (usize, usize),
+    pub connected_nodes: [usize; 2],
     pub momenta: Option<Vec<i8>>,
 }
 
 impl Edge {
-    fn new(connected_nodes: (usize, usize), momenta: Option<Vec<i8>>) -> Self {
+    fn new(connected_nodes: [usize; 2], momenta: Option<Vec<i8>>) -> Self {
         return Self {
             connected_nodes,
             momenta
         }
     }
     
-    fn empty(connected_nodes: (usize, usize)) -> Self {
+    fn empty(connected_nodes: [usize; 2]) -> Self {
         return Self {
             connected_nodes,
             momenta: None
@@ -96,11 +96,11 @@ impl Topology {
         let mut edges = Vec::new();
         for i in 0..workspace.nodes.len() {
             for _ in 0..*workspace.adjacency_matrix.get(i, i)/2 {
-                edges.push(Edge::empty((i, i)));
+                edges.push(Edge::empty([i, i]));
             }
             for j in (i+1)..workspace.nodes.len() {
                 for _ in 0..*workspace.adjacency_matrix.get(i, j) {
-                    edges.push(Edge::empty((i, j)));
+                    edges.push(Edge::empty([i, j]));
                 }
             }
         }
@@ -125,7 +125,7 @@ impl Topology {
         let n_momenta = self.n_external + self.n_loops;
         
         // First assign loop momenta to self-loops
-        for edge in self.edges.iter_mut().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1) {
+        for edge in self.edges.iter_mut().filter(|edge| edge.connected_nodes[0] == edge.connected_nodes[1]) {
             let mut momenta = vec![0; n_momenta];
             momenta[current_loop_momentum] = 1;
             edge.momenta = Some(momenta);
@@ -148,13 +148,13 @@ impl Topology {
         // External momenta
         for edge in self.edges.iter_mut().take(self.n_external) {
             let mut momenta = vec![0; n_momenta];
-            momenta[edge.connected_nodes.0] = 1;
+            momenta[edge.connected_nodes[0]] = 1;
             edge.momenta = Some(momenta);
         }
         
         // Use global momentum conservation to eliminate the last external momentum
         for edge in self.edges.iter_mut() {
-            if !(self.nodes[edge.connected_nodes.0].degree == 1 || self.nodes[edge.connected_nodes.1].degree == 1)
+            if !(self.nodes[edge.connected_nodes[0]].degree == 1 || self.nodes[edge.connected_nodes[1]].degree == 1)
                 && edge.momenta.as_ref().unwrap()[self.n_external - 1] != 0 {
                 for i in 0..self.n_external {
                     edge.momenta.as_mut().unwrap()[i] -= edge.momenta.as_ref().unwrap()[self.n_external - 1];
@@ -189,7 +189,7 @@ impl Topology {
             }
             // Ignore self-loops and edges to which a momentum is already assigned
             if connected_node == node || self.edges.iter().filter(
-                |edge| edge.connected_nodes == (node, connected_node)  || edge.connected_nodes == (connected_node, node)
+                |edge| edge.connected_nodes == [node, connected_node]  || edge.connected_nodes == [connected_node, node]
             ).any(|edge| edge.momenta.is_some()) {
                 continue;
             }
@@ -273,8 +273,8 @@ impl Topology {
         let n_momenta = self.n_external + self.n_loops;
         let current_edges = self.edges.iter_mut().filter(
             |other_edge| 
-                other_edge.connected_nodes == (first_node, second_node) ||
-                    other_edge.connected_nodes == (second_node, first_node)
+                other_edge.connected_nodes == [first_node, second_node] ||
+                    other_edge.connected_nodes == [second_node, first_node]
         ).collect_vec();
         let n_edges = current_edges.len();
         for (i, edge) in current_edges.into_iter().enumerate() {
@@ -306,7 +306,7 @@ impl Topology {
 
     fn get_multiplicity(&self, first_node: usize, second_node: usize) -> usize {
         return self.edges.iter().filter(|edge| 
-            edge.connected_nodes == (first_node, second_node) || edge.connected_nodes == (second_node, first_node)
+            edge.connected_nodes == [first_node, second_node] || edge.connected_nodes == [second_node, first_node]
         ).count();
     }
     
@@ -323,7 +323,7 @@ impl Topology {
     /// Count the number of self-loops in the topology. A self-loop is defined as an edge which ends on the same
     /// node it started on.
     pub fn count_self_loops(&self) -> usize {
-        return self.edges.iter().filter(|edge| edge.connected_nodes.0 == edge.connected_nodes.1).count();
+        return self.edges.iter().filter(|edge| edge.connected_nodes[0] == edge.connected_nodes[1]).count();
     }
 
     /// Return `true` if the topology is on-shell, i.e. contains no self-energy insertions on an external edge. This
@@ -331,7 +331,7 @@ impl Topology {
     /// equivalent to a self-energy insertion on an external edge.
     pub fn on_shell(&self) -> bool {
         return !self.edges.iter().any(|edge| {
-            return if edge.connected_nodes.0 >= self.n_external && edge.connected_nodes.1 >= self.n_external && // internal edge
+            return if edge.connected_nodes[0] >= self.n_external && edge.connected_nodes[1] >= self.n_external && // internal edge
                 edge.momenta.as_ref().unwrap().iter().skip(self.n_external).all(|x| *x == 0) { // no loop momentum
                 let ext_count = edge.momenta.as_ref().unwrap().iter().take(self.n_external).filter(|x| **x != 0).count();
                 match ext_count {
@@ -414,8 +414,8 @@ impl std::fmt::Display for Topology {
         writeln!(f, "    Edges: [")?;
         for (i, edge) in self.edges.iter().enumerate() {
             writeln!(f, "        {} -> {}, p = {},", 
-                   edge.connected_nodes.0, 
-                   edge.connected_nodes.1, 
+                   edge.connected_nodes[0],
+                   edge.connected_nodes[1],
                    self.momentum_string(i)
             )?;
         }
@@ -630,7 +630,7 @@ mod tests {
         let mut selector = TopologySelector::default();
         let filter = |topo: &Topology| -> bool {
             for edge in topo.edges.iter() {
-                if edge.connected_nodes.0 == edge.connected_nodes.1 {
+                if edge.connected_nodes[0] == edge.connected_nodes[1] {
                     return false;
                 }
             }
@@ -708,11 +708,11 @@ mod tests {
         let mut edges:Vec<Edge> = Vec::new();
         for i in 0..10 {
             for _ in 0..*adjacency_matrix.get(i, i)/2 {
-                edges.push(Edge::empty((i, i)))
+                edges.push(Edge::empty([i, i]))
             }
             for j in (i+1)..10 {
                 for _ in 0..*adjacency_matrix.get(i, j) {
-                    edges.push(Edge::empty((i, j)))
+                    edges.push(Edge::empty([i, j]))
                 }
             }
         }
@@ -749,15 +749,15 @@ mod tests {
                 Node::new(3, vec![3, 5, 6])
             ],
             edges: vec![
-                Edge::new((0, 6), Some(vec![1, 0, 0, 0, 0, 0])),
-                Edge::new((1, 4), Some(vec![0, 1, 0, 0, 0, 0])),
-                Edge::new((2, 5), Some(vec![0, 0, 1, 0, 0, 0])),
-                Edge::new((3, 7), Some(vec![0, 0, 0, 1, 0, 0])),
-                Edge::new((4, 5), Some(vec![1, 1, 0, 0, 1, 1])),
-                Edge::new((4, 6), Some(vec![-1, 0, 0, 0, -1, -1])),
-                Edge::new((5, 6), Some(vec![0, 0, 0, 0, 1, 0])),
-                Edge::new((5, 7), Some(vec![1, 1, 1, 0, 0, 1])),
-                Edge::new((6, 7), Some(vec![0, 0, 0, 0, 0, -1])),
+                Edge::new([0, 6], Some(vec![1, 0, 0, 0, 0, 0])),
+                Edge::new([1, 4], Some(vec![0, 1, 0, 0, 0, 0])),
+                Edge::new([2, 5], Some(vec![0, 0, 1, 0, 0, 0])),
+                Edge::new([3, 7], Some(vec![0, 0, 0, 1, 0, 0])),
+                Edge::new([4, 5], Some(vec![1, 1, 0, 0, 1, 1])),
+                Edge::new([4, 6], Some(vec![-1, 0, 0, 0, -1, -1])),
+                Edge::new([5, 6], Some(vec![0, 0, 0, 0, 1, 0])),
+                Edge::new([5, 7], Some(vec![1, 1, 1, 0, 0, 1])),
+                Edge::new([6, 7], Some(vec![0, 0, 0, 0, 0, -1])),
             ],
             node_symmetry: 1,
             edge_symmetry: 4,
@@ -781,15 +781,15 @@ mod tests {
                 Node::new(3, vec![3, 5, 6])
             ],
             edges: vec![
-                Edge::new((0, 6), None),
-                Edge::new((1, 4), None),
-                Edge::new((2, 5), None),
-                Edge::new((3, 7), None),
-                Edge::new((4, 5), None),
-                Edge::new((4, 6), None),
-                Edge::new((5, 6), None),
-                Edge::new((5, 7), None),
-                Edge::new((6, 7), None),
+                Edge::new([0, 6], None),
+                Edge::new([1, 4], None),
+                Edge::new([2, 5], None),
+                Edge::new([3, 7], None),
+                Edge::new([4, 5], None),
+                Edge::new([4, 6], None),
+                Edge::new([5, 6], None),
+                Edge::new([5, 7], None),
+                Edge::new([6, 7], None),
             ],
             node_symmetry: 1,
             edge_symmetry: 4,
@@ -819,14 +819,14 @@ mod tests {
                 Node::new(3, vec![5, 7])
             ],
             edges: vec![
-                Edge::new((0, 4), Some(vec![1, 0, 0, 0, 0])),
-                Edge::new((1, 4), Some(vec![0, 1, 0, 0, 0])),
-                Edge::new((2, 6), Some(vec![0, 0, 1, 0, 0])),
-                Edge::new((3, 6), Some(vec![0, 0, 0, 1, 0])),
-                Edge::new((4, 5), Some(vec![1, 1, 0, 0, 0])),
-                Edge::new((5, 6), Some(vec![1, 1, 0, 0, 0])),
-                Edge::new((5, 7), Some(vec![0, 0, 0, 0, 0])),
-                Edge::new((7, 7), Some(vec![0, 0, 0, 0, 1])),
+                Edge::new([0, 4], Some(vec![1, 0, 0, 0, 0])),
+                Edge::new([1, 4], Some(vec![0, 1, 0, 0, 0])),
+                Edge::new([2, 6], Some(vec![0, 0, 1, 0, 0])),
+                Edge::new([3, 6], Some(vec![0, 0, 0, 1, 0])),
+                Edge::new([4, 5], Some(vec![1, 1, 0, 0, 0])),
+                Edge::new([5, 6], Some(vec![1, 1, 0, 0, 0])),
+                Edge::new([5, 7], Some(vec![0, 0, 0, 0, 0])),
+                Edge::new([7, 7], Some(vec![0, 0, 0, 0, 1])),
             ],
             node_symmetry: 1,
             edge_symmetry: 2,
@@ -850,14 +850,14 @@ mod tests {
                 Node::new(3, vec![5, 7])
             ],
             edges: vec![
-                Edge::new((0, 4), None),
-                Edge::new((1, 4), None),
-                Edge::new((2, 6), None),
-                Edge::new((3, 6), None),
-                Edge::new((4, 5), None),
-                Edge::new((5, 6), None),
-                Edge::new((5, 7), None),
-                Edge::new((7, 7), None),
+                Edge::new([0, 4], None),
+                Edge::new([1, 4], None),
+                Edge::new([2, 6], None),
+                Edge::new([3, 6], None),
+                Edge::new([4, 5], None),
+                Edge::new([5, 6], None),
+                Edge::new([5, 7], None),
+                Edge::new([7, 7], None),
             ],
             node_symmetry: 1,
             edge_symmetry: 2,

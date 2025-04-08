@@ -347,17 +347,17 @@ mod tests {
                 }), 
                 ("V_3".to_string(), InteractionVertex {
                     name: "V_3".to_string(),
-                    particles: vec!["G".to_string(), "u".to_string(), "u~".to_string()],
+                    particles: vec!["u~".to_string(), "u".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_4".to_string(), InteractionVertex {
                     name: "V_4".to_string(),
-                    particles: vec!["G".to_string(), "c".to_string(), "c~".to_string()],
+                    particles: vec!["c~".to_string(), "c".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_5".to_string(), InteractionVertex {
                     name: "V_5".to_string(),
-                    particles: vec!["G".to_string(), "t".to_string(), "t~".to_string()],
+                    particles: vec!["t~".to_string(), "t".to_string(), "G".to_string()],
                     couplings_orders: HashMap::from([("QCD".to_string(), 1)])
                 })
             ]),

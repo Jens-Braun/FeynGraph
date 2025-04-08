@@ -161,7 +161,7 @@ impl Model {
 
     pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {return QGRAFParser::parse_qgraf_model(path); }
     
-    pub fn get_anti(&self, particle_index: usize) -> usize {
+    pub fn get_anti_index(&self, particle_index: usize) -> usize {
         return if self.particles[particle_index].self_anti {
             particle_index
         } else {
@@ -171,9 +171,19 @@ impl Model {
         }
     }
 
+    pub fn get_anti(&self, particle_index: usize) -> &Particle {
+        return if self.particles[particle_index].self_anti {
+            &self.particles[particle_index]
+        } else {
+            self.particles.values().find(
+                |p| p.pdg_code == -self.particles[particle_index].pdg_code
+            ).as_ref().unwrap()
+        }
+    }
+
     pub fn normalize(&self, particle_index: usize) -> usize {
         return if self.particles[particle_index].pdg_code < 0 {
-            self.get_anti(particle_index)
+            self.get_anti_index(particle_index)
         } else {
             particle_index
         }
@@ -195,11 +205,13 @@ impl Model {
         }
     }
     
-    pub fn get_particle_index(&self, key: &String) -> usize {
-        return self.particles.get_index_of(key).unwrap();
+    pub fn get_particle_index(&self, key: &str) -> Result<usize, ModelError> {
+        return self.particles.get_index_of(key).ok_or_else(
+            || ModelError::ContentError(format!("Particle '{}' not found in model", key))
+        );
     }
     
-    pub fn get_vertex(&self, index: usize) -> &InteractionVertex {
+    pub fn vertex(&self, index: usize) -> &InteractionVertex {
         return &self.vertices[index];
     }
     
@@ -212,7 +224,7 @@ impl Model {
     }
 
     /// Check if adding `vertex` to the diagram is allowed by the maximum power of the coupling constants
-    pub(crate) fn check_coupling_orders(&self, interaction: usize, 
+    pub(crate) fn check_coupling_orders(&self, interaction: usize,
                              remaining_coupling_orders: &Option<HashMap<String, usize>>) -> bool {
         return if let Some(ref remaining_orders) = remaining_coupling_orders {
             for (coupling, order) in self.vertices[interaction].get_coupling_orders() {

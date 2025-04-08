@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use itertools::Itertools;
 use crate::diagram::Diagram;
+use crate::diagram::view::DiagramView;
+use crate::model::Model;
 use crate::topology::filter::TopologySelector;
 use crate::topology::Topology;
 
@@ -22,8 +24,8 @@ pub struct DiagramSelector {
     pub(crate) propagator_counts: HashMap<String, Vec<usize>>,
     /// Only keep diagrams for which the number of vertices of the given fields is in the list of specified counts
     pub(crate) vertex_counts: HashMap<Vec<String>, Vec<usize>>,
-    /// Only keep topologies for which the given custom function returns `true`
-    pub(crate) custom_functions: Vec<Arc<dyn Fn(&Diagram) -> bool + Sync + Send>>,
+    /// Only keep diagrams for which the given custom function returns `true`
+    pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>>,
     /// Same as [custom_functions], but used when the [DiagramSelector] is cast to a [TopologySelector]
     pub(crate) topology_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
 }
@@ -106,16 +108,38 @@ impl DiagramSelector {
     }
 
     /// Add a criterion to keep only diagrams for which the given function returns `true`.
-    pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&Diagram) -> bool + Sync + Send>) {
+    pub fn add_custom_function(
+        &mut self,
+        function: Arc<dyn Fn(&DiagramView) -> bool + Sync + Send>) {
+        self.custom_functions.push(
+            Arc::new(move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
+                function(&DiagramView {
+                    model: model.as_ref(),
+                    momentum_labels: momentum_labels.as_ref(),
+                    diagram: diag
+                })
+            })
+        );
+    }
+
+    /// Add a custom function which takes the internal representation of a diagram as input
+    pub(crate) fn add_unwrapped_custom_function(
+        &mut self,
+        function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>) {
         self.custom_functions.push(function);
     }
 
-    pub(crate) fn select(&self, diag: &Diagram) -> bool {
-        return self.select_opi_components(diag) &&
-            self.select_custom_criteria(diag) &&
-            self.select_coupling_powers(diag) &&
-            self.select_propagator_counts(diag) &&
-            self.select_vertex_counts(diag);
+    pub(crate) fn select(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
+        let view = DiagramView {
+            model: model.as_ref(),
+            momentum_labels: momentum_labels.as_ref(),
+            diagram: diag
+        };
+        return self.select_opi_components(view.diagram) &&
+            self.select_custom_criteria(model.clone(), momentum_labels.clone(), diag) &&
+            self.select_coupling_powers(&view) &&
+            self.select_propagator_counts(&view) &&
+            self.select_vertex_counts(&view);
     }
 
     fn select_opi_components(&self, diag: &Diagram) -> bool {
@@ -123,40 +147,42 @@ impl DiagramSelector {
         return self.opi_components.iter().any(|opi_count| *opi_count == diag.count_opi_components());
     }
 
-    fn select_custom_criteria(&self, diag: &Diagram) -> bool {
+    fn select_custom_criteria(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
         if self.custom_functions.is_empty() { return true; }
         for custom_function in &self.custom_functions {
-            if custom_function(diag) { return true; }
+            if custom_function(model.clone(), momentum_labels.clone(), diag) { return true; }
         }
         return false;
     }
 
-    fn select_coupling_powers(&self, diag: &Diagram) -> bool {
+    fn select_coupling_powers(&self, view: &DiagramView) -> bool {
         if self.coupling_powers.is_empty() { return true; }
         return self.coupling_powers.iter().all(
             |(coupling, powers)| powers.iter().any(
-                |power| diag.vertices.iter().map(
-                    |v| *v.interaction.couplings_orders.get(coupling).unwrap_or(&0)
+                |power| view.vertices().map(
+                    |v| *v.interaction().couplings_orders.get(coupling).unwrap_or(&0)
                 ).sum::<usize>() == *power
             )
         )
     }
 
-    fn select_propagator_counts(&self, diag: &Diagram) -> bool {
+    fn select_propagator_counts(&self, view: &DiagramView) -> bool {
         if self.propagator_counts.is_empty() { return true; }
         return self.propagator_counts.iter().all(
             |(particle, counts)| counts.iter().any(
-                |count| diag.propagators.iter().filter(|prop| *prop.particle.get_name() == *particle).count() == *count
+                |count| view.propagators().filter(
+                    |prop| *prop.particle().get_name() == *particle
+                ).count() == *count
             )
         )
     }
 
-    fn select_vertex_counts(&self, diag: &Diagram) -> bool {
+    fn select_vertex_counts(&self, view: &DiagramView) -> bool {
         if self.vertex_counts.is_empty() { return true; }
         return self.vertex_counts.iter().all(
             |(particles, counts)| counts.iter().any(
-                |count| diag.vertices.iter().filter(|v|
-                    v.interaction.particles.iter().cloned().sorted().collect_vec() == *particles
+                |count| view.vertices().filter(|v|
+                    v.match_particles(particles)
                 ).count() == *count
             )
         )

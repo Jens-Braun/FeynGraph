@@ -1,19 +1,23 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::Arc;
 use itertools::{FoldWhile, Itertools};
 use crate::diagram::{Diagram, DiagramContainer};
 use crate::diagram::components::{AssignPropagator, AssignVertex, VertexClassification};
 use crate::diagram::filter::DiagramSelector;
-use crate::model::{Model, Particle};
+use crate::model::{Model};
 use crate::topology::Topology;
 use crate::util::generate_permutations;
 
 pub(crate) struct AssignWorkspace<'a> {
     pub(crate) topology: &'a Topology,
-    pub(crate) model: &'a Model,
+    // The workspace carries an Arc of the model, such that the model can be handed to a Python function (which is not
+    // allowed to take an object with a Rust lifetime) in the custom filter functions
+    pub(crate) model: Arc<Model>,
+    pub(crate) momentum_labels: Arc<Vec<String>>,
     pub(crate) selector: &'a DiagramSelector,
-    pub(crate) incoming_particles: &'a Vec<Particle>,
-    pub(crate) outgoing_particles: &'a Vec<Particle>,
+    pub(crate) incoming_particles: &'a Vec<usize>,
+    pub(crate) outgoing_particles: &'a Vec<usize>,
     pub(crate) diagram_buffer: DiagramContainer,
     pub(crate) vertex_candidates: Vec<AssignVertex>,
     pub(crate) propagator_candidates: Vec<AssignPropagator>,
@@ -23,24 +27,25 @@ pub(crate) struct AssignWorkspace<'a> {
 
 impl<'a> AssignWorkspace<'a> {
     pub(crate) fn new(topology: &'a Topology, 
-                      model: &'a Model,
+                      model: Arc<Model>,
                       selector: &'a DiagramSelector,
-                      incoming_particles: &'a Vec<Particle>, 
-                      outgoing_particles: &'a Vec<Particle>) -> Self {
+                      incoming_particles: &'a Vec<usize>,
+                      outgoing_particles: &'a Vec<usize>) -> Self {
         let remaining_coupling_orders = selector.get_max_coupling_orders();
         let vertex_candidates = topology.nodes_iter().enumerate().map(|(index, node)| {
             AssignVertex::new(node.degree, topology.edges_iter().enumerate().filter_map(
-                |(i, edge)| if edge.connected_nodes.0 == index || edge.connected_nodes.1 == index {Some(i)} else {None}
+                |(i, edge)| if edge.connected_nodes[0] == index || edge.connected_nodes[1] == index {Some(i)} else {None}
             ).collect_vec())
         }).collect_vec();
         let n_edges = topology.n_edges();
         return Self {
             topology,
             model,
+            momentum_labels: Arc::new(topology.momentum_labels.clone()),
             selector,
             incoming_particles,
             outgoing_particles,
-            diagram_buffer: DiagramContainer::default(),
+            diagram_buffer: DiagramContainer::new(None, &topology.momentum_labels),
             vertex_candidates,
             propagator_candidates: vec![AssignPropagator::new(); n_edges],
             vertex_classification: VertexClassification::from(topology),
@@ -54,26 +59,22 @@ impl<'a> AssignWorkspace<'a> {
         for i in 0..n_in {
             self.vertex_candidates[i].remaining_legs = 0;
             let edge = self.vertex_candidates[i].edges[0];
-            if i == self.topology.edges[i].connected_nodes.0 {
-                self.vertex_candidates[self.topology.edges[i].connected_nodes.1].remaining_legs -= 1;
+            if i == self.topology.edges[i].connected_nodes[0] {
+                self.vertex_candidates[self.topology.edges[i].connected_nodes[1]].remaining_legs -= 1;
             } else {
-                self.vertex_candidates[self.topology.edges[i].connected_nodes.0].remaining_legs -= 1;
+                self.vertex_candidates[self.topology.edges[i].connected_nodes[0]].remaining_legs -= 1;
             }
-            self.propagator_candidates[edge].particle = Some(
-                self.model.get_particle_index(&self.incoming_particles[i].get_name())
-            )
+            self.propagator_candidates[edge].particle = Some(self.incoming_particles[i]);
         }
         for i in 0..n_out {
             self.vertex_candidates[n_in + i].remaining_legs = 0;
             let edge = self.vertex_candidates[n_in + i].edges[0];
-            if i == self.topology.edges[i].connected_nodes.0 {
-                self.vertex_candidates[self.topology.edges[n_in + i].connected_nodes.1].remaining_legs -= 1;
+            if i == self.topology.edges[i].connected_nodes[0] {
+                self.vertex_candidates[self.topology.edges[n_in + i].connected_nodes[1]].remaining_legs -= 1;
             } else {
-                self.vertex_candidates[self.topology.edges[n_in + i].connected_nodes.0].remaining_legs -= 1;
+                self.vertex_candidates[self.topology.edges[n_in + i].connected_nodes[0]].remaining_legs -= 1;
             }
-            self.propagator_candidates[edge].particle = Some(
-                self.model.get_anti(self.model.get_particle_index(&self.outgoing_particles[i].get_name()))
-            )
+            self.propagator_candidates[edge].particle = Some(self.outgoing_particles[i]);
         }
         for index in 0..self.vertex_candidates.len() {
             if self.vertex_candidates[index].degree == 1 { continue; }
@@ -84,18 +85,21 @@ impl<'a> AssignWorkspace<'a> {
             if !connected_particles.is_empty() { 
                 candidates.retain(|candidate| {
                     connected_particles.iter().counts().into_iter().all(|(particle_index, count)| {
-                        count <= self.model.get_vertex(*candidate)
+                        count <= self.model.vertex(*candidate)
                             .count_particles(self.model.get_particle(*particle_index).get_name())
                     })
                 })
             }
             if candidates.is_empty() {
-                return DiagramContainer::new();
+                return DiagramContainer::new(None, &self.topology.momentum_labels);
             }
             self.vertex_candidates[index].candidates = candidates;
         }
         self.select_vertex();
-        let container = std::mem::take(&mut self.diagram_buffer);
+        let container = std::mem::replace(
+            &mut self.diagram_buffer,
+            DiagramContainer::new(None, &self.topology.momentum_labels)
+        );
         return container;
     }
     
@@ -107,7 +111,11 @@ impl<'a> AssignWorkspace<'a> {
         if self.vertex_candidates[next_vertex].remaining_legs == 0 {
             if let Some(vertex_symmetry) = self.is_representative() {
                 let diagram = Diagram::from(&self, vertex_symmetry);
-                if self.selector.select(&diagram) {
+                if self.selector.select(
+                    self.model.clone(),
+                    self.momentum_labels.clone(),
+                    &diagram,
+                ) {
                     self.diagram_buffer.inner_ref_mut().push(diagram);
                 }
             }
@@ -132,10 +140,10 @@ impl<'a> AssignWorkspace<'a> {
                 for particle in self.possible_particles(vertex, next_leg) {
                     if self.assign_particle(vertex, next_leg, particle) {
                         let other_vertex = 
-                            if vertex == self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes.0 {
-                                self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes.1
+                            if vertex == self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes[0] {
+                                self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes[1]
                             } else {
-                                self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes.0
+                                self.topology.get_edge(self.vertex_candidates[vertex].edges[next_leg]).connected_nodes[0]
                             };
                         self.vertex_candidates[vertex].remaining_legs -= 1;
                         self.vertex_candidates[other_vertex].remaining_legs -= 1;
@@ -175,10 +183,10 @@ impl<'a> AssignWorkspace<'a> {
     fn assign_particle(&mut self, vertex: usize, leg: usize, particle: usize) -> bool {
         let edge = self.vertex_candidates[vertex].edges[leg];
         let connected_vertex;
-        if self.topology.get_edge(edge).connected_nodes.0 == vertex {
-            connected_vertex = self.topology.get_edge(edge).connected_nodes.1;
+        if self.topology.get_edge(edge).connected_nodes[0] == vertex {
+            connected_vertex = self.topology.get_edge(edge).connected_nodes[1];
         } else {
-            connected_vertex = self.topology.get_edge(edge).connected_nodes.0;
+            connected_vertex = self.topology.get_edge(edge).connected_nodes[0];
         };
         self.propagator_candidates[edge].particle = Some(particle);
         self.update_vertex_candidates(vertex);
@@ -195,26 +203,26 @@ impl<'a> AssignWorkspace<'a> {
         let mut particles = Vec::new();
         let connected_particles = self.get_connected_particles(vertex);
         let edge = self.topology.get_edge(self.vertex_candidates[vertex].edges[leg]);
-        let connected_vertex = if edge.connected_nodes.0 == vertex {
-            edge.connected_nodes.1
+        let connected_vertex = if edge.connected_nodes[0] == vertex {
+            edge.connected_nodes[1]
         } else {
-            edge.connected_nodes.0
+            edge.connected_nodes[0]
         };
         for interaction_candidate in self.vertex_candidates[vertex].candidates.iter() {
             if !self.model.check_coupling_orders(*interaction_candidate, &self.remaining_coupling_orders) {
                 continue;
             }
-            for candidate_particle_str in self.model.get_vertex(*interaction_candidate).particles_iter() {
-                let mut particle_index = self.model.get_particle_index(candidate_particle_str);
+            for candidate_particle_str in self.model.vertex(*interaction_candidate).particles_iter() {
+                let mut particle_index = self.model.get_particle_index(candidate_particle_str).unwrap();
                 // If self-loop, only consider particles, not anti-particles (the anti-particles assigned here are
                 // always inverted at the end of this function)
                 if vertex == connected_vertex && !self.model.get_particle(particle_index).is_anti(){
-                    particle_index = self.model.get_anti(particle_index)
+                    particle_index = self.model.get_anti_index(particle_index)
                 }
                 if !particles.contains(&particle_index) 
                     // Check for remaining open connections of `particle`
                     && (connected_particles.iter().filter(|i| **i == particle_index).count() 
-                        < self.model.get_vertex(*interaction_candidate).count_particles(candidate_particle_str))
+                        < self.model.vertex(*interaction_candidate).count_particles(candidate_particle_str))
                     // Check if this assignment violates ordering of the edges into the connected class
                     && self.check_propagator_ordering(vertex, leg, particle_index) {
                     particles.push(particle_index);
@@ -222,8 +230,8 @@ impl<'a> AssignWorkspace<'a> {
             }
         }
         // If looking at the propagator in the wrong direction, charge conjugate all candidates
-        if edge.connected_nodes.0 == vertex {
-            particles = particles.into_iter().map(|p| self.model.get_anti(p)).collect_vec();
+        if edge.connected_nodes[0] == vertex {
+            particles = particles.into_iter().map(|p| self.model.get_anti_index(p)).collect_vec();
         }
         return particles;
     }
@@ -234,12 +242,12 @@ impl<'a> AssignWorkspace<'a> {
     fn check_propagator_ordering(&self, vertex: usize, leg: usize, particle: usize) -> bool {
         let edge = self.vertex_candidates[vertex].edges[leg];
         // Assign `v`, `w` such, that `v --edge--> w`
-        let v = self.topology.edges[edge].connected_nodes.0;
-        let w = self.topology.edges[edge].connected_nodes.1;
+        let v = self.topology.edges[edge].connected_nodes[0];
+        let w = self.topology.edges[edge].connected_nodes[1];
         let ref_leg = self.vertex_candidates[v].edges.iter().position(|e| *e == edge).unwrap();
         let p;
-        if self.topology.edges[edge].connected_nodes.0 == vertex {
-            p = self.model.get_anti(particle);
+        if self.topology.edges[edge].connected_nodes[0] == vertex {
+            p = self.model.get_anti_index(particle);
         } else {
             p = particle;
         }
@@ -247,7 +255,7 @@ impl<'a> AssignWorkspace<'a> {
         if self.vertex_candidates[v].edges.iter().enumerate().any(
             |(other_leg, cmp_edge)| {
                 if self.propagator_candidates[*cmp_edge].particle.is_some()
-                    && self.topology.edges[*cmp_edge].connected_nodes == (v, w) {
+                    && self.topology.edges[*cmp_edge].connected_nodes == [v, w] {
                     let other_particle = self.propagator_candidates[*cmp_edge].particle.unwrap();
                     (ref_leg < other_leg && p < other_particle) || (ref_leg > other_leg && p > other_particle)
                 } else {
@@ -266,7 +274,7 @@ impl<'a> AssignWorkspace<'a> {
         vertex_candidates.candidates.retain(|candidate| {
             if !self.model.check_coupling_orders(*candidate, &self.remaining_coupling_orders) { return false; }
             for (particle, count) in connected_particles.iter().counts().into_iter() {
-                if count > self.model.get_vertex(*candidate).count_particles(
+                if count > self.model.vertex(*candidate).count_particles(
                     self.model.get_particle(*particle).get_name()
                 ) {
                     return false;
@@ -277,7 +285,7 @@ impl<'a> AssignWorkspace<'a> {
     }
 
     fn update_coupling_orders(&mut self, vertex_id: usize) {
-        let vertex = self.model.get_vertex(vertex_id);
+        let vertex = self.model.vertex(vertex_id);
         if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
             for (coupling, power) in vertex.get_coupling_orders() {
                 if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
@@ -290,7 +298,7 @@ impl<'a> AssignWorkspace<'a> {
     }
 
     fn restore_coupling_orders(&mut self, vertex_id: usize) {
-        let vertex = self.model.get_vertex(vertex_id);
+        let vertex = self.model.vertex(vertex_id);
         if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
             for (coupling, power) in vertex.get_coupling_orders() {
                 if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
@@ -306,17 +314,17 @@ impl<'a> AssignWorkspace<'a> {
         let mut particles = vec![];
         for edge in self.vertex_candidates[vertex].edges.iter() {
             if self.propagator_candidates[*edge].particle.is_some() {
-                if vertex == self.topology.get_edge(*edge).connected_nodes.0 {
-                    particles.push(self.model.get_anti(self.propagator_candidates[*edge].particle.unwrap()));
+                if vertex == self.topology.get_edge(*edge).connected_nodes[0] {
+                    particles.push(self.model.get_anti_index(self.propagator_candidates[*edge].particle.unwrap()));
                     // Self-loop -> the respective antiparticle is also connected to the vertex
-                    if vertex == self.topology.get_edge(*edge).connected_nodes.1 {
+                    if vertex == self.topology.get_edge(*edge).connected_nodes[1] {
                         particles.push(self.propagator_candidates[*edge].particle.unwrap());
                     }
                 } else {
                     particles.push(self.propagator_candidates[*edge].particle.unwrap());
                     // Self-loop -> the respective antiparticle is also connected to the vertex
-                    if vertex == self.topology.get_edge(*edge).connected_nodes.0 {
-                        particles.push(self.model.get_anti(self.propagator_candidates[*edge].particle.unwrap()));
+                    if vertex == self.topology.get_edge(*edge).connected_nodes[0] {
+                        particles.push(self.model.get_anti_index(self.propagator_candidates[*edge].particle.unwrap()));
                     }
                 }
             }
@@ -351,8 +359,8 @@ impl<'a> AssignWorkspace<'a> {
                     { continue; }
                 let ref_particle_ids = vertex.edges.iter().filter(
                     |edge| 
-                        self.topology.get_edge(**edge).connected_nodes == (i, *connected_vertex)
-                        || self.topology.get_edge(**edge).connected_nodes == (*connected_vertex, i)
+                        self.topology.get_edge(**edge).connected_nodes == [i, *connected_vertex]
+                        || self.topology.get_edge(**edge).connected_nodes == [*connected_vertex, i]
                 ).map(
                     |edge| self.propagator_candidates[*edge].particle.unwrap()
                 ).collect_vec();
@@ -361,12 +369,12 @@ impl<'a> AssignWorkspace<'a> {
                                     || (i > *connected_vertex && perm[i] < perm[*connected_vertex]);
                 let permuted_particle_ids = self.vertex_candidates[perm[i]-1].edges.iter().filter(
                     |edge|
-                        self.topology.get_edge(**edge).connected_nodes == (perm[i]-1, perm[*connected_vertex]-1)
-                            || self.topology.get_edge(**edge).connected_nodes == (perm[*connected_vertex]-1, perm[i]-1)
+                        self.topology.get_edge(**edge).connected_nodes == [perm[i]-1, perm[*connected_vertex]-1]
+                            || self.topology.get_edge(**edge).connected_nodes == [perm[*connected_vertex]-1, perm[i]-1]
                 ).map(
                     |edge| {
                         if invert {
-                            self.model.get_anti(self.propagator_candidates[*edge].particle.unwrap())
+                            self.model.get_anti_index(self.propagator_candidates[*edge].particle.unwrap())
                         } else {
                             self.propagator_candidates[*edge].particle.unwrap()
                         }
@@ -393,8 +401,8 @@ impl<'a> AssignWorkspace<'a> {
     fn trace_fermi_line(&self, prop: usize, visited: &mut Vec<bool>) -> (usize, usize) {
         let initial_vertex;
         let mut to_visit: Vec<usize> = Vec::new();
-        initial_vertex = self.topology.edges[prop].connected_nodes.0;
-        to_visit.push(self.topology.edges[prop].connected_nodes.1);
+        initial_vertex = self.topology.edges[prop].connected_nodes[0];
+        to_visit.push(self.topology.edges[prop].connected_nodes[1]);
         visited[prop] = true;
         while !to_visit.is_empty() {
             let current = to_visit.pop().unwrap();
@@ -404,10 +412,10 @@ impl<'a> AssignWorkspace<'a> {
                 if !self.model.get_particle(*self.propagator_candidates[*edge].particle.as_ref().unwrap()).is_fermi() {
                     continue;
                 }
-                let connected_vertex = if self.topology.edges[*edge].connected_nodes.0 == current {
-                    self.topology.edges[*edge].connected_nodes.1
+                let connected_vertex = if self.topology.edges[*edge].connected_nodes[0] == current {
+                    self.topology.edges[*edge].connected_nodes[1]
                 } else {
-                    self.topology.edges[*edge].connected_nodes.0
+                    self.topology.edges[*edge].connected_nodes[0]
                 };
                 if connected_vertex == initial_vertex || self.topology.nodes[connected_vertex].degree == 1 {
                     return (initial_vertex, connected_vertex);
@@ -465,7 +473,7 @@ mod tests {
     #[test]
     fn assign_qcd_gluon_4point_tree_test() {
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let incoming = vec![model.get_particle_name("G").unwrap().clone(); 2];
+        let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
             n_external: 4,
@@ -478,10 +486,10 @@ mod tests {
                 Node { degree: 4, adjacent_nodes: vec![0, 1, 2, 3] }
             ],
             edges: vec![
-                Edge { connected_nodes: (0, 4), momenta: Some(vec![1, 0, 0, 0]) },
-                Edge { connected_nodes: (1, 4), momenta: Some(vec![0, 1, 0, 0]) },
-                Edge { connected_nodes: (2, 4), momenta: Some(vec![0, 0, 1, 0]) },
-                Edge { connected_nodes: (3, 4), momenta: Some(vec![0, 0, 0, 1]) }
+                Edge { connected_nodes: [0, 4], momenta: Some(vec![1, 0, 0, 0]) },
+                Edge { connected_nodes: [1, 4], momenta: Some(vec![0, 1, 0, 0]) },
+                Edge { connected_nodes: [2, 4], momenta: Some(vec![0, 0, 1, 0]) },
+                Edge { connected_nodes: [3, 4], momenta: Some(vec![0, 0, 0, 1]) }
             ],
             node_symmetry: 1,
             edge_symmetry: 1,
@@ -501,7 +509,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let mut workspace = AssignWorkspace::new(
             &topology,
-            &model,
+            Arc::new(model),
             &selector,
             &incoming,
             &outgoing
@@ -513,7 +521,7 @@ mod tests {
     #[test]
     fn assign_qcd_gluon_s_channel_tree_test() {
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let incoming = vec![model.get_particle_name("G").unwrap().clone(); 2];
+        let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
             n_external: 4,
@@ -527,11 +535,11 @@ mod tests {
                 Node { degree: 3, adjacent_nodes: vec![2, 3, 4] }
             ],
             edges: vec![
-                Edge { connected_nodes: (0, 4), momenta: Some(vec![1, 0, 0, 0]) },
-                Edge { connected_nodes: (1, 4), momenta: Some(vec![0, 1, 0, 0]) },
-                Edge { connected_nodes: (2, 5), momenta: Some(vec![0, 0, 1, 0]) },
-                Edge { connected_nodes: (3, 5), momenta: Some(vec![0, 0, 0, 1]) },
-                Edge { connected_nodes: (4, 5), momenta: Some(vec![1, 1, 0, 0]) },
+                Edge { connected_nodes: [0, 4], momenta: Some(vec![1, 0, 0, 0]) },
+                Edge { connected_nodes: [1, 4], momenta: Some(vec![0, 1, 0, 0]) },
+                Edge { connected_nodes: [2, 5], momenta: Some(vec![0, 0, 1, 0]) },
+                Edge { connected_nodes: [3, 5], momenta: Some(vec![0, 0, 0, 1]) },
+                Edge { connected_nodes: [4, 5], momenta: Some(vec![1, 1, 0, 0]) },
             ],
             node_symmetry: 1,
             edge_symmetry: 1,
@@ -552,7 +560,7 @@ mod tests {
         let selector = DiagramSelector::default();
         let mut workspace = AssignWorkspace::new(
             &topology,
-            &model,
+            Arc::new(model),
             &selector,
             &incoming,
             &outgoing
@@ -570,16 +578,16 @@ mod tests {
             Some(TopologySelector::new())
         ).generate();
         let topo = topos[48].clone();
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Arc::new(Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap());
         let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
+        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let particle_out = vec![
-            model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u~").unwrap().clone()
+            model.get_particle_index("u").unwrap().clone(),
+            model.get_particle_index("u~").unwrap().clone()
         ];
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            model.clone(),
             &selector,
             &particles_in,
             &particle_out,
@@ -590,7 +598,7 @@ mod tests {
         let topo = topos[81].clone();
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            model.clone(),
             &selector,
             &particles_in,
             &particle_out,
@@ -601,7 +609,7 @@ mod tests {
         let topo = topos[84].clone();
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            model,
             &selector,
             &particles_in,
             &particle_out,
@@ -621,14 +629,14 @@ mod tests {
         let topo = topos[1532].clone();
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_name("G").unwrap().clone(); 2];
+        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let particle_out = vec![
-            model.get_particle_name("u").unwrap().clone(),
-            model.get_particle_name("u~").unwrap().clone()
+            model.get_particle_index("u").unwrap().clone(),
+            model.get_particle_index("u~").unwrap().clone()
         ];
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            Arc::new(model),
             &selector,
             &particles_in,
             &particle_out,
@@ -648,11 +656,11 @@ mod tests {
         let topo = topos[13].clone();
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
+        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
+        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            Arc::new(model),
             &selector,
             &particles_in,
             &particle_out,
@@ -666,7 +674,7 @@ mod tests {
         let mut topo_selector = TopologySelector::new();
         topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {
-                !topo.edges_iter().any(|edge| edge.connected_nodes.0 == edge.connected_nodes.1)
+                !topo.edges_iter().any(|edge| edge.connected_nodes[0] == edge.connected_nodes[1])
             })
         );
         topo_selector.add_custom_function(
@@ -683,11 +691,11 @@ mod tests {
         let topo = topos[10].clone();
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
+        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
+        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            Arc::new(model),
             &selector,
             &particles_in,
             &particle_out,
@@ -708,11 +716,11 @@ mod tests {
         let topo = topos[137].clone();
         let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
         let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_name("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_name("G").unwrap().clone()];
+        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
+        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
         let mut workspace = AssignWorkspace::new(
             &topo,
-            &model,
+            Arc::new(model),
             &selector,
             &particles_in,
             &particle_out,
