@@ -1,0 +1,144 @@
+#![allow(dead_code, non_snake_case)]
+use std::path::PathBuf;
+use paste::paste;
+use tempfile::NamedTempFile;
+use itertools::Itertools;
+use feyngraph::{
+    model::Model,
+    diagram::DiagramGenerator
+};
+mod common;
+
+macro_rules! test_diagrams {
+    (
+        $ufo:ident,
+        $($particle_in:ident)+ => $($particle_out:ident)+,
+        $n_loops:literal
+    ) => {
+        paste!{
+            #[test]
+            fn [< test_diag _ $ufo _ $($particle_in)+ _ $($particle_out)+ _loops_ $n_loops >]() {
+                let model = Model::from_ufo(
+                    &PathBuf::from(format!("tests/resources/{}", stringify!($ufo)))
+                ).unwrap();
+                let in_particles = vec![$(model.get_particle_index(stringify!($particle_in)).unwrap()),+];
+                let out_particles = vec![$(model.get_particle_index(stringify!($particle_out)).unwrap()),+];
+                let n_topos = DiagramGenerator::new(
+                    in_particles,
+                    out_particles,
+                    $n_loops,
+                    model.clone(),
+                    None,
+                ).count();
+                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
+                common::write_qgraf_model(
+                    &qgraf_model,
+                    &model
+                ).unwrap();
+                let in_particles = vec![$(model.get_particle_name(stringify!($particle_in)).unwrap()),+];
+                let out_particles = vec![$(model.get_particle_name(stringify!($particle_out)).unwrap()),+];
+                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
+                common::write_qgraf_config(
+                    &qgraf_config,
+                    &qgraf_model.path().to_str().unwrap(),
+                    &in_particles.iter().map(
+                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                    ).collect_vec(),
+                    &out_particles.iter().map(
+                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                    ).collect_vec(),
+                    $n_loops,
+                    &vec![]
+                ).unwrap();
+                let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
+                if let Ok(n_qgraf) = n_qgraf {
+                    assert_eq!(n_qgraf, n_topos);
+                } else if let Err(e) = n_qgraf {
+                    println!("{}", std::fs::read_to_string(qgraf_model.path().to_str().unwrap()).unwrap());
+                    println!("{}", std::fs::read_to_string(qgraf_config.path().to_str().unwrap()).unwrap());
+                    println!("{:#?}", e);
+                    panic!("QGRAF terminated due to an error");
+                }
+            }
+        }
+    };
+    (
+        $ufo:ident,
+        $name:ident,
+        $($particle_in:literal)+ => $($particle_out:literal)+,
+        $n_loops:literal
+    ) => {
+        paste!{
+            #[test]
+            fn [< test_diag _ $ufo _ $name _loops_ $n_loops >]() {
+                let model = Model::from_ufo(
+                    &PathBuf::from(format!("tests/resources/{}", stringify!($ufo)))
+                ).unwrap();
+                let in_particles = vec![$(model.get_particle_index($particle_in).unwrap()),+];
+                let out_particles = vec![$(model.get_particle_index($particle_out).unwrap()),+];
+                let n_topos = DiagramGenerator::new(
+                    in_particles,
+                    out_particles,
+                    $n_loops,
+                    model.clone(),
+                    None,
+                ).count();
+                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
+                common::write_qgraf_model(
+                    &qgraf_model,
+                    &model
+                ).unwrap();
+                let in_particles = vec![$(model.get_particle_name($particle_in).unwrap()),+];
+                let out_particles = vec![$(model.get_particle_name($particle_out).unwrap()),+];
+                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
+                common::write_qgraf_config(
+                    &qgraf_config,
+                    &qgraf_model.path().to_str().unwrap(),
+                    &in_particles.iter().map(
+                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                    ).collect_vec(),
+                    &out_particles.iter().map(
+                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                    ).collect_vec(),
+                    $n_loops,
+                    &vec![]
+                ).unwrap();
+                let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
+                if let Ok(n_qgraf) = n_qgraf {
+                    assert_eq!(n_qgraf, n_topos);
+                } else if let Err(e) = n_qgraf {
+                    println!("{}", std::fs::read_to_string(qgraf_model.path().to_str().unwrap()).unwrap());
+                    println!("{}", std::fs::read_to_string(qgraf_config.path().to_str().unwrap()).unwrap());
+                    println!("{:#?}", e);
+                    panic!("QGRAF terminated due to an error");
+                }
+            }
+        }
+    };
+}
+
+test_diagrams!(Standard_Model_UFO, g g => g g, 0);
+test_diagrams!(Standard_Model_UFO, g g => g g, 1);
+test_diagrams!(Standard_Model_UFO, g g => g g, 2);
+
+test_diagrams!(Standard_Model_UFO, u u => u u, 0);
+test_diagrams!(Standard_Model_UFO, u u => u u, 1);
+test_diagrams!(Standard_Model_UFO, u u => u u, 2);
+
+test_diagrams!(Standard_Model_UFO, uubar_uubar, "u" "u~" => "u" "u~", 0);
+test_diagrams!(Standard_Model_UFO, uubar_uubar, "u" "u~" => "u" "u~", 1);
+test_diagrams!(Standard_Model_UFO, uubar_uubar, "u" "u~" => "u" "u~", 2);
+
+test_diagrams!(Standard_Model_UFO, gg_uubar, "g" "g" => "u" "u~", 0);
+test_diagrams!(Standard_Model_UFO, gg_uubar, "g" "g" => "u" "u~", 1);
+test_diagrams!(Standard_Model_UFO, gg_uubar, "g" "g" => "u" "u~", 2);
+
+test_diagrams!(Standard_Model_UFO, u u => u u g, 0);
+test_diagrams!(Standard_Model_UFO, u u => u u g, 1);
+test_diagrams!(Standard_Model_UFO, u u => u u g, 2);
+
+test_diagrams!(QCD_UFO, G => G, 3);
+test_diagrams!(QCD_UFO, G => G, 4);
+
+test_diagrams!(QCD_UFO, u => u, 3);
+test_diagrams!(QCD_UFO, u => u, 4);

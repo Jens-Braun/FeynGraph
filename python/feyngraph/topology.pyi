@@ -10,6 +10,9 @@ class Topology:
     def nodes(self) -> list[Node]:
         """Get a list of all edges in the topology."""
 
+    def symmetry_factor(self) -> int:
+        """Get the topology's symmetry factor"""
+
 class Edge:
     """The internal representaion of a graph edge."""
 

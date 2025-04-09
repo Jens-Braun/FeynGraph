@@ -351,6 +351,31 @@ impl DiagramGenerator {
         return container;
     }
 
+    pub fn count(&self) -> usize {
+        let mut topo_generator = TopologyGenerator::new(
+            self.n_external,
+            self.n_loops,
+            TopologyModel::from(self.model.as_ref()),
+            Some(self.selector.as_topology_selector()),
+        );
+        if let Some(ref labels) = self.momentum_labels {
+            topo_generator.set_momentum_labels(labels.clone()).unwrap();
+        }
+        let topologies = topo_generator.generate();
+        let mut counts: Vec<usize> = Vec::new();
+        topologies.inner_ref().into_par_iter().map(|topology| {
+            let mut assign_workspace = AssignWorkspace::new(
+                topology,
+                self.model.clone(),
+                &self.selector,
+                &self.incoming_particles,
+                &self.outgoing_particles
+            );
+            return assign_workspace.assign().len();
+        }).collect_into_vec(&mut counts);
+        return counts.into_iter().sum();
+    }
+
     pub fn assign_topology(&self, topology: &Topology) -> DiagramContainer {
         let mut assign_workspace = AssignWorkspace::new(
             topology,
@@ -388,158 +413,10 @@ mod tests {
     use std::sync::Arc;
     use crate::topology::filter::TopologySelector;
     use super::*;
-    
-    #[test]
-    pub fn diagram_generator_qcd_2g_2g_tree() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = particles_in.clone();
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            0,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 4);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_2g_2u_tree() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            0,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 3);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_2g_2u_1loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            1,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 134);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_2g_2u_2loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            2,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 5569);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_2g_2u_3loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            3,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 233199);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_u_prop_2loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("u").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("u").unwrap().clone()];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            2,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 80);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_g_prop_2loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            2,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 200);
-    }
-
-    #[test]
-    pub fn diagram_generator_qcd_g_prop_3loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            3,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.generate();
-        assert_eq!(diagrams.len(), 5386);
-    }
 
     #[test]
     pub fn diagram_generator_qcd_g_prop_opi_3loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let mut selector = DiagramSelector::default();
         selector.add_opi_count(1);
         let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
@@ -557,7 +434,7 @@ mod tests {
 
     #[test]
     pub fn diagram_generator_qcd_g_prop_no_self_loops_3loop() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let mut topo_selector = TopologySelector::new();
         topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {
@@ -581,28 +458,8 @@ mod tests {
     }
 
     #[test]
-    fn diagram_generator_sm_u_prop_1l_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/Standard_Model_UFO")).unwrap();
-        let topo_selector = TopologySelector::new();
-        let topo_generator = TopologyGenerator::new(2, 1, (&model).into(), Some(topo_selector));
-        let topologies = topo_generator.generate();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("u").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("u").unwrap().clone()];
-        let generator = DiagramGenerator::new(
-            particles_in,
-            particle_out,
-            1,
-            model,
-            Some(selector)
-        );
-        let diagrams = generator.assign_topology(&topologies[1]);
-        assert_eq!(diagrams.len(), 37);
-    }
-
-    #[test]
     pub fn diagram_generator_sign_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let particles_in = vec![model.get_particle_index("u").unwrap().clone(); 2];
         let particle_out = vec![model.get_particle_index("u").unwrap().clone(); 2];
         let generator = DiagramGenerator::new(
@@ -619,7 +476,7 @@ mod tests {
 
     #[test]
     fn diagram_generator_sign_1l_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let mut topo_selector = TopologySelector::new();
         topo_selector.add_custom_function(
             Arc::new(|topo: &Topology| -> bool {

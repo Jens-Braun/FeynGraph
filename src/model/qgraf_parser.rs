@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn qgraf_qcd_test() {
-        let path = PathBuf::from("tests/qcd.qgraf");
+        let path = PathBuf::from("tests/resources/qcd.qgraf");
         let model = QGRAFParser::parse_qgraf_model(&path).unwrap();
         println!("{:#?}", model);
         let model_ref = Model {

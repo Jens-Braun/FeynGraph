@@ -363,7 +363,7 @@ impl<'a> AssignWorkspace<'a> {
                         || self.topology.get_edge(**edge).connected_nodes == [*connected_vertex, i]
                 ).map(
                     |edge| self.propagator_candidates[*edge].particle.unwrap()
-                ).collect_vec();
+                ).sorted_unstable().collect_vec();
                 // Direction of the edges between the nodes is inverted by the permutation
                 let invert = (i < *connected_vertex && perm[i] > perm[*connected_vertex])
                                     || (i > *connected_vertex && perm[i] < perm[*connected_vertex]);
@@ -379,7 +379,7 @@ impl<'a> AssignWorkspace<'a> {
                             self.propagator_candidates[*edge].particle.unwrap()
                         }
                     }
-                ).collect_vec();
+                ).sorted_unstable().collect_vec();
                 match ref_particle_ids.len().cmp(&permuted_particle_ids.len()) {
                     Ordering::Equal => (),
                     x => result = Some(x)
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn assign_qcd_gluon_4point_tree_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn assign_qcd_gluon_s_channel_tree_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_UFO")).unwrap();
         let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
@@ -570,126 +570,17 @@ mod tests {
     }
 
     #[test]
-    pub fn workspace_qcd_2g_2u_1loop() {
-        let topos = TopologyGenerator::new(
-            4,
-            1,
-            TopologyModel::from(vec![3, 4]),
-            Some(TopologySelector::new())
-        ).generate();
-        let topo = topos[48].clone();
-        let model = Arc::new(Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap());
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            model.clone(),
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 4);
-
-        let topo = topos[81].clone();
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            model.clone(),
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 4);
-
-        let topo = topos[84].clone();
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            model,
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 7);
-    }
-
-    #[test]
-    pub fn workspace_qcd_2g_2u_2loop() {
-        let topos = TopologyGenerator::new(
-            4,
-            2,
-            TopologyModel::from(vec![3, 4]),
-            Some(TopologySelector::new())
-        ).generate();
-        let topo = topos[1532].clone();
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone(); 2];
-        let particle_out = vec![
-            model.get_particle_index("u").unwrap().clone(),
-            model.get_particle_index("u~").unwrap().clone()
-        ];
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            Arc::new(model),
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 4);
-    }
-
-    #[test]
-    pub fn workspace_qcd_g_prop_2loop() {
-        let topos = TopologyGenerator::new(
-            2,
-            2,
-            TopologyModel::from(vec![3, 4]),
-            Some(TopologySelector::new())
-        ).generate();
-        let topo = topos[13].clone();
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            Arc::new(model),
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 4);
-    }
-
-    #[test]
-    pub fn workspace_qcd_g_prop_3loop() {
+    pub fn workspace_qcd_g_prop_4loop() {
         let mut topo_selector = TopologySelector::new();
-        topo_selector.add_custom_function(
-            Arc::new(|topo: &Topology| -> bool {
-                !topo.edges_iter().any(|edge| edge.connected_nodes[0] == edge.connected_nodes[1])
-            })
-        );
-        topo_selector.add_custom_function(
-            Arc::new(|topo: &Topology| -> bool {
-                topo.edges_iter().any(|edge| edge.momenta.as_ref().unwrap().iter().all(|x| *x == 0))
-            })
-        );
+        topo_selector.add_opi_count(1);
         let topos = TopologyGenerator::new(
             2,
-            3,
+            4,
             TopologyModel::from(vec![3, 4]),
             Some(topo_selector)
         ).generate();
-        let topo = topos[10].clone();
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
+        let topo = topos[1004].clone();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_U_UFO")).unwrap();
         let selector = DiagramSelector::default();
         let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
         let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
@@ -701,31 +592,6 @@ mod tests {
             &particle_out,
         );
         let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 1);
-    }
-
-    #[test]
-    pub fn workspace_qcd_g_prop_full_3loop() {
-        let topo_selector = TopologySelector::new();
-        let topos = TopologyGenerator::new(
-            2,
-            3,
-            TopologyModel::from(vec![3, 4]),
-            Some(topo_selector)
-        ).generate();
-        let topo = topos[137].clone();
-        let model = Model::from_ufo(&PathBuf::from("tests/QCD_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
-        let mut workspace = AssignWorkspace::new(
-            &topo,
-            Arc::new(model),
-            &selector,
-            &particles_in,
-            &particle_out,
-        );
-        let diagrams = workspace.assign();
-        assert_eq!(diagrams.len(), 16);
+        assert_eq!(diagrams.len(), 13);
     }
 }

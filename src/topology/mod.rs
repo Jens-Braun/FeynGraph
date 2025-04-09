@@ -616,6 +616,36 @@ impl TopologyGenerator {
         }).collect_into_vec(&mut containers);
         return TopologyContainer::from(containers);
     }
+
+    /// Generate and count the topologies without saving them
+    pub fn count_topologies(&self) -> usize {
+        let degrees = self.model.degrees_iter().collect_vec();
+        let node_partitions = find_partitions(
+            self.model.degrees_iter().map(|d| d - 2), 2*self.n_loops + self.n_external - 2
+        ).into_iter()
+            .filter(|partition| {
+                self.selector.select_partition(
+                    partition.iter().enumerate().map(|(i, count)| (degrees[i], *count)).collect_vec()
+                )
+            }
+            ).collect_vec();
+        let mut counts = Vec::new();
+        node_partitions
+            .into_par_iter()
+            .map(|partition| {
+                let mut nodes = vec![1; self.n_external];
+                let mut internal_nodes = partition
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, n)| vec![self.model.get(i); n])
+                    .concat();
+                nodes.append(&mut internal_nodes);
+                let mut workspace = TopologyWorkspace::from_nodes(self.n_external, self.n_loops, &nodes);
+                workspace.topology_selector = self.selector.clone();
+                return workspace.count();
+            }).collect_into_vec(&mut counts);
+        return counts.into_iter().sum();
+    }
 }
 
 #[cfg(test)]
@@ -640,53 +670,6 @@ mod tests {
         let generator = TopologyGenerator::new(2, 1, model, Some(selector));
         let topologies = generator.generate();
         assert_eq!(topologies.len(), 1);
-    }
-    
-    #[test]
-    fn topology_generator_1_loop_test() {
-        let model = TopologyModel::from(vec![3, 4]);
-        let generator = TopologyGenerator::new(4, 1, model, Some(TopologySelector::new()));
-        let topologies = generator.generate();
-        assert_eq!(topologies.inner_ref().len(), 99);
-    }
-
-    #[test]
-    fn topology_generator_3_loop_test() {
-        let model = TopologyModel::from(vec![3, 4]);
-        let generator = TopologyGenerator::new(4, 3, model, Some(TopologySelector::new()));
-        let topologies = generator.generate();
-        assert_eq!(topologies.inner_ref().len(), 50051);
-    }
-    
-    #[test]
-    fn topology_generator_3_loop_opi_test() {
-        let model = TopologyModel::from(vec![3, 4]);
-        let mut selector = TopologySelector::default();
-        selector.add_opi_count(1);
-        let generator = TopologyGenerator::new(4, 3, model, Some(selector));
-        let topologies = generator.generate();
-        assert_eq!(topologies.inner_ref().len(), 6166);
-    }
-
-    #[test]
-    fn topology_generator_3_loop_opi_partition_test() {
-        let model = TopologyModel::from(vec![3, 4]);
-        let mut selector = TopologySelector::default();
-        selector.add_opi_count(1);
-        selector.add_node_partition(vec![(3, 4), (4, 2)]);
-        let generator = TopologyGenerator::new(4, 3, model, Some(selector));
-        let topologies = generator.generate();
-        assert_eq!(topologies.inner_ref().len(), 2614);
-    }
-
-    #[test]
-    fn topology_generator_2_loop_degree_6_test() {
-        let model = TopologyModel::from(vec![3, 4, 5, 6]);
-        let mut selector = TopologySelector::default();
-        selector.add_opi_count(1);
-        let generator = TopologyGenerator::new(4, 2, model, Some(selector));
-        let topologies = generator.generate();
-        assert_eq!(topologies.inner_ref().len(), 404);
     }
     
     #[test]

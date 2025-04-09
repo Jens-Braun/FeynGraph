@@ -50,7 +50,7 @@ fn set_threads(n_threads: usize) {
     particles_in,
     particles_out,
     n_loops = 0,
-    model = PyModel::from_ufo(PathBuf::from("tests/Standard_Model_UFO")).unwrap(),
+    model = PyModel::from_ufo(PathBuf::from("tests/resources/resourcesStandard_Model_UFO")).unwrap(),
     diagram_selector = None,
 ))]
 fn generate_diagrams(
@@ -311,6 +311,8 @@ impl PyTopology {
     fn edges(&self) -> Vec<PyEdge> {
         return self.0.edges_iter().map(|edge| PyEdge(edge.clone())).collect_vec();
     }
+
+    fn symmetry_factor(&self) -> usize { return self.0.node_symmetry * self.0.edge_symmetry; }
 
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
@@ -731,7 +733,7 @@ impl PyDiagram {
         return PyPropagator {
             container: self.container.clone(),
             diagram: Arc::new(self.clone()),
-            propagator: Arc::new(self.diagram.propagators[index + self.n_ext()].clone()),
+            propagator: Arc::new(self.diagram.propagators[index].clone()),
             index,
             invert: false
         }

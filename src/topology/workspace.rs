@@ -25,6 +25,8 @@ pub struct TopologyWorkspace{
     pub(crate) topology_selector: TopologySelector,
     /// List of names of the momenta
     pub(crate) momentum_labels: Vec<String>,
+    /// Number of generated diagrams
+    pub(crate) count: usize,
 }
 
 impl TopologyWorkspace {
@@ -51,7 +53,8 @@ impl TopologyWorkspace {
             momentum_labels: vec![
                 (1..=n_external).map(|i| format!("p{}", i)).collect_vec(),
                 (1..=n_loops).map(|i| format!("l{}", i)).collect_vec(),
-            ].into_iter().flatten().collect_vec()
+            ].into_iter().flatten().collect_vec(),
+            count: 0
         }
     }
 
@@ -225,7 +228,10 @@ impl TopologyWorkspace {
                         // Only keep fully connected graphs which are representatives
                         let topology = Topology::from(self, node_symmetry);
                         if self.topology_selector.select(&topology) {
-                            self.topology_buffer.as_mut().unwrap().push(topology);
+                            if self.topology_buffer.is_some() {
+                                self.topology_buffer.as_mut().unwrap().push(topology);
+                            }
+                            self.count += 1;
                         }
                     }
                 }
@@ -335,6 +341,12 @@ impl TopologyWorkspace {
         self.connect_next_class();
         let container = std::mem::take(&mut self.topology_buffer).unwrap();
         return container;
+    }
+
+    /// Generate and count all topologies of the current workspace without saving them.
+    pub fn count(&mut self) -> usize {
+        self.connect_next_class();
+        return self.count;
     }
 }
 

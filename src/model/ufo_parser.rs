@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn ufo_parse_test() {
-        let path = PathBuf::from("tests/QCD_UFO");
+        let path = PathBuf::from("tests/resources/QCD_UFO");
         let model = UFOParser::parse_ufo_model(&path).unwrap();
         println!("{:#?}", model);
         let model_ref = Model {

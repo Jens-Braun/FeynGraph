@@ -219,9 +219,13 @@ impl Model {
         return self.vertices.values();
     }
 
+    pub fn particles_iter(&self) -> impl Iterator<Item = &Particle> { return self.particles.values(); }
+
     pub fn n_vertices(&self) -> usize {
         return self.vertices.len();
     }
+
+    pub fn coupling_orders(&self) -> &Vec<String> { return &self.coupling_orders; }
 
     /// Check if adding `vertex` to the diagram is allowed by the maximum power of the coupling constants
     pub(crate) fn check_coupling_orders(&self, interaction: usize,
@@ -291,7 +295,7 @@ mod tests {
 
     #[test]
     fn model_conversion_test() {
-        let model = Model::from_ufo(&PathBuf::from("tests/Standard_Model_UFO")).unwrap();
+        let model = Model::from_ufo(&PathBuf::from("tests/resources/Standard_Model_UFO")).unwrap();
         let topology_model = TopologyModel::from(&model);
         assert_eq!(topology_model, TopologyModel {vertex_degrees: vec![3, 4]});
     }
