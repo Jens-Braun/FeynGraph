@@ -16,7 +16,7 @@ use crate::{model::{
     filter::TopologySelector
 }, diagram::{
     DiagramContainer, DiagramGenerator, Diagram, filter::DiagramSelector, Propagator, Vertex, Leg,
-    view::{DiagramView}
+    view::DiagramView
 }, util};
 
 #[pymodule]
@@ -50,7 +50,7 @@ fn set_threads(n_threads: usize) {
     particles_in,
     particles_out,
     n_loops = 0,
-    model = PyModel::from_ufo(PathBuf::from("tests/resources/resourcesStandard_Model_UFO")).unwrap(),
+    model = PyModel::__new__(),
     diagram_selector = None,
 ))]
 fn generate_diagrams(
@@ -76,9 +76,8 @@ fn generate_diagrams(
 impl From<ModelError> for PyErr {
     fn from(err: ModelError) -> PyErr {
         match err {
-            ModelError::IOError(_) => PyIOError::new_err(err.to_string()),
-            ModelError::UFOParseError(_) => PySyntaxError::new_err(err.to_string()),
-            ModelError::QGRAFParseError(_) => PySyntaxError::new_err(err.to_string()),
+            ModelError::IOError(_, _) => PyIOError::new_err(err.to_string()),
+            ModelError::ParseError(_, _) => PySyntaxError::new_err(err.to_string()),
             ModelError::ContentError(_) => PySyntaxError::new_err(err.to_string()),
         }
     }
@@ -126,6 +125,12 @@ struct PyModel(Model);
 
 #[pymethods]
 impl PyModel {
+
+    #[new]
+    fn __new__() -> Self {
+        return PyModel(Model::default());
+    }
+
     #[staticmethod]
     fn from_ufo(path: PathBuf) -> PyResult<Self> {
         return Ok(Self(Model::from_ufo(&path)?));
@@ -185,7 +190,7 @@ impl PyInteractionVertex {
     fn __str__(&self) -> String { return format!("{:?}", self.0); }
 
     fn coupling_orders(&self) -> HashMap<String, usize> {
-        return self.0.couplings_orders.clone();
+        return self.0.coupling_orders.clone();
     }
 }
 

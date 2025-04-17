@@ -1,0 +1,24 @@
+
+%  simplified QCD with neither flavour nor colour indices
+
+
+%  propagators
+
+  [ quark, antiquark, - ; TWOSPIN='1', COLOR='3']
+
+  [ gluon, gluon, + ; TWOSPIN='2', COLOR='8']
+
+  [ ghost, antighost, - ; TWOSPIN='-2', COLOR='8']
+
+
+
+%  vertices
+
+  [ antiquark, quark, gluon ; QCD='1', CONJ=('+','-')]
+
+  [ gluon, gluon, gluon ; QCD='1']
+
+  [ gluon, gluon, gluon, gluon ; QCD='2']
+
+  [ antighost, ghost, gluon ; QCD='1']
+

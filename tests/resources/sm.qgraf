@@ -1,0 +1,279 @@
+% vim: syntax=none
+
+% From Boehm, Denner, Joos
+% in Feynman Gauge
+
+[ model = 'Standard Model' ]
+
+% Propagators:
+
+% quarks
+[U, Ubar,          -; TWOSPIN=1, COLOR=3, MASS='mU', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[D, Dbar,          -; TWOSPIN=1, COLOR=3, MASS='mD', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[C, Cbar,          -; TWOSPIN=1, COLOR=3, MASS='mC', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[S, Sbar,          -; TWOSPIN=1, COLOR=3, MASS='mS', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[T, Tbar,          -; TWOSPIN=1, COLOR=3, MASS='mT', WIDTH='wT',
+                      AUX='0', CONJ=('+','-')]
+[B, Bbar,          -; TWOSPIN=1, COLOR=3, MASS='mB', WIDTH='wB',
+                      AUX='0', CONJ=('+','-')]
+
+% gluon and its ghost:
+[gh, ghbar,        -; TWOSPIN=0, COLOR=8, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[g, g,             +, notadpole; TWOSPIN=2, COLOR=8, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+')]
+
+% V: EWSM gauge bosons
+[A, A,             +, notadpole; TWOSPIN=2, COLOR=1, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+')]
+[Wm, Wp,           +; TWOSPIN=2, COLOR=1, MASS='mW', WIDTH='wW',
+                      AUX='0', CONJ=('+','+')]
+[Z, Z,             +; TWOSPIN=2, COLOR=1, MASS='mZ', WIDTH='wZ',
+                      AUX='0', CONJ=('+')]
+
+% leptons
+[em, ep,           -; TWOSPIN=1, COLOR=1, MASS='me', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[ne, nebar,        -; TWOSPIN=1, COLOR=1, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[mum, mup,         -; TWOSPIN=1, COLOR=1, MASS='mmu', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[nmu, nmubar,      -; TWOSPIN=1, COLOR=1, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[taum, taup,       -; TWOSPIN=1, COLOR=1, MASS='mtau', WIDTH='wtau',
+                      AUX='0', CONJ=('+','-')]
+[ntau, ntaubar,    -; TWOSPIN=1, COLOR=1, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+
+% G: Faddeev-Popov Ghosts
+[ghA, ghAbar,      -; TWOSPIN=0, COLOR=1, MASS='0', WIDTH='0',
+                      AUX='0', CONJ=('+','-')]
+[ghZ, ghZbar,      -; TWOSPIN=0, COLOR=1, MASS='mZ', WIDTH='wghZ',
+                      AUX='0', CONJ=('+','-')]
+[ghWm, ghWmbar,    -; TWOSPIN=0, COLOR=1, MASS='mW', WIDTH='wghWm',
+                      AUX='0', CONJ=('+','-')]
+[ghWp, ghWpbar,    -; TWOSPIN=0, COLOR=1, MASS='mW', WIDTH='wghWp',
+                      AUX='0', CONJ=('+','-')]
+
+% S: scalars
+[chi, chi,         +; TWOSPIN=0, COLOR=1, MASS='mZ', WIDTH='wZ',
+                      AUX='0', CONJ=('+')]
+[phim, phip,       +; TWOSPIN=0, COLOR=1, MASS='mW', WIDTH='wphi',
+                      AUX='0', CONJ=('+','-')]
+[H, H,             +; TWOSPIN=0, COLOR=1, MASS='mH', WIDTH='wH',
+                      AUX='0', CONJ=('+')]
+
+% Vertices:
+
+% QCD
+[Ubar, U, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+[Dbar, D, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+[Sbar, S, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+[Cbar, C, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+[Bbar, B, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+[Tbar, T, g;   gs='+1', gw='0', QCD='+1', QED='0', RK='0']
+
+[g, g, g, g;   gs='+2', gw='0', QCD='+2', QED='0', RK='0']
+[g, g, g;      gs='+1', gw='0', QCD='+1', QED='0', RK='1']
+[ghbar, gh, g; gs='+1', gw='0', QCD='+1', QED='0', RK='1']
+
+% VVVV
+[Wp, Wm, Z, Z; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Wm, A, Z; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Wm, A, A; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+[Wp, Wp, Wm, Wm; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+% VVV
+[Wp, Wm, A; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Wp, Wm, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+
+% SSSS
+[H, H, H, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[chi, chi, chi, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+[H, H, chi, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[H, H, phim, phip; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[chi, chi, phim, phip; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[phim, phip, phim, phip; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+% SSS
+[H, H, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[H, chi, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[H, phim, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+% VVSS
+[Z, Z, H, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Z, Z, chi, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Wm, H, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Wm, chi, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Wm, phip, phim; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+[A, A, phip, phim; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Z, A, phip, phim; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Z, Z, phip, phim; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+[Wp, A, phim, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wm, A, phip, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, A, phim, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wm, A, phip, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Z, phim, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wm, Z, phip, H; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wp, Z, phim, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+[Wm, Z, phip, chi; gs='0', gw='+2', QCD='0', QED='+2', RK='0']
+
+% VSS
+[Z, chi, H; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[A, phip, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Z, phip, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Wp, phim, H; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Wm, phip, H; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Wp, phim, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[Wm, phip, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+
+% SVV
+[H, Z, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[H, Wp, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[phip, Wm, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[phim, Wp, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[phip, Wm, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[phim, Wp, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+% ffV
+[Ubar, U, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Dbar, D, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, S, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, C, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, B, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, T, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, em, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[mup, mum, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[taup, taum, A; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Ubar, U, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Dbar, D, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, S, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, C, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, B, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, T, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, em, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[mup, mum, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[taup, taum, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[nebar, ne, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nmubar, nmu, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ntaubar, ntau, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Dbar, U, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, C, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, T, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Ubar, D, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, S, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, B, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, ne, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nebar, em, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[mup, nmu, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nmubar, mum, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[taup, ntau, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ntaubar, taum, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+% Sff
+[Ubar, U, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Dbar, D, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, S, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, C, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, B, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, T, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, em, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[mup, mum, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[taup, taum, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[nebar, ne, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nmubar, nmu, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ntaubar, ntau, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Ubar, U, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Dbar, D, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, S, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, C, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, B, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, T, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, em, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[mup, mum, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[taup, taum, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[nebar, ne, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nmubar, nmu, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ntaubar, ntau, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Dbar, U, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Dbar, C, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Dbar, T, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+%[Sbar, U, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Sbar, C, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Sbar, T, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+%[Bbar, U, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Bbar, C, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Bbar, T, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[Ubar, D, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Ubar, S, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Ubar, B, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+%[Cbar, D, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Cbar, S, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Cbar, B, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+%[Tbar, D, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+%[Tbar, S, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[Tbar, B, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[ep, ne, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nebar, em, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[mup, nmu, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[nmubar, mum, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+[taup, ntau, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ntaubar, taum, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+
+% VGG
+[ghWpbar, ghWp, A; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWmbar, ghWm, A; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghAbar, ghWm, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghAbar, ghWp, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWmbar, ghA, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWpbar, ghA, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWpbar, ghWp, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWmbar, ghWm, Z; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghZbar, ghWm, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghZbar, ghWp, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWmbar, ghZ, Wm; gs='0', gw='+1', QCD='0', QED='+1', RK='1']
+[ghWpbar, ghZ, Wp; gs='0', gw='+1', QCD='0', QED='+1', RK='1'] 
+
+% SGG
+[ghZbar, ghZ, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWpbar, ghWp, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWmbar, ghWm, H; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWpbar, ghWp, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWmbar, ghWm, chi; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWpbar, ghA, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWmbar, ghA, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWpbar, ghZ, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghWmbar, ghZ, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghZbar, ghWp, phim; gs='0', gw='+1', QCD='0', QED='+1', RK='0']
+[ghZbar, ghWm, phip; gs='0', gw='+1', QCD='0', QED='+1', RK='0']

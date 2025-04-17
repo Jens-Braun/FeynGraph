@@ -59,13 +59,12 @@ class TopologySelector:
         Add a constraint to only select topologies for which the number of nodes of all given degree exactly matches
         he specified count.
         
-        Examples
-        --------
-        .. code-block:: python
-        
-            selector = TopologySelector()
-            # Select only topologies containing exactly four nodes of degree 3 and one node of degree 4
-            selector.select_node_partition([(3, 4), (4, 1)])
+        Examples:
+        ```python
+        selector = TopologySelector()
+        # Select only topologies containing exactly four nodes of degree 3 and one node of degree 4
+        selector.select_node_partition([(3, 4), (4, 1)])
+        ```
         """
     
     def select_opi_components(self, opi_count: int):
@@ -76,16 +75,14 @@ class TopologySelector:
         Add a constraint to only select topologies for which the given function returns `true`. The function receives
         a single topology as input and should return a boolean.
         
-        Examples
-        --------
-        
-        .. code-block:: python
-        
-            def no_self_loop(topo: feyngraph.topology.Topology) -> bool:
-                return any(edge.get_nodes()[0] == edge.get_nodes()[1] for edge in topo.get_edges())
-        
-            selector = feyngraph.topology.TopologySelector()
-            selector.add_custom_function(no_self_loop)
+        Examples:
+        ```python
+        def no_self_loop(topo: feyngraph.topology.Topology) -> bool:
+            return any(edge.get_nodes()[0] == edge.get_nodes()[1] for edge in topo.get_edges())
+    
+        selector = feyngraph.topology.TopologySelector()
+        selector.add_custom_function(no_self_loop)
+        ```
         """
     
     def clear(self):
@@ -107,25 +104,23 @@ class TopologyGenerator:
     """
     The main generator class of the topology module.
     
-    Examples
-    --------
-    
-    .. code-block:: python
-    
-        model = TopologyModel([3, 4])
-        selector = TopologySelector()
-        selector.select_opi_components(1)
-        generator = TopologyGenerator(4, 3, model, selector)
-        topologies = generator.generate()
-        assert(len(topologies), 6166)
+    Examples:    
+    ```python
+    model = TopologyModel([3, 4])
+    selector = TopologySelector()
+    selector.select_opi_components(1)
+    generator = TopologyGenerator(4, 3, model, selector)
+    topologies = generator.generate()
+    assert(len(topologies), 6166)
+    ```
     """
 
     def __new__(cls, n_external: int, n_loops: int, model: TopologyModel, selector: Optional[TopologySelector]) -> TopologyGenerator:
         """
         Create a new topology generator.
 
-        :param selector: the selector choosing whether a given topology is kept or discarded. If no selector is specified,
-            all topologies are kept
+        Parameters:
+            selector: the selector choosing whether a given topology is kept or discarded. If no selector is specified, all topologies are kept
         """
 
     def generate(self) -> TopologyContainer:

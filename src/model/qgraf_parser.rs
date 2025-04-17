@@ -1,151 +1,226 @@
-use std::collections::HashMap;
-use std::path::{Path};
+use std::{collections::HashMap, path::Path};
+use peg;
+use log;
+use itertools::Itertools;
 use indexmap::IndexMap;
-use pest::Parser;
-use pest_derive::Parser;
-use crate::model::{LineStyle, Model, ModelError, Particle, InteractionVertex};
-use log::warn;
-use crate::model::Statistic::{Bose, Fermi};
+use crate::model::{
+    ModelError, Model, Particle, InteractionVertex, LineStyle, Statistic
+};
 
-#[derive(Parser)]
-#[grammar = "model/qgraf_model.pest"]
-pub(crate) struct QGRAFParser;
+#[derive(Debug)]
+enum Value<'a> {
+    Int(isize),
+    String(&'a str),
+    List(Box<Vec<Value<'a>>>),
+    None
+}
 
-impl QGRAFParser {
-    pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
-        let mut particles: IndexMap<String, Particle> = IndexMap::new();
-        let mut coupling_orders: Vec<String> = Vec::new();
-        let mut vertices: IndexMap<String, InteractionVertex> = IndexMap::new();
+enum ModelEntry<'a> {
+    Prop(Particle),
+    Vert(InteractionVertex),
+    Misc(&'a str)
+}
 
-        let file_content = std::fs::read_to_string(path)?;
-        let parsed_content = QGRAFParser::parse(Rule::file, &file_content)?.next().unwrap();
-        let mut particle_counter = 1;
-        let mut vertex_counter = 1;
-        for rule in parsed_content.into_inner() {
-            match rule.as_rule() {
-                Rule::EOI => (),
-                Rule::propagator => {
-                    let mut inner_rule = rule.into_inner();
-                    let field_name = inner_rule.next().unwrap().as_str().to_string();
-                    let anti_name = inner_rule.next().unwrap().as_str().to_string();
-                    let sign = inner_rule.next().unwrap().as_str().to_string();
-                    let statistic = match sign.as_str() {
-                        "+" | "+1" => Bose,
-                        "-" | "-1" => Fermi,
-                        _ => unreachable!()
-                    };
-                    let mut twospin = None;
-                    let mut color = None;
-                    for property in inner_rule {
-                        let mut inner_property = property.into_inner();
-                        let property_name = inner_property.next().unwrap().as_str().to_string();
-                        match property_name.to_lowercase().as_str() {
-                            "twospin" => twospin = Some(inner_property.next().unwrap().as_str().trim_matches(['\"', '\'']).parse::<i8>().unwrap()),
-                            "color" => color = Some(inner_property.next().unwrap().as_str().trim_matches(['\"', '\'']).parse::<u8>().unwrap()),
+peg::parser!(
+    grammar qgraf_model() for str {
+        rule whitespace() = quiet!{[' ' | '\t' | '\n']}
+        rule comment() = quiet!{"%" [^'\n']* "\n"}
+
+        rule _() = quiet!{(comment() / whitespace())*}
+        
+        rule alphanumeric() = quiet!{['a'..='z' | 'A'..='Z' | '0'..='9' | '_']}
+
+        rule statistic() -> Statistic = sign:$(['+' | '-'] / "+1" / "-1") {
+            match sign {
+                "+" | "+1" => Statistic::Bose,
+                "-" | "-1" => Statistic::Fermi,
+                _ => unreachable!()
+            }
+        }
+        rule name() -> &'input str = $(alphanumeric()+)
+        rule int() -> Value<'input> = int:$(['+' | '-']? ['0'..'9']+) {? 
+            match int.parse() {
+                Ok(i) => Ok(Value::Int(i)),
+                Err(_) => Err("int")
+            }
+        }
+        rule string() -> Value<'input> = s:$(("\"" [^ '"' ]* "\"") / ("\'" [^ '\'' ]* "\'")) {
+            Value::String(&s[1..s.len()-1])
+        }
+
+        rule value() -> Value<'input> = int() / string()
+        rule property_value() -> Value<'input> = 
+            value()
+            / "(" _ vals:(value() ** (_ "," _)) _ ")" { Value::List(Box::new(vals)) }
+
+        rule property() -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value() {(prop, value)}
+
+        rule propagator(particle_counter: &mut usize) -> Particle = 
+            "[" _ name:name() _ "," _ anti_name:name() _ "," _ statistic:statistic() _ [^';' | ']']* _
+            props:(";" _ props:(property()** (_ "," _))? {props} )? _ "]" {?
+                let mut twospin = None;
+                let mut color = None;
+                if let Some(Some(props)) = props {
+                    for (prop, value) in props {
+                        match prop.to_lowercase().as_str() {
+                            "twospin" => {
+                                match value {
+                                    Value::Int(i) => twospin = Some(i),
+                                    Value::String(s) => twospin = Some(s.parse::<isize>().or(Err("Expected int"))?),
+                                    _ => {
+                                        log::error!("In particle {}: property 'twospin' only accepts int values", name);
+                                        Err("Expected int")?
+                                    }
+                                }
+                            },
+                            "color" => {
+                                match value {
+                                    Value::Int(i) => color = Some(i),
+                                    Value::String(s) => color = Some(s.parse::<isize>().or(Err("Expected int"))?),
+                                    _ => {
+                                        log::error!("In particle {}: property 'color' only accepts int values", name);
+                                        Err("Expected int")?
+                                    }
+                                }
+                            },
                             "mass" => (),
                             "width" => (),
                             "aux" => (),
                             "conj" => (),
-                            prop => {
-                                warn!("Encountered unknown property '{}' in QGRAF model, ignoring", prop);
-                            }
+                            prop => log::warn!("Ignoring unknown property {} for particle '{}' in QGRAF model", prop, name)
                         }
                     }
-                    let linestyle;
-                    if twospin.is_none() && color.is_none() {
-                        linestyle = LineStyle::Dashed;
-                    } else {
-                        linestyle = match twospin.unwrap() {
-                            0 => LineStyle::Dashed,
-                            1 => {
-                                if field_name != anti_name {
-                                    LineStyle::Straight
-                                } else if color == Some(1) {
-                                    LineStyle::Swavy
-                                } else {
-                                    LineStyle::Scurly
-                                }
-                            },
-                            2 => {
-                                if color == Some(1) {
-                                    LineStyle::Wavy
-                                } else {
-                                    LineStyle::Curly
-                                }
-                            }
-                            4 => LineStyle::Double,
-                            -2 => LineStyle::Dotted,
-                            _ => {
-                                warn!("Found spin '{}' for particle {} in model {:#?}, \
-                                for which 'linestyle' is undefined. Defaulting to 'dashed'.", &twospin.unwrap(), &field_name, path);
-                                LineStyle::Dashed
-                            }
-                        };
-                    }
-                    let pdg_code = particle_counter;
-                    particle_counter += 1;
-                    let particle = Particle::new(
-                        field_name.clone(),
-                        anti_name.clone(),
-                        pdg_code,
-                        field_name.clone(),
-                        anti_name.clone(),
-                        linestyle,
-                        statistic,
-                    );
-                    particles.insert(field_name.clone(), particle.clone());
-                    if !(field_name == anti_name) {
-                        let anti_particle = particle.into_anti();
-                        particles.insert(anti_name, anti_particle);
-                    }
-                },
-                Rule::vertex => {
-                    let inner_rule = rule.into_inner();
-                    let mut vertex_particles: Vec<String> = Vec::new();
-                    let mut vertex_couplings: HashMap<String, usize> = HashMap::new();
-                    let mut vertex_name = None;
-                    for property in inner_rule {
-                        match property.as_rule() {
-                            Rule::name => vertex_particles.push(property.as_str().to_string()),
-                            Rule::property => {
-                                let mut inner_property = property.into_inner();
-                                let property_name = inner_property.next().unwrap().as_str().to_string();
-                                let property_value = inner_property.next().unwrap().as_str().trim_matches(['\"', '\'']);
-                                if property_name == "VL" {
-                                    vertex_name = Some(property_value.to_string());
-                                    continue;
-                                }
-                                let coupling_order = property_value.parse::<usize>().unwrap();
-                                if !coupling_orders.contains(&property_name) {
-                                    coupling_orders.push(property_name.clone());
-                                }
-                                vertex_couplings.insert(property_name.clone(), coupling_order);
-                            },
-                            _ => unreachable!()
-                        }
-                    }
-                    if let None = vertex_name {
-                        vertex_name = Some(format!("V_{vertex_counter}"))
-                    }
-                    vertices.insert(vertex_name.clone().unwrap(),
-                        InteractionVertex {
-                            name: vertex_name.unwrap(),
-                            particles: vertex_particles,
-                            couplings_orders: vertex_couplings
-                        }
-                    );
-                    vertex_counter += 1;
                 }
-                Rule::misc_statement => (),
-                _ => unreachable!()
+                let linestyle = match (twospin, color) {
+                    (None, None) => LineStyle::Dashed,
+                    (Some(0), _) => LineStyle::Dashed,
+                    (Some(1), Some(1)) => LineStyle::Swavy,
+                    (Some(1), _) if *name != *anti_name => LineStyle::Straight,
+                    (Some(1), _) => LineStyle::Scurly,
+                    (Some(2), Some(1)) => LineStyle::Wavy,
+                    (Some(2), _) => LineStyle::Curly,
+                    (Some(4), _) => LineStyle::Double,
+                    (Some(-2), _) => LineStyle::Dotted,
+                    _ => {
+                        log::warn!("Unable to determine linestyle for particle {}, using default 'dashed'", name);
+                        LineStyle::Dashed
+                    },
+                };
+                let pdg_code = *particle_counter;
+                *particle_counter += 1;
+                Ok(Particle::new(
+                    String::from(name),
+                    String::from(anti_name),
+                    pdg_code as isize,
+                    String::from(name),
+                    String::from(anti_name),
+                    linestyle,
+                    statistic
+                ))
             }
-        }
+        
+        rule vertex(vertex_counter: &mut usize) -> InteractionVertex =
+            pos: position!() "[" _ fields:(name() **<3,> (_ "," _)) _ 
+            couplings:(";" _ couplings:(property() ** (_ "," _))? {couplings})? _ "]" {?
+                let mut coupling_map = HashMap::new();
+                let mut vertex_name = format!("V_{}", vertex_counter);
+                if let Some(Some(couplings)) = couplings {
+                    for (coupling, value) in couplings {
+                        if coupling == "VL" {
+                            match value {
+                                Value::String(s) => vertex_name = String::from(s),
+                                Value::Int(n) => vertex_name = format!("{}", n),
+                                _ => {
+                                    log::error!("Vertex at {}: vertex label must be string or int", pos);
+                                    Err("String or int")?
+                                }
+                            }
+                        }
+                        match value {
+                            Value::Int(n) => {
+                                match coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                    Some(v) => log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling),
+                                    None => (),
+                                }
+                            },
+                            Value::String(s) => {
+                                let n = s.parse::<isize>().or(Err("Expected int"))?;
+                                match coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                    Some(v) => log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling),
+                                    None => (),
+                                }
+                            }
+                            _ => {
+                                log::error!("Vertex at {}: coupling '{}' is only allowed to have non-negative int value. Ignoring.", pos, coupling);
+                            }
+                        }
+                    }
+                }
+                *vertex_counter += 1;
+                Ok(InteractionVertex {
+                    name: vertex_name,
+                    particles: fields.iter().map(|f| String::from(*f)).collect_vec(),
+                    coupling_orders: coupling_map,
+                })
+            }
 
-        return Ok(Model {
-            particles,
-            vertices,
-            coupling_orders
-        })
+        rule misc() -> &'input str =
+            s:$("[" [^ ']']* "]")
+
+        pub rule qgraf_model(particle_counter: &mut usize, vertex_counter: &mut usize) -> Model =
+            _ entries:( 
+                (
+                    p:propagator(particle_counter) {ModelEntry::Prop(p)} 
+                    / v:vertex(vertex_counter) {ModelEntry::Vert(v)}
+                    / m:misc() {ModelEntry::Misc(m)}
+                ) ** _
+            ) _ {
+                let mut particles = IndexMap::new();
+                let mut vertices = IndexMap::new();
+                let mut couplings = Vec::new();
+
+                for entry in entries {
+                    match entry {
+                        ModelEntry::Prop(p) => {
+                            particles.insert(p.name.clone(), p.clone());
+                            if !p.self_anti() {
+                                let anti_name = p.anti_name.clone();
+                                particles.insert(anti_name, p.into_anti());
+                            }
+                        },
+                        ModelEntry::Vert(v) => {
+                            for coupling in v.coupling_orders.keys() {
+                                if !couplings.contains(coupling) {
+                                    couplings.push(coupling.clone());
+                                }
+                            }
+                            vertices.insert(v.name.clone(), v);
+                        },
+                        ModelEntry::Misc(m) => {
+                            log::warn!("Ignoring misc model statement: '{}'", m);
+                        }
+                    }
+                }
+
+                Model {
+                    particles,
+                    vertices,
+                    couplings
+                }
+            }
+    }
+);
+
+pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(x) => x,
+        Err(e) =>{ return Err(ModelError::IOError(path.to_str().unwrap().to_owned(), e)); }
+    };
+    let mut particle_counter: usize = 1;
+    let mut vertex_counter: usize = 1;
+    return match qgraf_model::qgraf_model(&content, &mut particle_counter, &mut vertex_counter) {
+        Ok(m) => Ok(m),
+        Err(e) => Err(ModelError::ParseError(path.file_name().unwrap().to_str().unwrap().to_owned(), e))
     }
 }
 
@@ -158,7 +233,7 @@ mod tests {
     #[test]
     fn qgraf_qcd_test() {
         let path = PathBuf::from("tests/resources/qcd.qgraf");
-        let model = QGRAFParser::parse_qgraf_model(&path).unwrap();
+        let model = parse_qgraf_model(&path).unwrap();
         println!("{:#?}", model);
         let model_ref = Model {
             particles: IndexMap::from([
@@ -183,26 +258,36 @@ mod tests {
                 ("V_1".to_string(), InteractionVertex {
                     name: "V_1".to_string(),
                     particles: vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
-                    couplings_orders: HashMap::from([("QCD".to_string(), 1)])
+                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_2".to_string(), InteractionVertex {
                     name: "V_2".to_string(),
                     particles: vec!["gluon".to_string(); 3],
-                    couplings_orders: HashMap::from([("QCD".to_string(), 1)])
+                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
                 ("V_3".to_string(), InteractionVertex {
                     name: "V_3".to_string(),
                     particles: vec!["gluon".to_string(); 4],
-                    couplings_orders: HashMap::from([("QCD".to_string(), 2)])
+                    coupling_orders: HashMap::from([("QCD".to_string(), 2)])
                 }),
                 ("V_4".to_string(), InteractionVertex {
                     name: "V_4".to_string(),
                     particles: vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
-                    couplings_orders: HashMap::from([("QCD".to_string(), 1)])
+                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
                 }),
             ]),
-            coupling_orders: vec!["QCD".to_string()],
+            couplings: vec!["QCD".to_string()],
         };
         assert_eq!(model, model_ref);
+    }
+
+    #[test]
+    fn qgraf_sm_test() {
+        let model = parse_qgraf_model(Path::new("tests/resources/sm.qgraf"));
+        match &model {
+            Ok(_) => (),
+            Err(e) => {println!("{:#?}", e);}
+        }
+        assert!(model.is_ok());
     }
 }

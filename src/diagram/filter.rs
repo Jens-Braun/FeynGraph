@@ -160,7 +160,7 @@ impl DiagramSelector {
         return self.coupling_powers.iter().all(
             |(coupling, powers)| powers.iter().any(
                 |power| view.vertices().map(
-                    |v| *v.interaction().couplings_orders.get(coupling).unwrap_or(&0)
+                    |v| *v.interaction().coupling_orders.get(coupling).unwrap_or(&0)
                 ).sum::<usize>() == *power
             )
         )

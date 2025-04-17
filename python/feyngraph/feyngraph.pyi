@@ -11,8 +11,8 @@ def set_threads(n_threads: int):
     """
     Set the number of threads FeynGraph will use. The default is the maximum number of available threads.
     
-    :param n_threads: number of threads to use
-    :type n_threads: int
+    Parameters:
+        n_threads: Number of threads to use (shared across all instanced of FeynGraph running for the current process)
     """
 
 def generate_diagrams(
@@ -26,21 +26,19 @@ def generate_diagrams(
     Convenience function for diagram generation. This function only requires the minimal set of input information,
     the incoming particles and the outgoing particles. Sensible defaults are provided for all other variables.
     
-    Examples
-    --------
-    
-    .. code-block:: python
-    
-        import feyngraph as fg
-        diagrams = fg.generate_diagrams(["u", "u__tilde__"], ["u", "u__tilde"], 2)
-        assert(len(diagrams), 4632)
-    
-    
-    :param particles_in: list of incoming particles, specified by name
-    :param particles_out: list of outgoing particles, specified by name
-    :param n_loops: number of loops in the generated diagrams [default: 0]
-    :param model: model used in diagram generation [default: SM in Feynman gauge]
-    :param diagram_selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
+    Examples:    
+    ``` python
+    import feyngraph as fg
+    diagrams = fg.generate_diagrams(["u", "u__tilde__"], ["u", "u__tilde"], 2)
+    assert(len(diagrams), 4632)
+    ```
+
+    Parameters:    
+        particles_in: list of incoming particles, specified by name
+        particles_out: list of outgoing particles, specified by name
+        n_loops: number of loops in the generated diagrams [default: 0]
+        model: model used in diagram generation [default: SM in Feynman gauge]
+        diagram_selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
     
     """
 
@@ -166,7 +164,8 @@ class DiagramContainer:
         """
         Query whether there is a diagram in the container, which would be selected by `selector`.
         
-        :return: None if no diagram is selected, the position of the first selected diagram otherwise
+        Returns:
+            None if no diagram is selected, the position of the first selected diagram otherwise
         """
 
 class DiagramSelector:
@@ -185,17 +184,15 @@ class DiagramSelector:
 
     For more precise definitions of each criterion, see the respective function.
 
-    Examples
-    --------
-
-    .. code-block:: python
-
-        selector = DiagramSelector()
-        selector.select_on_shell()
-        selector.select_self_loops(0)
-        selector.add_coupling_power("QCD", 2)
-        selector.add_coupling_power("QED", 0)
-        selector.add_propagator_count("t", 0)
+    Examples:
+    ```python
+    selector = DiagramSelector()
+    selector.select_on_shell()
+    selector.select_self_loops(0)
+    selector.add_coupling_power("QCD", 2)
+    selector.add_coupling_power("QED", 0)
+    selector.add_propagator_count("t", 0)
+    ```
     """
 
     def select_opi_components(self, opi_count: int) :
@@ -221,18 +218,16 @@ class DiagramSelector:
         Add a constraint to only select diagrams for which the given function returns `true`. The function receives
         a single diagrams as input and should return a boolean.
         
-        Examples
-        --------
-        
-        .. code-block:: python
-        
-            def s_channel(diag: feyngraph.topology.Diagram) -> bool:
-                n_momenta = len(diag.get_propagators()[0].get_momentum()) # Total number of momenta in the process
-                s_momentum = [1, 1]+ [0]*(n_momenta-2) # e.g. = [1, 1, 0, 0] for n_momenta = 4
-                return any(propagator.get_momentum() == s_momentum for propagator in diag.get_propagators())
-        
-            selector = feyngraph.topology.DiagramSelector()
-            selector.add_custom_function(s_channel)
+        Examples:        
+        ```python
+        def s_channel(diag: feyngraph.Diagram) -> bool:
+            n_momenta = len(diag.propagators()[0].momentum()) # Total number of momenta in the process
+            s_momentum = [1, 1]+ [0]*(n_momenta-2) # e.g. = [1, 1, 0, 0] for n_momenta = 4
+            return any(propagator.momentum() == s_momentum for propagator in diag.propagators())
+    
+        selector = feyngraph.DiagramSelector()
+        selector.add_custom_function(s_channel)
+        ```
         """
     
     def add_coupling_power(self, coupling: str, power: int):
@@ -254,16 +249,15 @@ class DiagramGenerator:
     """
     The main class used to generate Feynman diagrams.
     
-    Examples
-    --------
+    Examples:
     
-    .. code-block:: python
-    
-        model = Model.from_ufo("tests/Standard_Model_UFO")
-        selector = DiagramSelector()
-        selector.set_opi_components(1)
-        diags = DiagramGenerator(["g", "g"], ["u", "u__tilde__", "g"], 1, model, selector).generate()
-        assert(len(diags), 51)
+    ```python
+    model = Model.from_ufo("tests/Standard_Model_UFO")
+    selector = DiagramSelector()
+    selector.set_opi_components(1)
+    diags = DiagramGenerator(["g", "g"], ["u", "u__tilde__", "g"], 1, model, selector).generate()
+    assert(len(diags), 51)
+    ```
     """
 
     def __new__(
@@ -296,8 +290,11 @@ class DiagramGenerator:
 
 class Model:
     """
-    Internal representation of a model in FeynGraph
+    Internal representation of a model in FeynGraph.
     """
+
+    def __new__() -> Model:
+        """Construct the default mode, the Standard Model in Feynman gauge."""
 
     @staticmethod
     def from_ufo(path: str) -> Model:

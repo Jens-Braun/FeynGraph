@@ -142,3 +142,5 @@ test_diagrams!(QCD_UFO, G => G, 4);
 
 test_diagrams!(QCD_UFO, u => u, 3);
 test_diagrams!(QCD_UFO, u => u, 4);
+
+//test_diagrams!(SMEFT, u => u, 1);

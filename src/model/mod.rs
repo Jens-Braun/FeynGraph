@@ -3,24 +3,21 @@ use std::path::Path;
 use itertools::Itertools;
 use thiserror::Error;
 use indexmap::IndexMap;
-use crate::model::qgraf_parser::QGRAFParser;
 use crate::model::Statistic::Fermi;
-use crate::model::ufo_parser::{UFOParser};
 
-mod ufo_parser;
 mod qgraf_parser;
+mod ufo_parser;
+
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Error, Debug)]
 pub enum ModelError {
     #[error("Encountered illegal model option: {0}")]
     ContentError(String),
-    #[error(transparent)]
-    IOError(#[from] std::io::Error),
-    #[error("Error while parsing UFO model" )]
-    UFOParseError(#[from] pest::error::Error<ufo_parser::Rule>),
-    #[error("Error while parsing QGRAF model")]
-    QGRAFParseError(#[from] pest::error::Error<qgraf_parser::Rule>),
+    #[error("Error wile trying to access file {0}: {1}")]
+    IOError(String, #[source] std::io::Error),
+    #[error("Error while parsing file {0}: {1}")]
+    ParseError(String, #[source] peg::error::ParseError<peg::str::LineCol>)
 }
 
 #[derive(PartialEq, Debug, Hash, Clone, Eq)]
@@ -115,7 +112,7 @@ impl Particle {
 pub struct InteractionVertex {
     pub(crate) name: String,
     pub(crate) particles: Vec<String>,
-    pub(crate) couplings_orders: HashMap<String, usize>,
+    pub(crate) coupling_orders: HashMap<String, usize>,
 }
 
 impl InteractionVertex {
@@ -128,7 +125,7 @@ impl InteractionVertex {
     }
     
     pub fn get_coupling_orders(&self) -> &HashMap<String, usize> {
-        return &self.couplings_orders;
+        return &self.coupling_orders;
     }
     
     pub fn get_degree(&self) -> usize {
@@ -151,15 +148,19 @@ impl std::fmt::Display for InteractionVertex {
 pub struct Model {
     particles: IndexMap<String, Particle>,
     vertices: IndexMap<String, InteractionVertex>,
-    coupling_orders: Vec<String>
+    couplings: Vec<String>
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        return ufo_parser::sm();
+    }
 }
 
 impl Model {
-    pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
-        return UFOParser::parse_ufo_model(path);
-    }
+    pub fn from_ufo(path: &Path) -> Result<Self, ModelError> { return ufo_parser::parse_ufo_model(path); }
 
-    pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {return QGRAFParser::parse_qgraf_model(path); }
+    pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {return qgraf_parser::parse_qgraf_model(path); }
     
     pub fn get_anti_index(&self, particle_index: usize) -> usize {
         return if self.particles[particle_index].self_anti {
@@ -225,7 +226,7 @@ impl Model {
         return self.vertices.len();
     }
 
-    pub fn coupling_orders(&self) -> &Vec<String> { return &self.coupling_orders; }
+    pub fn coupling_orders(&self) -> &Vec<String> { return &self.couplings; }
 
     /// Check if adding `vertex` to the diagram is allowed by the maximum power of the coupling constants
     pub(crate) fn check_coupling_orders(&self, interaction: usize,
