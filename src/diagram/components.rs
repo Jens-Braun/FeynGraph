@@ -44,7 +44,7 @@ impl VertexClassification {
     pub(crate) fn get_class(&self, vertex: usize) -> usize {
         return self.boundaries.iter().enumerate().find_map(
             |(i, boundary)| if *boundary > vertex {Some(i)} else {None}
-        ).unwrap().clone()-1;
+        ).unwrap()-1;
     }
     pub(crate) fn class_iter(&self, class: usize) -> impl Iterator<Item = usize> {
         return self.boundaries[class]..self.boundaries[class+1];

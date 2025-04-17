@@ -235,7 +235,7 @@ impl Topology {
                 let mut current_momentum = accumulated_momenta.clone();
 
                 // Add to total momentum flow of the current node
-                *momenta = momenta.into_iter().zip(accumulated_momenta).map(|(x, y)| *x + y).collect();
+                *momenta = momenta.iter_mut().zip(accumulated_momenta).map(|(x, y)| *x + y).collect();
                 for l in self.n_external..(self.n_external+self.n_loops) {
                     // Check if the current edge is part of the l-th loop
                     // The distance of connected_node is the one of the node which initiated the loop,
@@ -263,7 +263,7 @@ impl Topology {
             }
         }
         // Accumulate all external momenta flowing into the current node for the remaining way back
-        *momenta = momenta.into_iter().zip(local_momenta).map(|(x, y)| *x + y).collect();
+        *momenta = momenta.iter_mut().zip(local_momenta).map(|(x, y)| *x + y).collect();
     }
     
     /// Assign `momentum` to the edges connecting `first_node` and `second_node`. If there are
@@ -338,7 +338,7 @@ impl Topology {
                     1 => true,
                     n if n+1 == self.n_external => { // Try with momentum conservation
                         edge.momenta.as_ref().unwrap().iter()
-                            .take(self.n_external).map(|x| x.abs() as usize).sum::<usize>()+1 == self.n_external
+                            .take(self.n_external).map(|x| x.unsigned_abs() as usize).sum::<usize>()+1 == self.n_external
                     },
                     _ => false
                 }

@@ -190,32 +190,32 @@ pub struct DiagramContainer {
 
 impl DiagramContainer {
     
-    pub(crate) fn new(model: Option<&Model>, momentum_labels: &Vec<String>) -> Self {
+    pub(crate) fn new(model: Option<&Model>, momentum_labels: &[String]) -> Self {
         return if let Some(model) = model {
             Self {
                 model: Some(Arc::new(model.clone())),
-                momentum_labels: Arc::new(momentum_labels.clone()),
+                momentum_labels: Arc::new(momentum_labels.to_owned()),
                 data: Vec::new()
             }
         } else {
             Self {
                 model: None,
-                momentum_labels: Arc::new(momentum_labels.clone()),
+                momentum_labels: Arc::new(momentum_labels.to_owned()),
                 data: Vec::new()
             }
         }
     }
-    pub(crate) fn with_capacity(model: Option<&Model>, momentum_labels: &Vec<String>, capacity: usize) -> Self {
+    pub(crate) fn with_capacity(model: Option<&Model>, momentum_labels: &[String], capacity: usize) -> Self {
         return if let Some(model) = model {
             Self {
                 model: Some(Arc::new(model.clone())),
-                momentum_labels: Arc::new(momentum_labels.clone()),
+                momentum_labels: Arc::new(momentum_labels.to_owned()),
                 data: Vec::with_capacity(capacity),
             }
         } else {
             Self {
                 model: None,
-                momentum_labels: Arc::new(momentum_labels.clone()),
+                momentum_labels: Arc::new(momentum_labels.to_owned()),
                 data: Vec::with_capacity(capacity),
             }
         }

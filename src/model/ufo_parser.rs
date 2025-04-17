@@ -7,10 +7,10 @@ use crate::model::{
     ModelError, Model, Particle, InteractionVertex, LineStyle, Statistic
 };
 
-const SM_PARTICLES: &'static str = include_str!("../../tests/resources/Standard_Model_UFO/particles.py");
-const SM_COUPLING_ORDERS: &'static str = include_str!("../../tests/resources/Standard_Model_UFO/coupling_orders.py");
-const SM_COUPLINGS: &'static str = include_str!("../../tests/resources/Standard_Model_UFO/couplings.py");
-const SM_VERTICES: &'static str = include_str!("../../tests/resources/Standard_Model_UFO/vertices.py");
+const SM_PARTICLES: &str = include_str!("../../tests/resources/Standard_Model_UFO/particles.py");
+const SM_COUPLING_ORDERS: &str = include_str!("../../tests/resources/Standard_Model_UFO/coupling_orders.py");
+const SM_COUPLINGS: &str = include_str!("../../tests/resources/Standard_Model_UFO/couplings.py");
+const SM_VERTICES: &str = include_str!("../../tests/resources/Standard_Model_UFO/vertices.py");
 
 #[derive(Debug)]
 enum Value<'a> {
@@ -18,9 +18,9 @@ enum Value<'a> {
     Rational(isize, isize),
     String(&'a str),
     Bool(bool),
-    List(Box<Vec<Value<'a>>>),
-    SIDict(Box<HashMap<String, usize>>),
-    CODict(Box<HashMap<(usize, usize), String>>),
+    List(Vec<Value<'a>>),
+    SIDict(HashMap<String, usize>),
+    CODict(HashMap<(usize, usize), String>),
     Particle(Particle),
     None
 }
@@ -52,7 +52,7 @@ impl<'a> Value<'a> {
     fn si_dict(self) -> Result<HashMap<String, usize>, &'static str> {
         match self {
             Self::SIDict(d) => {
-                return Ok(*d);
+                return Ok(d);
             }
             _ => Err("String-int dict")?
         }
@@ -61,7 +61,7 @@ impl<'a> Value<'a> {
     fn co_dict(self) -> Result<HashMap<(usize, usize), String>, &'static str> {
         match self {
             Self::CODict(d) => {
-                return Ok(*d);
+                return Ok(d);
             }
             _ => Err("(int, int)-String dict")?
         }
@@ -102,18 +102,14 @@ peg::parser! {
                 ) {
                     match v {
                         Ok(v) => { 
-                            match result.insert(k.clone(), v) {
-                                Some(i) => {
-                                    log::warn!(
-                                        "Value '{}' appears multiple times in dict, keeping only value {}", k, i);
-                                },
-                                None => (),
+                            if let Some(i) =  result.insert(k.clone(), v) {
+                                log::warn!("Value '{}' appears multiple times in dict, keeping only value {}", k, i);
                             }
                         }
                         _ => Err("String-int dict")?
                     }
                 }
-                Ok(Value::SIDict(Box::new(result)))
+                Ok(Value::SIDict(result))
             }
 
         rule co_dict() -> Value<'input> = 
@@ -122,27 +118,23 @@ peg::parser! {
                 for ((i, j), c) in entries.into_iter() {
                     let i = i.int()?.try_into().or(Err("Non-negative int"))?;
                     let j = j.int()?.try_into().or(Err("Non-negative int"))?;
-                    match result.insert((i, j), c.to_owned()) {
-                        Some(v) => {
-                            log::warn!(
-                                "Basis element '({}, {})' appears multiple times in dict, keeping only coupling {}", i, j, v);
-                        },
-                        None => (),
+                    if let Some(v) =  result.insert((i, j), c.to_owned()) {
+                        log::warn!("Basis element '({}, {})' appears multiple times in dict, keeping only coupling {}", i, j, v);
                     }
                 }
-                Ok(Value::CODict(Box::new(result)))
+                Ok(Value::CODict(result))
             }
 
         rule p_list() -> Value<'input> =
-            "[" _ vals:(("P." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(Box::new(vals))}
+            "[" _ vals:(("P." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(vals)}
         
         rule l_list() -> Value<'input> =
-            "[" _ vals:(("L." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(Box::new(vals))}
+            "[" _ vals:(("L." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(vals)}
 
         rule value() -> Value<'input> = rational() / int() / bool() / string() / p_list() / l_list() / si_dict() / co_dict()
         rule property_value() -> Value<'input> = 
             value()
-            / "[" _ vals:(value() ** (_ "," _)) _ "]" { Value::List(Box::new(vals)) }
+            / "[" _ vals:(value() ** (_ "," _)) _ "]" { Value::List(vals) }
             / ([^',' | ')']* {Value::None})
 
         rule property() -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value() {(prop, value)}
@@ -296,6 +288,7 @@ peg::parser! {
                     }
                     let particles = particles.unwrap().iter().map(|p| ident_map.get(p).unwrap().clone()).collect_vec();
                     let vertices;
+                    #[allow(clippy::type_complexity)]
                     let mut unique_coupling_orders: Vec<(&HashMap<String, usize>, Vec<(usize, usize)>)>;
                     if let Some(coupling_dict) = coupling_dict {
                         unique_coupling_orders = Vec::new();
@@ -323,7 +316,7 @@ peg::parser! {
                             log::warn!("Vertex '{}' at {} has ambiguous coupling powers, the vertex will be split as\n{:#?}", py_name, pos, &vertices);
                         } else {
                             vertices = vec![InteractionVertex {
-                                    particles: particles,
+                                    particles,
                                     name: name.unwrap(),
                                     coupling_orders: unique_coupling_orders[0].0.clone()
                                 }]
@@ -331,7 +324,7 @@ peg::parser! {
                     } else {
                         log::warn!("No couplings specified for vertex {} at {}", py_name, pos);
                         vertices = vec![InteractionVertex {
-                            particles: particles,
+                            particles,
                             name: name.unwrap(),
                             coupling_orders: HashMap::new()
                         }]

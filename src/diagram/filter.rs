@@ -25,8 +25,10 @@ pub struct DiagramSelector {
     /// Only keep diagrams for which the number of vertices of the given fields is in the list of specified counts
     pub(crate) vertex_counts: HashMap<Vec<String>, Vec<usize>>,
     /// Only keep diagrams for which the given custom function returns `true`
+    #[allow(clippy::type_complexity)]
     pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>>,
     /// Same as [custom_functions], but used when the [DiagramSelector] is cast to a [TopologySelector]
+    #[allow(clippy::type_complexity)]
     pub(crate) topology_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
 }
 
@@ -123,6 +125,7 @@ impl DiagramSelector {
     }
 
     /// Add a custom function which takes the internal representation of a diagram as input
+    #[allow(clippy::type_complexity)]
     pub(crate) fn add_unwrapped_custom_function(
         &mut self,
         function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>) {

@@ -155,7 +155,7 @@ impl std::fmt::Display for DiagramView<'_> {
         for outgoing in self.outgoing() {
             write!(f, "{} ", outgoing.particle().get_name())?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         write!(f, "    Vertices: [ ")?;
         for vertex in self.vertices() {
             write!(f, "{} ", vertex)?;
@@ -189,7 +189,7 @@ pub struct LegView<'a> {
     pub(crate) leg_index: usize
 }
 
-impl<'a> LegView<'a> {
+impl LegView<'_> {
     /// Get the vertex the leg is attached to
     pub fn vertex(&self) -> VertexView {
         return self.diagram.vertex(self.leg.vertex);
@@ -254,7 +254,7 @@ pub struct PropagatorView<'a> {
     pub(crate) index: usize,
 }
 
-impl<'a> PropagatorView<'a> {
+impl PropagatorView<'_> {
     /// Get an iterator over the vertices connected by the propagator
     pub fn vertices(&self) -> impl Iterator<Item = VertexView> {
         return self.propagator.vertices.iter().map(
@@ -329,10 +329,10 @@ pub struct VertexView<'a> {
     pub(crate) index: usize,
 }
 
-impl<'a> VertexView<'a> {
+impl VertexView<'_> {
 
     /// Get an iterator over the propagators connected to the vertex
-    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView<'a>, PropagatorView<'a>>> {
+    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView, PropagatorView>> {
         return self.vertex.propagators.iter().map(
             |i| if *i >= 0 {
                 Either::Right(self.diagram.propagator(*i as usize))
@@ -354,7 +354,7 @@ impl<'a> VertexView<'a> {
     }
 
     /// Get an iterator over the propagators connected to the vertex ordered like the particles in the interaction
-    pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView<'a>, PropagatorView<'a>>> {
+    pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView, PropagatorView>> {
         let views = self.propagators().collect_vec();
         let mut perm = Vec::with_capacity(self.vertex.propagators.len());
         let mut seen = vec![false; self.vertex.propagators.len()];

@@ -22,6 +22,7 @@ pub struct TopologySelector {
     /// Only keep topologies with no self-energy insertions on external legs.
     pub(crate) on_shell: bool,
     /// Only keep topologies for which the given custom function returns `true`
+    #[allow(clippy::type_complexity)]
     pub(crate) custom_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
 }
 
@@ -124,7 +125,7 @@ impl TopologySelector {
     fn select_node_degrees(&self, topo: &Topology) -> bool {
         return self.node_degrees.iter().all(|(degree, counts)| {
             let topo_count = topo.nodes.iter().filter(|node| node.degree == *degree).count();
-            if counts.iter().map(|count|  topo_count == *count).any(|x| x) {
+            if counts.iter().any(|count| topo_count == *count) {
                 return true;
             }
             return false;
@@ -133,9 +134,9 @@ impl TopologySelector {
 
     fn select_node_partition(&self, topo: &Topology) -> bool {
         for partition in &self.node_partition {
-            if partition.iter().map(|(degree, count)|  {
+            if partition.iter().any(|(degree, count)|  {
                 topo.nodes.iter().filter(|node| node.degree == *degree).count() != *count
-            }).any(|x| x) {
+            }) {
                 return false;
             }
         }
@@ -167,11 +168,11 @@ impl TopologySelector {
 
     pub(crate) fn select_partition(&self, partition: Vec<(usize, usize)>) -> bool {
         for selected_partition in &self.node_partition {
-            if !selected_partition.iter().map(|(selected_degree, selected_count)| {
+            if !selected_partition.iter().all(|(selected_degree, selected_count)| {
                 partition.iter().find_map(|(degree, count)|
                     if *degree == *selected_degree {Some(*count)} else {None}
                 ) == Some(*selected_count)
-            }).all(|x| x) {
+            }) {
                 return false;
             }
         }

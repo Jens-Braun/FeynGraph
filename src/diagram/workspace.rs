@@ -110,7 +110,7 @@ impl<'a> AssignWorkspace<'a> {
         
         if self.vertex_candidates[next_vertex].remaining_legs == 0 {
             if let Some(vertex_symmetry) = self.is_representative() {
-                let diagram = Diagram::from(&self, vertex_symmetry);
+                let diagram = Diagram::from(self, vertex_symmetry);
                 if self.selector.select(
                     self.model.clone(),
                     self.momentum_labels.clone(),
@@ -121,10 +121,10 @@ impl<'a> AssignWorkspace<'a> {
             }
             return;
         }
-        self.select_leg(next_vertex, None);
+        self.select_leg(next_vertex);
     }
     
-    fn select_leg(&mut self, vertex: usize, previous_leg: Option<usize>) {
+    fn select_leg(&mut self, vertex: usize) {
         let next_leg = self.vertex_candidates[vertex].edges.iter().cloned().enumerate().find_map(
             |(index, edge)| if self.propagator_candidates[edge].particle.is_none() { Some(index) } else { None }
         );
@@ -147,7 +147,7 @@ impl<'a> AssignWorkspace<'a> {
                             };
                         self.vertex_candidates[vertex].remaining_legs -= 1;
                         self.vertex_candidates[other_vertex].remaining_legs -= 1;
-                        self.select_leg(vertex, previous_leg);
+                        self.select_leg(vertex);
                         self.vertex_candidates[vertex].remaining_legs += 1;
                         self.vertex_candidates[other_vertex].remaining_legs += 1;
                     }
@@ -182,11 +182,10 @@ impl<'a> AssignWorkspace<'a> {
     
     fn assign_particle(&mut self, vertex: usize, leg: usize, particle: usize) -> bool {
         let edge = self.vertex_candidates[vertex].edges[leg];
-        let connected_vertex;
-        if self.topology.get_edge(edge).connected_nodes[0] == vertex {
-            connected_vertex = self.topology.get_edge(edge).connected_nodes[1];
+        let connected_vertex = if self.topology.get_edge(edge).connected_nodes[0] == vertex {
+            self.topology.get_edge(edge).connected_nodes[1]
         } else {
-            connected_vertex = self.topology.get_edge(edge).connected_nodes[0];
+            self.topology.get_edge(edge).connected_nodes[0]
         };
         self.propagator_candidates[edge].particle = Some(particle);
         self.update_vertex_candidates(vertex);
@@ -245,12 +244,11 @@ impl<'a> AssignWorkspace<'a> {
         let v = self.topology.edges[edge].connected_nodes[0];
         let w = self.topology.edges[edge].connected_nodes[1];
         let ref_leg = self.vertex_candidates[v].edges.iter().position(|e| *e == edge).unwrap();
-        let p;
-        if self.topology.edges[edge].connected_nodes[0] == vertex {
-            p = self.model.get_anti_index(particle);
+        let p = if self.topology.edges[edge].connected_nodes[0] == vertex {
+            self.model.get_anti_index(particle)
         } else {
-            p = particle;
-        }
+            particle
+        };
         // Check ordering of edges between `v` and `w`
         if self.vertex_candidates[v].edges.iter().enumerate().any(
             |(other_leg, cmp_edge)| {
@@ -345,7 +343,7 @@ impl<'a> AssignWorkspace<'a> {
     
     /// Check if the current diagram is larger in lexicographical ordering of the vertices and propagators
     /// than all possible permutations
-    fn cmp_permutation(&self, perm: &Vec<usize>) -> Ordering {
+    fn cmp_permutation(&self, perm: &[usize]) -> Ordering {
         let mut result = None;
         for (i, vertex) in self.vertex_candidates.iter().enumerate() {
             if vertex.degree == 1 { continue; }
@@ -392,20 +390,18 @@ impl<'a> AssignWorkspace<'a> {
                 }
             }
         }
-        if result.is_some() {
-            return result.unwrap();
+        if let Some(result) = result {
+            return result;
         }
         return Ordering::Equal;
     }
 
-    fn trace_fermi_line(&self, prop: usize, visited: &mut Vec<bool>) -> (usize, usize) {
-        let initial_vertex;
+    fn trace_fermi_line(&self, prop: usize, visited: &mut [bool]) -> (usize, usize) {
+        let initial_vertex = self.topology.edges[prop].connected_nodes[0];
         let mut to_visit: Vec<usize> = Vec::new();
-        initial_vertex = self.topology.edges[prop].connected_nodes[0];
         to_visit.push(self.topology.edges[prop].connected_nodes[1]);
         visited[prop] = true;
-        while !to_visit.is_empty() {
-            let current = to_visit.pop().unwrap();
+        while let Some(current) = to_visit.pop() {
             for edge in self.vertex_candidates[current].edges.iter() {
                 if visited[*edge] { continue; }
                 visited[*edge] = true;

@@ -11,7 +11,7 @@ use crate::model::{
 enum Value<'a> {
     Int(isize),
     String(&'a str),
-    List(Box<Vec<Value<'a>>>),
+    List(Vec<Value<'a>>),
     None
 }
 
@@ -38,7 +38,7 @@ peg::parser!(
             }
         }
         rule name() -> &'input str = $(alphanumeric()+)
-        rule int() -> Value<'input> = int:$(['+' | '-']? ['0'..'9']+) {? 
+        rule int() -> Value<'input> = int:$(['+' | '-']? ['0'..='9']+) {?
             match int.parse() {
                 Ok(i) => Ok(Value::Int(i)),
                 Err(_) => Err("int")
@@ -51,7 +51,7 @@ peg::parser!(
         rule value() -> Value<'input> = int() / string()
         rule property_value() -> Value<'input> = 
             value()
-            / "(" _ vals:(value() ** (_ "," _)) _ ")" { Value::List(Box::new(vals)) }
+            / "(" _ vals:(value() ** (_ "," _)) _ ")" { Value::List(vals) }
 
         rule property() -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value() {(prop, value)}
 
@@ -138,16 +138,14 @@ peg::parser!(
                         }
                         match value {
                             Value::Int(n) => {
-                                match coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
-                                    Some(v) => log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling),
-                                    None => (),
+                                if let Some(v) =  coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                    log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
                                 }
                             },
                             Value::String(s) => {
                                 let n = s.parse::<isize>().or(Err("Expected int"))?;
-                                match coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
-                                    Some(v) => log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling),
-                                    None => (),
+                                if let Some(v) = coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                    log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
                                 }
                             }
                             _ => {

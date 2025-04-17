@@ -287,7 +287,7 @@ struct PyEdge(Edge);
 #[pymethods]
 impl PyEdge {
     fn nodes(&self) -> [usize; 2] {
-        return self.0.connected_nodes.clone();
+        return self.0.connected_nodes;
     }
     
     fn momentum(&self) -> Vec<i8> {
@@ -603,7 +603,7 @@ impl PyVertex {
                     diagram: self.diagram.clone(),
                     propagator: Arc::new(self.diagram.diagram.propagators[*i as usize].clone()),
                     index: *i as usize,
-                    invert: if self.diagram.diagram.propagators[*i as usize].vertices[0] == self.index { true } else { false }
+                    invert: self.diagram.diagram.propagators[*i as usize].vertices[0] == self.index
                 })
             } else {
                 let index = (*i + self.diagram.n_ext() as isize) as usize;
