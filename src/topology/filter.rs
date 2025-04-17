@@ -1,9 +1,8 @@
+use crate::topology::Topology;
+use itertools::Itertools;
 use std::fmt::Formatter;
 use std::ops::Range;
 use std::sync::Arc;
-use itertools::Itertools;
-use crate::topology::Topology;
-
 
 /// A struct that decides whether a topology is to be kept or discarded. Only topologies for which
 /// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
@@ -23,11 +22,10 @@ pub struct TopologySelector {
     pub(crate) on_shell: bool,
     /// Only keep topologies for which the given custom function returns `true`
     #[allow(clippy::type_complexity)]
-    pub(crate) custom_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
+    pub(crate) custom_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>,
 }
 
 impl TopologySelector {
-    
     /// Create a new [TopologySelector] which selects every diagram.
     pub fn new() -> Self {
         return Self {
@@ -36,14 +34,17 @@ impl TopologySelector {
             opi_components: Vec::new(),
             self_loops: Vec::new(),
             on_shell: false,
-            custom_functions: Vec::new()
+            custom_functions: Vec::new(),
         };
     }
-    
+
     /// Add a criterion to keep only diagrams with `selection` number of nodes with `degree`.
     pub fn add_node_degree(&mut self, degree: usize, selection: usize) {
-        if let Some((_, counts)) =
-            &mut self.node_degrees.iter_mut().find(|(constrained_degree, _)| *constrained_degree == degree) {
+        if let Some((_, counts)) = &mut self
+            .node_degrees
+            .iter_mut()
+            .find(|(constrained_degree, _)| *constrained_degree == degree)
+        {
             counts.push(selection)
         } else {
             self.node_degrees.push((degree, vec![selection]));
@@ -53,8 +54,11 @@ impl TopologySelector {
     /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
     /// in `selection`.
     pub fn add_node_degree_list(&mut self, degree: usize, mut selection: Vec<usize>) {
-        if let Some((_, counts)) =
-            &mut self.node_degrees.iter_mut().find(|(constrained_degree, _)| *constrained_degree == degree) {
+        if let Some((_, counts)) = &mut self
+            .node_degrees
+            .iter_mut()
+            .find(|(constrained_degree, _)| *constrained_degree == degree)
+        {
             counts.append(&mut selection)
         } else {
             self.node_degrees.push((degree, selection));
@@ -64,8 +68,11 @@ impl TopologySelector {
     /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
     /// in the range `selection`.
     pub fn add_node_degree_range(&mut self, degree: usize, selection: Range<usize>) {
-        if let Some((_, counts)) =
-            &mut self.node_degrees.iter_mut().find(|(constrained_degree, _)| *constrained_degree == degree) {
+        if let Some((_, counts)) = &mut self
+            .node_degrees
+            .iter_mut()
+            .find(|(constrained_degree, _)| *constrained_degree == degree)
+        {
             counts.append(&mut selection.collect_vec());
         } else {
             self.node_degrees.push((degree, selection.collect_vec()));
@@ -91,12 +98,16 @@ impl TopologySelector {
 
     /// Add a criterion to only keep topologies with `count` self loops. A self-loop is defined as an edge which ends
     /// on the same node it started on.
-    pub fn add_self_loop_count(&mut self, count: usize) { self.self_loops.push(count); }
+    pub fn add_self_loop_count(&mut self, count: usize) {
+        self.self_loops.push(count);
+    }
 
     /// Toggle the on-shell criterion. If true, only topologies with no self-energy insertions on external legs are
     /// kept. This implementation considers internal edges carrying a single external momentum and no loop momentum,
     /// which is equivalent to a self-energy insertion on an external edge.
-    pub fn set_on_shell(&mut self) { self.on_shell = !self.on_shell; }
+    pub fn set_on_shell(&mut self) {
+        self.on_shell = !self.on_shell;
+    }
 
     /// Add a criterion to keep only diagrams for which the given function returns `true`.
     pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&Topology) -> bool + Sync + Send>) {
@@ -112,7 +123,7 @@ impl TopologySelector {
         self.on_shell = false;
         self.custom_functions.clear();
     }
-    
+
     pub(crate) fn select(&self, topo: &Topology) -> bool {
         return self.select_node_degrees(topo)
             && self.select_node_partition(topo)
@@ -134,9 +145,10 @@ impl TopologySelector {
 
     fn select_node_partition(&self, topo: &Topology) -> bool {
         for partition in &self.node_partition {
-            if partition.iter().any(|(degree, count)|  {
-                topo.nodes.iter().filter(|node| node.degree == *degree).count() != *count
-            }) {
+            if partition
+                .iter()
+                .any(|(degree, count)| topo.nodes.iter().filter(|node| node.degree == *degree).count() != *count)
+            {
                 return false;
             }
         }
@@ -144,24 +156,40 @@ impl TopologySelector {
     }
 
     fn select_opi_components(&self, topo: &Topology) -> bool {
-        if self.opi_components.is_empty() { return true; }
-        return self.opi_components.iter().any(|opi_count| *opi_count == topo.count_opi_componenets());
+        if self.opi_components.is_empty() {
+            return true;
+        }
+        return self
+            .opi_components
+            .iter()
+            .any(|opi_count| *opi_count == topo.count_opi_componenets());
     }
 
     fn select_self_loops(&self, topo: &Topology) -> bool {
-        if self.self_loops.is_empty() { return true; }
-        return self.self_loops.iter().any(|opi_count| *opi_count == topo.count_self_loops());
+        if self.self_loops.is_empty() {
+            return true;
+        }
+        return self
+            .self_loops
+            .iter()
+            .any(|opi_count| *opi_count == topo.count_self_loops());
     }
 
     fn select_on_shell(&self, topo: &Topology) -> bool {
-        if !self.on_shell { return true; }
+        if !self.on_shell {
+            return true;
+        }
         return topo.on_shell();
     }
 
     fn select_custom_criteria(&self, topo: &Topology) -> bool {
-        if self.custom_functions.is_empty() { return true; }
+        if self.custom_functions.is_empty() {
+            return true;
+        }
         for custom_function in &self.custom_functions {
-            if custom_function(topo) { return true; }
+            if custom_function(topo) {
+                return true;
+            }
         }
         return false;
     }
@@ -169,17 +197,30 @@ impl TopologySelector {
     pub(crate) fn select_partition(&self, partition: Vec<(usize, usize)>) -> bool {
         for selected_partition in &self.node_partition {
             if !selected_partition.iter().all(|(selected_degree, selected_count)| {
-                partition.iter().find_map(|(degree, count)|
-                    if *degree == *selected_degree {Some(*count)} else {None}
-                ) == Some(*selected_count)
+                partition.iter().find_map(|(degree, count)| {
+                    if *degree == *selected_degree {
+                        Some(*count)
+                    } else {
+                        None
+                    }
+                }) == Some(*selected_count)
             }) {
                 return false;
             }
         }
         for (selected_degree, counts) in &self.node_degrees {
-            if !counts.contains(&partition.iter().find_map(|(degree, count)|
-                if *degree == *selected_degree {Some(*count)} else {None}
-            ).unwrap_or(0)) {
+            if !counts.contains(
+                &partition
+                    .iter()
+                    .find_map(|(degree, count)| {
+                        if *degree == *selected_degree {
+                            Some(*count)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0),
+            ) {
                 return false;
             }
         }
@@ -189,11 +230,15 @@ impl TopologySelector {
 
 impl std::fmt::Debug for TopologySelector {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
-        return fmt.debug_struct("TopologySelector")
+        return fmt
+            .debug_struct("TopologySelector")
             .field("node_degrees", &self.node_degrees)
             .field("node_partition", &self.node_partition)
             .field("opi_components", &self.opi_components)
-            .field("custom_functions", &format!("{} custom functions", self.custom_functions.len()))
+            .field(
+                "custom_functions",
+                &format!("{} custom functions", self.custom_functions.len()),
+            )
             .finish();
     }
 }

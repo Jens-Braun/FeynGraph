@@ -1,25 +1,31 @@
 #![allow(dead_code, non_snake_case)]
+use feyngraph::model::{Model, TopologyModel};
+use regex::Regex;
 use std::error::Error;
 use std::io::{Error as IOError, ErrorKind};
 use std::process::Command;
-use regex::Regex;
-use feyngraph::model::{Model, TopologyModel};
 
 pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<(), Box<dyn Error>> {
     writeln!(out, "% Particles")?;
     for particle in model.particles_iter() {
-        if particle.get_pdg() < 0 { continue; }
+        if particle.get_pdg() < 0 {
+            continue;
+        }
         if particle.self_anti() {
-            writeln!(out, "[ part{}, part{}, {}]",
-                     particle.get_pdg(),
-                     particle.get_pdg(),
-                     if particle.is_fermi() { "-" } else { "+" }
+            writeln!(
+                out,
+                "[ part{}, part{}, {}]",
+                particle.get_pdg(),
+                particle.get_pdg(),
+                if particle.is_fermi() { "-" } else { "+" }
             )?;
         } else {
-            writeln!(out, "[ part{}, anti{}, {}]",
-                     particle.get_pdg(),
-                     particle.get_pdg(),
-                     if particle.is_fermi() { "-" } else { "+" }
+            writeln!(
+                out,
+                "[ part{}, anti{}, {}]",
+                particle.get_pdg(),
+                particle.get_pdg(),
+                if particle.is_fermi() { "-" } else { "+" }
             )?;
         }
     }
@@ -34,7 +40,7 @@ pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<
             } else {
                 write!(out, "anti{}", p.get_pdg().abs())?;
             }
-            if i != vertex.get_degree()-1 {
+            if i != vertex.get_degree() - 1 {
                 write!(out, ", ")?;
             }
         }
@@ -58,7 +64,7 @@ pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<
 pub fn write_qgraf_topo_model(mut out: impl std::io::Write, model: &TopologyModel) -> Result<(), Box<dyn Error>> {
     writeln!(out, "[phi, phi, +; ID='1']")?;
     for degree in model.degrees_iter() {
-        writeln!(out, "[ {}{} ]", "phi, ".repeat(degree-1), "phi")?;
+        writeln!(out, "[ {}{} ]", "phi, ".repeat(degree - 1), "phi")?;
     }
     Ok(())
 }
@@ -69,9 +75,11 @@ pub fn write_qgraf_config(
     in_particles: &Vec<String>,
     out_particles: &Vec<String>,
     n_loops: usize,
-    options: &[&str]
+    options: &[&str],
 ) -> Result<(), Box<dyn Error>> {
-    writeln!(out, "\
+    writeln!(
+        out,
+        "\
 config = nolist ;
 style = 'tests/resources/empty.sty' ;
 output = 'out' ;
@@ -90,13 +98,16 @@ options = {};
     Ok(())
 }
 
-pub fn run_qgraf(config_path: &str) -> Result<usize, Box<dyn Error>>{
+pub fn run_qgraf(config_path: &str) -> Result<usize, Box<dyn Error>> {
     let output = Command::new("qgraf").arg(config_path).output()?;
     let re = Regex::new(r"total\s*=\s*(\d+)\s+connected diagrams").unwrap();
     let res = re.captures(&std::str::from_utf8(&output.stdout)?);
     if res.is_none() {
         println!("{}", std::str::from_utf8(&output.stdout)?);
-        return Err(Box::new(IOError::new(ErrorKind::Other, std::str::from_utf8(&output.stdout)?)));
+        return Err(Box::new(IOError::new(
+            ErrorKind::Other,
+            std::str::from_utf8(&output.stdout)?,
+        )));
     }
     Ok(res.unwrap()[1].parse()?)
 }

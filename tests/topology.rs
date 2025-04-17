@@ -1,10 +1,7 @@
 #![allow(dead_code, non_snake_case)]
+use feyngraph::{model::TopologyModel, topology::TopologyGenerator};
 use paste::paste;
 use tempfile::NamedTempFile;
-use feyngraph::{
-    model::TopologyModel,
-    topology::{TopologyGenerator}
-};
 
 mod common;
 

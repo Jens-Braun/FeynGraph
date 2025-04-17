@@ -1,5 +1,5 @@
+use crate::topology::Topology;
 use itertools::Itertools;
-use crate::topology::{Topology};
 
 #[derive(Debug, Clone)]
 pub(crate) struct AssignVertex {
@@ -15,14 +15,14 @@ impl AssignVertex {
             degree,
             remaining_legs: degree,
             candidates: Vec::new(),
-            edges
-        }
+            edges,
+        };
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct AssignPropagator {
-    pub particle: Option<usize>
+    pub particle: Option<usize>,
 }
 
 impl AssignPropagator {
@@ -33,21 +33,30 @@ impl AssignPropagator {
 
 #[derive(Clone)]
 pub(crate) struct VertexClassification {
-    pub(crate) boundaries: Vec<usize>
+    pub(crate) boundaries: Vec<usize>,
 }
 
 impl VertexClassification {
     pub(crate) fn get_class_sizes(&self) -> Vec<usize> {
-        return self.boundaries.iter().tuple_windows().map(|(start, end)| *end - *start).collect_vec();
+        return self
+            .boundaries
+            .iter()
+            .tuple_windows()
+            .map(|(start, end)| *end - *start)
+            .collect_vec();
     }
 
     pub(crate) fn get_class(&self, vertex: usize) -> usize {
-        return self.boundaries.iter().enumerate().find_map(
-            |(i, boundary)| if *boundary > vertex {Some(i)} else {None}
-        ).unwrap()-1;
+        return self
+            .boundaries
+            .iter()
+            .enumerate()
+            .find_map(|(i, boundary)| if *boundary > vertex { Some(i) } else { None })
+            .unwrap()
+            - 1;
     }
     pub(crate) fn class_iter(&self, class: usize) -> impl Iterator<Item = usize> {
-        return self.boundaries[class]..self.boundaries[class+1];
+        return self.boundaries[class]..self.boundaries[class + 1];
     }
 }
 
@@ -55,6 +64,6 @@ impl From<&Topology> for VertexClassification {
     fn from(topo: &Topology) -> Self {
         return Self {
             boundaries: topo.get_classification().boundaries.clone(),
-        }
+        };
     }
 }

@@ -17,28 +17,25 @@ impl SymmetricMatrix {
     pub fn zero(dimension: usize) -> Self {
         return Self {
             dimension,
-            data: vec![0; dimension*(dimension+1)/2]
+            data: vec![0; dimension * (dimension + 1) / 2],
         };
     }
 
     /// Return the $n$-dimensional identity matrix.
     #[inline]
     pub fn identity(dimension: usize) -> Self {
-        let mut data = Vec::with_capacity(dimension*(dimension+1)/2);
+        let mut data = Vec::with_capacity(dimension * (dimension + 1) / 2);
         for i in 0..dimension {
             data.push(1);
-            data.append(&mut vec![0; dimension-i-1])
+            data.append(&mut vec![0; dimension - i - 1])
         }
-        return Self {
-            dimension,
-            data
-        }
+        return Self { dimension, data };
     }
 
     /// Build $n$-dimensional matrix from Vec.
     #[inline]
     pub fn from_vec(dimension: usize, data: Vec<usize>) -> Self {
-        assert_eq!(dimension * (dimension + 1)/2, data.len());
+        assert_eq!(dimension * (dimension + 1) / 2, data.len());
         return Self { dimension, data };
     }
 
@@ -46,9 +43,9 @@ impl SymmetricMatrix {
     #[inline]
     pub fn get(&self, i: usize, j: usize) -> &usize {
         return if j >= i {
-            &self.data[i * self.dimension + j - i*(i+1)/2]
+            &self.data[i * self.dimension + j - i * (i + 1) / 2]
         } else {
-            &self.data[j * self.dimension + i - j*(j+1)/2]
+            &self.data[j * self.dimension + i - j * (j + 1) / 2]
         };
     }
 
@@ -56,9 +53,9 @@ impl SymmetricMatrix {
     #[inline]
     pub fn get_mut(&mut self, i: usize, j: usize) -> &mut usize {
         return if j >= i {
-            &mut self.data[i * self.dimension + j - i*(i+1)/2]
+            &mut self.data[i * self.dimension + j - i * (i + 1) / 2]
         } else {
-            &mut self.data[j * self.dimension + i - j*(j+1)/2]
+            &mut self.data[j * self.dimension + i - j * (j + 1) / 2]
         };
     }
 
@@ -69,7 +66,7 @@ impl SymmetricMatrix {
     pub fn cmp_permutation(&self, permutation: &[usize]) -> Ordering {
         for i in 0..self.dimension {
             for j in i..self.dimension {
-                match (*self.get(i, j)).cmp(self.get(permutation[i]-1, permutation[j]-1)) {
+                match (*self.get(i, j)).cmp(self.get(permutation[i] - 1, permutation[j] - 1)) {
                     Ordering::Less => return Ordering::Less,
                     Ordering::Greater => return Ordering::Greater,
                     Ordering::Equal => (),
@@ -100,8 +97,8 @@ impl std::fmt::Debug for SymmetricMatrix {
 
 #[cfg(test)]
 mod test {
-    use std::cmp::Ordering;
     use super::SymmetricMatrix;
+    use std::cmp::Ordering;
 
     #[test]
     fn cmp_test() {

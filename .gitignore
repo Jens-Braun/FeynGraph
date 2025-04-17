@@ -8,4 +8,7 @@ tests/grc
 *.log
 doc/doctrees
 doc/html
-tests/python
+tests/resources/python
+tests/resources/qgraf
+tests/resources/grc
+tests/resources/form

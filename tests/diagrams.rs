@@ -1,12 +1,9 @@
 #![allow(dead_code, non_snake_case)]
-use std::path::PathBuf;
-use paste::paste;
-use tempfile::NamedTempFile;
+use feyngraph::{diagram::DiagramGenerator, model::Model};
 use itertools::Itertools;
-use feyngraph::{
-    model::Model,
-    diagram::DiagramGenerator
-};
+use paste::paste;
+use std::path::PathBuf;
+use tempfile::NamedTempFile;
 mod common;
 
 macro_rules! test_diagrams {

@@ -1,24 +1,22 @@
-use std::{collections::HashMap, path::Path};
-use peg;
-use log;
-use itertools::Itertools;
+use crate::model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic};
 use indexmap::IndexMap;
-use crate::model::{
-    ModelError, Model, Particle, InteractionVertex, LineStyle, Statistic
-};
+use itertools::Itertools;
+use log;
+use peg;
+use std::{collections::HashMap, path::Path};
 
 #[derive(Debug)]
 enum Value<'a> {
     Int(isize),
     String(&'a str),
     List(Vec<Value<'a>>),
-    None
+    None,
 }
 
 enum ModelEntry<'a> {
     Prop(Particle),
     Vert(InteractionVertex),
-    Misc(&'a str)
+    Misc(&'a str),
 }
 
 peg::parser!(
@@ -27,7 +25,7 @@ peg::parser!(
         rule comment() = quiet!{"%" [^'\n']* "\n"}
 
         rule _() = quiet!{(comment() / whitespace())*}
-        
+
         rule alphanumeric() = quiet!{['a'..='z' | 'A'..='Z' | '0'..='9' | '_']}
 
         rule statistic() -> Statistic = sign:$(['+' | '-'] / "+1" / "-1") {
@@ -49,13 +47,13 @@ peg::parser!(
         }
 
         rule value() -> Value<'input> = int() / string()
-        rule property_value() -> Value<'input> = 
+        rule property_value() -> Value<'input> =
             value()
             / "(" _ vals:(value() ** (_ "," _)) _ ")" { Value::List(vals) }
 
         rule property() -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value() {(prop, value)}
 
-        rule propagator(particle_counter: &mut usize) -> Particle = 
+        rule propagator(particle_counter: &mut usize) -> Particle =
             "[" _ name:name() _ "," _ anti_name:name() _ "," _ statistic:statistic() _ [^';' | ']']* _
             props:(";" _ props:(property()** (_ "," _))? {props} )? _ "]" {?
                 let mut twospin = None;
@@ -118,9 +116,9 @@ peg::parser!(
                     statistic
                 ))
             }
-        
+
         rule vertex(vertex_counter: &mut usize) -> InteractionVertex =
-            pos: position!() "[" _ fields:(name() **<3,> (_ "," _)) _ 
+            pos: position!() "[" _ fields:(name() **<3,> (_ "," _)) _
             couplings:(";" _ couplings:(property() ** (_ "," _))? {couplings})? _ "]" {?
                 let mut coupling_map = HashMap::new();
                 let mut vertex_name = format!("V_{}", vertex_counter);
@@ -166,9 +164,9 @@ peg::parser!(
             s:$("[" [^ ']']* "]")
 
         pub rule qgraf_model(particle_counter: &mut usize, vertex_counter: &mut usize) -> Model =
-            _ entries:( 
+            _ entries:(
                 (
-                    p:propagator(particle_counter) {ModelEntry::Prop(p)} 
+                    p:propagator(particle_counter) {ModelEntry::Prop(p)}
                     / v:vertex(vertex_counter) {ModelEntry::Vert(v)}
                     / m:misc() {ModelEntry::Misc(m)}
                 ) ** _
@@ -212,21 +210,26 @@ peg::parser!(
 pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
     let content = match std::fs::read_to_string(path) {
         Ok(x) => x,
-        Err(e) =>{ return Err(ModelError::IOError(path.to_str().unwrap().to_owned(), e)); }
+        Err(e) => {
+            return Err(ModelError::IOError(path.to_str().unwrap().to_owned(), e));
+        }
     };
     let mut particle_counter: usize = 1;
     let mut vertex_counter: usize = 1;
     return match qgraf_model::qgraf_model(&content, &mut particle_counter, &mut vertex_counter) {
         Ok(m) => Ok(m),
-        Err(e) => Err(ModelError::ParseError(path.file_name().unwrap().to_str().unwrap().to_owned(), e))
-    }
+        Err(e) => Err(ModelError::ParseError(
+            path.file_name().unwrap().to_str().unwrap().to_owned(),
+            e,
+        )),
+    };
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use crate::model::Statistic;
     use super::*;
+    use crate::model::Statistic;
+    use std::path::PathBuf;
 
     #[test]
     fn qgraf_qcd_test() {
@@ -235,44 +238,92 @@ mod tests {
         println!("{:#?}", model);
         let model_ref = Model {
             particles: IndexMap::from([
-                (String::from("quark"), Particle::new(
-                    "quark", "antiquark", 1, "quark", "antiquark", LineStyle::Straight, Statistic::Fermi
-                )),
-                (String::from("antiquark"), Particle::new(
-                    "antiquark", "quark", -1, "antiquark", "quark", LineStyle::Straight, Statistic::Fermi
-                )),
-                (String::from("gluon"), Particle::new(
-                    "gluon", "gluon", 2, "gluon", "gluon", LineStyle::Curly, Statistic::Bose
-                )),
-                (String::from("ghost"), Particle::new(
-                    "ghost", "antighost", 3, "ghost", "antighost", LineStyle::Dotted, Statistic::Fermi
-                )),
-                (String::from("antighost"), Particle::new(
-                    "antighost", "ghost", -3, "antighost", "ghost", LineStyle::Dotted, Statistic::Fermi
-                )),
-
+                (
+                    String::from("quark"),
+                    Particle::new(
+                        "quark",
+                        "antiquark",
+                        1,
+                        "quark",
+                        "antiquark",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
+                ),
+                (
+                    String::from("antiquark"),
+                    Particle::new(
+                        "antiquark",
+                        "quark",
+                        -1,
+                        "antiquark",
+                        "quark",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
+                ),
+                (
+                    String::from("gluon"),
+                    Particle::new("gluon", "gluon", 2, "gluon", "gluon", LineStyle::Curly, Statistic::Bose),
+                ),
+                (
+                    String::from("ghost"),
+                    Particle::new(
+                        "ghost",
+                        "antighost",
+                        3,
+                        "ghost",
+                        "antighost",
+                        LineStyle::Dotted,
+                        Statistic::Fermi,
+                    ),
+                ),
+                (
+                    String::from("antighost"),
+                    Particle::new(
+                        "antighost",
+                        "ghost",
+                        -3,
+                        "antighost",
+                        "ghost",
+                        LineStyle::Dotted,
+                        Statistic::Fermi,
+                    ),
+                ),
             ]),
             vertices: IndexMap::from([
-                ("V_1".to_string(), InteractionVertex {
-                    name: "V_1".to_string(),
-                    particles: vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
-                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
-                }),
-                ("V_2".to_string(), InteractionVertex {
-                    name: "V_2".to_string(),
-                    particles: vec!["gluon".to_string(); 3],
-                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
-                }),
-                ("V_3".to_string(), InteractionVertex {
-                    name: "V_3".to_string(),
-                    particles: vec!["gluon".to_string(); 4],
-                    coupling_orders: HashMap::from([("QCD".to_string(), 2)])
-                }),
-                ("V_4".to_string(), InteractionVertex {
-                    name: "V_4".to_string(),
-                    particles: vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
-                    coupling_orders: HashMap::from([("QCD".to_string(), 1)])
-                }),
+                (
+                    "V_1".to_string(),
+                    InteractionVertex {
+                        name: "V_1".to_string(),
+                        particles: vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
+                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
+                    },
+                ),
+                (
+                    "V_2".to_string(),
+                    InteractionVertex {
+                        name: "V_2".to_string(),
+                        particles: vec!["gluon".to_string(); 3],
+                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
+                    },
+                ),
+                (
+                    "V_3".to_string(),
+                    InteractionVertex {
+                        name: "V_3".to_string(),
+                        particles: vec!["gluon".to_string(); 4],
+                        coupling_orders: HashMap::from([("QCD".to_string(), 2)]),
+                    },
+                ),
+                (
+                    "V_4".to_string(),
+                    InteractionVertex {
+                        name: "V_4".to_string(),
+                        particles: vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
+                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
+                    },
+                ),
             ]),
             couplings: vec!["QCD".to_string()],
         };
@@ -284,7 +335,9 @@ mod tests {
         let model = parse_qgraf_model(Path::new("tests/resources/sm.qgraf"));
         match &model {
             Ok(_) => (),
-            Err(e) => {println!("{:#?}", e);}
+            Err(e) => {
+                println!("{:#?}", e);
+            }
         }
         assert!(model.is_ok());
     }

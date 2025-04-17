@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use itertools::Itertools;
-use crate::diagram::Diagram;
 use crate::diagram::view::DiagramView;
+use crate::diagram::Diagram;
 use crate::model::Model;
 use crate::topology::filter::TopologySelector;
 use crate::topology::Topology;
+use itertools::Itertools;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// A struct that decides whether a diagram is to be kept or discarded. Only diagrams for which
 /// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
@@ -29,24 +29,25 @@ pub struct DiagramSelector {
     pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>>,
     /// Same as [custom_functions], but used when the [DiagramSelector] is cast to a [TopologySelector]
     #[allow(clippy::type_complexity)]
-    pub(crate) topology_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>
+    pub(crate) topology_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>,
 }
 
 impl Default for DiagramSelector {
-    fn default() -> Self { return Self {
-        opi_components: Vec::new(),
-        self_loops: Vec::new(),
-        on_shell: false,
-        coupling_powers: HashMap::new(),
-        propagator_counts: HashMap::new(),
-        vertex_counts: HashMap::new(),
-        custom_functions: Vec::new(),
-        topology_functions: Vec::new()
-    } }
+    fn default() -> Self {
+        return Self {
+            opi_components: Vec::new(),
+            self_loops: Vec::new(),
+            on_shell: false,
+            coupling_powers: HashMap::new(),
+            propagator_counts: HashMap::new(),
+            vertex_counts: HashMap::new(),
+            custom_functions: Vec::new(),
+            topology_functions: Vec::new(),
+        };
+    }
 }
 
 impl DiagramSelector {
-
     /// Add a criterion to keep only diagrams with `count` one-particle-irreducible components.
     pub fn add_opi_count(&mut self, count: usize) {
         self.opi_components.push(count);
@@ -54,12 +55,16 @@ impl DiagramSelector {
 
     /// Add a criterion to only keep diagrams with `count` self loops. A self-loop is defined as a propagator which ends
     /// on the same vertex it started on.
-    pub fn add_self_loop_count(&mut self, count: usize) { self.self_loops.push(count); }
+    pub fn add_self_loop_count(&mut self, count: usize) {
+        self.self_loops.push(count);
+    }
 
     /// Toggle the on-shell criterion. If true, only diagrams with no self-energy insertions on external legs are
     /// kept. This implementation considers internal propagators carrying a single external momentum and no loop
     /// momentum, which is equivalent to a self-energy insertion on an external edge.
-    pub fn set_on_shell(&mut self) { self.on_shell = !self.on_shell; }
+    pub fn set_on_shell(&mut self) {
+        self.on_shell = !self.on_shell;
+    }
 
     /// Add a criterion to only keep diagrams which have power `power` in the given coupling `coupling`
     pub fn add_coupling_power(&mut self, coupling: &str, power: usize) {
@@ -110,25 +115,24 @@ impl DiagramSelector {
     }
 
     /// Add a criterion to keep only diagrams for which the given function returns `true`.
-    pub fn add_custom_function(
-        &mut self,
-        function: Arc<dyn Fn(&DiagramView) -> bool + Sync + Send>) {
-        self.custom_functions.push(
-            Arc::new(move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
+    pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&DiagramView) -> bool + Sync + Send>) {
+        self.custom_functions.push(Arc::new(
+            move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
                 function(&DiagramView {
                     model: model.as_ref(),
                     momentum_labels: momentum_labels.as_ref(),
-                    diagram: diag
+                    diagram: diag,
                 })
-            })
-        );
+            },
+        ));
     }
 
     /// Add a custom function which takes the internal representation of a diagram as input
     #[allow(clippy::type_complexity)]
     pub(crate) fn add_unwrapped_custom_function(
         &mut self,
-        function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>) {
+        function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>,
+    ) {
         self.custom_functions.push(function);
     }
 
@@ -136,71 +140,87 @@ impl DiagramSelector {
         let view = DiagramView {
             model: model.as_ref(),
             momentum_labels: momentum_labels.as_ref(),
-            diagram: diag
+            diagram: diag,
         };
-        return self.select_opi_components(view.diagram) &&
-            self.select_custom_criteria(model.clone(), momentum_labels.clone(), diag) &&
-            self.select_coupling_powers(&view) &&
-            self.select_propagator_counts(&view) &&
-            self.select_vertex_counts(&view);
+        return self.select_opi_components(view.diagram)
+            && self.select_custom_criteria(model.clone(), momentum_labels.clone(), diag)
+            && self.select_coupling_powers(&view)
+            && self.select_propagator_counts(&view)
+            && self.select_vertex_counts(&view);
     }
 
     fn select_opi_components(&self, diag: &Diagram) -> bool {
-        if self.opi_components.is_empty() { return true; }
-        return self.opi_components.iter().any(|opi_count| *opi_count == diag.count_opi_components());
+        if self.opi_components.is_empty() {
+            return true;
+        }
+        return self
+            .opi_components
+            .iter()
+            .any(|opi_count| *opi_count == diag.count_opi_components());
     }
 
     fn select_custom_criteria(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
-        if self.custom_functions.is_empty() { return true; }
+        if self.custom_functions.is_empty() {
+            return true;
+        }
         for custom_function in &self.custom_functions {
-            if custom_function(model.clone(), momentum_labels.clone(), diag) { return true; }
+            if custom_function(model.clone(), momentum_labels.clone(), diag) {
+                return true;
+            }
         }
         return false;
     }
 
     fn select_coupling_powers(&self, view: &DiagramView) -> bool {
-        if self.coupling_powers.is_empty() { return true; }
-        return self.coupling_powers.iter().all(
-            |(coupling, powers)| powers.iter().any(
-                |power| view.vertices().map(
-                    |v| *v.interaction().coupling_orders.get(coupling).unwrap_or(&0)
-                ).sum::<usize>() == *power
-            )
-        )
+        if self.coupling_powers.is_empty() {
+            return true;
+        }
+        return self.coupling_powers.iter().all(|(coupling, powers)| {
+            powers.iter().any(|power| {
+                view.vertices()
+                    .map(|v| *v.interaction().coupling_orders.get(coupling).unwrap_or(&0))
+                    .sum::<usize>()
+                    == *power
+            })
+        });
     }
 
     fn select_propagator_counts(&self, view: &DiagramView) -> bool {
-        if self.propagator_counts.is_empty() { return true; }
-        return self.propagator_counts.iter().all(
-            |(particle, counts)| counts.iter().any(
-                |count| view.propagators().filter(
-                    |prop| *prop.particle().get_name() == *particle
-                ).count() == *count
-            )
-        )
+        if self.propagator_counts.is_empty() {
+            return true;
+        }
+        return self.propagator_counts.iter().all(|(particle, counts)| {
+            counts.iter().any(|count| {
+                view.propagators()
+                    .filter(|prop| *prop.particle().get_name() == *particle)
+                    .count()
+                    == *count
+            })
+        });
     }
 
     fn select_vertex_counts(&self, view: &DiagramView) -> bool {
-        if self.vertex_counts.is_empty() { return true; }
-        return self.vertex_counts.iter().all(
-            |(particles, counts)| counts.iter().any(
-                |count| view.vertices().filter(|v|
-                    v.match_particles(particles)
-                ).count() == *count
-            )
-        )
+        if self.vertex_counts.is_empty() {
+            return true;
+        }
+        return self.vertex_counts.iter().all(|(particles, counts)| {
+            counts
+                .iter()
+                .any(|count| view.vertices().filter(|v| v.match_particles(particles)).count() == *count)
+        });
     }
-    
+
     pub(crate) fn get_max_coupling_orders(&self) -> Option<HashMap<String, usize>> {
         return if self.coupling_powers.is_empty() {
             None
         } else {
             Some(
-                self.coupling_powers.iter().map(
-                    |(coupling, powers)| (coupling.clone(), powers.iter().max().cloned().unwrap())
-                ).collect()
+                self.coupling_powers
+                    .iter()
+                    .map(|(coupling, powers)| (coupling.clone(), powers.iter().max().cloned().unwrap()))
+                    .collect(),
             )
-        }
+        };
     }
 
     pub(crate) fn as_topology_selector(&self) -> TopologySelector {
