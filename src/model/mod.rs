@@ -118,6 +118,7 @@ impl Particle {
 pub struct InteractionVertex {
     pub(crate) name: String,
     pub(crate) particles: Vec<String>,
+    pub(crate) spin_map: Vec<isize>,
     pub(crate) coupling_orders: HashMap<String, usize>,
 }
 
@@ -323,6 +324,7 @@ impl TopologyModel {
 mod tests {
     use crate::model::{Model, TopologyModel};
     use std::path::PathBuf;
+    use test_log::test;
 
     #[test]
     fn model_conversion_test() {

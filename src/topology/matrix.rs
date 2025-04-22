@@ -99,6 +99,7 @@ impl std::fmt::Debug for SymmetricMatrix {
 mod test {
     use super::SymmetricMatrix;
     use std::cmp::Ordering;
+    use test_log::test;
 
     #[test]
     fn cmp_test() {

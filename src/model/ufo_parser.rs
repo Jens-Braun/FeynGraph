@@ -1,4 +1,4 @@
-use crate::model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic};
+use crate::{model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic}, util::contract_indices};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log;
@@ -8,6 +8,7 @@ use std::{collections::HashMap, path::Path};
 const SM_PARTICLES: &str = include_str!("../../tests/resources/Standard_Model_UFO/particles.py");
 const SM_COUPLING_ORDERS: &str = include_str!("../../tests/resources/Standard_Model_UFO/coupling_orders.py");
 const SM_COUPLINGS: &str = include_str!("../../tests/resources/Standard_Model_UFO/couplings.py");
+const SM_LORENTZ: &str = include_str!("../../tests/resources/Standard_Model_UFO/lorentz.py");
 const SM_VERTICES: &str = include_str!("../../tests/resources/Standard_Model_UFO/vertices.py");
 
 #[derive(Debug)]
@@ -35,6 +36,16 @@ impl<'a> Value<'a> {
         match self {
             Self::String(s) => Ok(s),
             _ => Err("String"),
+        }
+    }
+
+    fn i_list(self) -> Result<Vec<isize>, &'static str> {
+        match self {
+            Self::List(l) => Ok(l
+                .into_iter()
+                .map(|v| v.int())
+                .collect::<Result<Vec<_>, &str>>()?),
+            _ => Err("List of ints"),
         }
     }
 
@@ -240,6 +251,7 @@ peg::parser! {
                 for (prop, value) in props {
                     match prop.to_lowercase().as_str() {
                         "value" => (),
+                        "name" => (),
                         "order" => orders = Some(value.si_dict()?),
                         x => {
                             log::warn!(
@@ -260,7 +272,9 @@ peg::parser! {
             }
 
         rule vertex(
-            couplings: &HashMap<String, HashMap<String, usize>>, ident_map: &HashMap<String, String>
+            couplings: &HashMap<String, HashMap<String, usize>>, 
+            ident_map: &HashMap<String, String>,
+            lorentz_structures: &HashMap<String, Vec<isize>>
         ) -> Vec<InteractionVertex> =
             pos: position!() py_name:name() _ "=" _ "Vertex(" _ props:(property() **<1,> (_ "," _)) _ ")" {?
                 let mut particles = None;
@@ -286,11 +300,19 @@ peg::parser! {
                     }
                 }
                 let particles = particles.unwrap().iter().map(|p| ident_map.get(p).unwrap().clone()).collect_vec();
-                let vertices;
+                let name = name.unwrap();
+
+                let mut unique_spin_mappings: Vec<(Vec<isize>, Vec<usize>)> = Vec::new();
+                for (i, spin_map) in lorentz_list.unwrap().iter().map(|s| lorentz_structures.get(s).unwrap()).enumerate() {
+                    match unique_spin_mappings.iter_mut().find(|(v, _)| **v == *spin_map ) {
+                        None => unique_spin_mappings.push((spin_map.clone(), vec![i])),
+                        Some((_, l)) => l.push(i)
+                    }
+                }
+
                 #[allow(clippy::type_complexity)]
-                let mut unique_coupling_orders: Vec<(&HashMap<String, usize>, Vec<(usize, usize)>)>;
+                let mut unique_coupling_orders: Vec<(&HashMap<String, usize>, Vec<(usize, usize)>)> = vec![];
                 if let Some(coupling_dict) = coupling_dict {
-                    unique_coupling_orders = Vec::new();
                     for ((i, j), c) in coupling_dict.iter() {
                         match couplings.get(c) {
                             Some(d) => {
@@ -300,35 +322,117 @@ peg::parser! {
                                 }
                             },
                             None => {
-                                log::warn!("Vertex '{}' at '{}' contains coupling '{}', which is not specified in 'couplings.py', ignoring", py_name, pos, c);
+                                log::warn!("Vertex '{}' at '{}' contains coupling '{}', which is not specified in \
+                                'couplings.py', ignoring", py_name, pos, c);
                             }
                         }
                     }
-                    if unique_coupling_orders.len() > 1 {
-                        vertices = unique_coupling_orders.into_iter().enumerate().map(
-                            |(i, (d, _l))| InteractionVertex {
-                                particles: particles.clone(),
-                                name: format!("{}_{}", name.as_ref().unwrap(), i),
-                                coupling_orders: d.clone()
-                            }
-                        ).collect_vec();
-                        log::warn!("Vertex '{}' at {} has ambiguous coupling powers, the vertex will be split as\n{:#?}", py_name, pos, &vertices);
-                    } else {
-                        vertices = vec![InteractionVertex {
-                                particles,
-                                name: name.unwrap(),
-                                coupling_orders: unique_coupling_orders[0].0.clone()
-                            }]
-                    }
                 } else {
                     log::warn!("No couplings specified for vertex {} at {}", py_name, pos);
-                    vertices = vec![InteractionVertex {
-                        particles,
-                        name: name.unwrap(),
-                        coupling_orders: HashMap::new()
-                    }]
                 }
+
+                let mut vertices = Vec::new();
+                for (spin_map, lorentz_indices) in unique_spin_mappings.iter() {
+                    if unique_coupling_orders.is_empty() {
+                        vertices.push(InteractionVertex {
+                            particles: particles.clone(),
+                            name: if vertices.is_empty() {name.clone()} else { format!("{}_{}", &name, vertices.len()+1) },
+                            spin_map: spin_map.clone(),
+                            coupling_orders: HashMap::new(),
+                        })
+                    } else {
+                        for (d, l) in unique_coupling_orders.iter() {
+                            if l.iter().any(|(_, i)| lorentz_indices.contains(i)) {
+                                vertices.push(InteractionVertex {
+                                    particles: particles.clone(),
+                                    name: if vertices.is_empty() {name.clone()} else { format!("{}_{}", &name, vertices.len()+1) },
+                                    spin_map: spin_map.clone(),
+                                    coupling_orders: (*d).clone(),
+                                })
+                            }
+                        }
+                    }
+                }
+
+                match (unique_spin_mappings.len(), unique_coupling_orders.len()) {
+                    (1, 0 | 1) => (),
+                    (1, x) => {
+                        log::warn!(
+                            "Ambiguous coupling powers for vertex {}, splitting into {} vertices '{}_0' .. '{}_{}'",
+                            &name, x, &name, &name, x
+                        );
+                    },
+                    (x, 1) => {
+                        log::warn!(
+                            "Ambiguous spin mapping for vertex {}, splitting into {} vertices '{}_0' .. '{}_{}'",
+                            &name, x, &name, &name, x
+                        );
+                    },
+                    (_, _) => {
+                        log::warn!(
+                            "Ambiguous coupling powers and spin mapping for vertex {}, \
+                            splitting into {} vertices '{}_0' .. '{}_{}'",
+                            &name, vertices.len(), &name, &name, vertices.len()
+                        );
+                    }
+                }
+
                 Ok(vertices)
+            }
+
+        rule lorentz_atom() -> (isize, isize) = 
+            ("Idendity" /  "Gamma5" / "ProjM" / "ProjP"  / "C") _ 
+            "(" _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
+            / "Gamma" _ "(" _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
+            / "Sigma" _ "(" _ int() _ "," _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
+
+        pub rule lorentz_structure() -> Vec<(isize, isize)> =
+            _ connections:((a:lorentz_atom() {Some(a)} / [_] {None})) ** _ { 
+                connections.into_iter().filter_map(|x| x).collect_vec()
+            }
+
+        rule lorentz() -> (&'input str, Vec<isize>) =
+            pos: position!() py_name:name() _ "=" _ "Lorentz(" _ props:(property() **<1,> (_ "," _)) _ ")" {?
+                let mut name = None;
+                let mut spins = None;
+                let mut structure = None;
+                for (prop, value) in props {
+                    match prop.to_lowercase().as_str() {
+                        "name" => name = Some(value.str()?),
+                        "spins" => spins = Some(value.i_list()?),
+                        "structure" => structure = Some(value.str()?),
+                        x => {
+                            log::warn!(
+                                "Option '{}' for lorentz structure {} at {} is unknown, ignoring",
+                                x,
+                                py_name,
+                                pos,
+                                );
+                        }
+                    }
+                }
+                let mut connections = lorentz_structure(structure.unwrap()).or(Err("Lorentz structure"))?;
+
+                let spins = spins.unwrap().into_iter().map(|s| s-1).collect_vec();
+                if connections.is_empty() && spins.iter().any(|s| *s < 0 || *s % 2 == 1) {
+                    let mut seen = vec![false; spins.len()];
+                    for (i, s) in spins.iter().enumerate() {
+                        if seen[i] || (*s > 0 && *s % 2 == 0) {
+                            seen[i] = true;
+                            continue;
+                        }
+                        let connected = spins.iter().enumerate()
+                            .filter_map(|(j, r)| if *s == *r {Some(j)} else {None}).collect_vec();
+                        if connected.len() > 1 {
+                            log::warn!("Ambiguous spin flow mapping for lorentz '{}' at {}, the calculated diagram signs for diagrams \
+                                        containing this lorentz structure might be wrong!", name.unwrap(), pos);
+                        }
+                        let j = connected[0];
+                        seen[j] = true;
+                        connections.push((i as isize, j as isize));
+                    }
+                }
+                return Ok((py_name, contract_indices(connections)));
             }
 
         pub rule particles() -> Vec<(String, Particle)> =
@@ -358,10 +462,18 @@ peg::parser! {
         pub rule couplings() -> HashMap<String, HashMap<String, usize>> =
         _ (!coupling() [_])* _ couplings:(coupling() ** _) _ {couplings.into_iter().collect()}
 
+        pub rule lorentz_structures() -> HashMap<String, Vec<isize>> =
+        _ (!lorentz() [_])* _ structures:(lorentz() ** _) _ {
+            structures.into_iter().map(|(s, v)| (s.to_owned(), v)).collect()
+        }
+
         pub rule vertices(
-            couplings: &HashMap<String, HashMap<String, usize>>, ident_map: &HashMap<String, String>
+            couplings: &HashMap<String, HashMap<String, usize>>, 
+            ident_map: &HashMap<String, String>,
+            lorentz_structures: &HashMap<String, Vec<isize>>
         ) -> IndexMap<String, InteractionVertex> =
-        _ (!vertex(couplings, ident_map) [_])* _ vertices:(vertex(couplings, ident_map) ** _) _ {
+        _ (!vertex(couplings, ident_map, lorentz_structures) [_])* _ 
+        vertices:(vertex(couplings, ident_map, lorentz_structures) ** _) _ {
                 vertices.into_iter().flatten().map(|v| (v.name.clone(), v)).collect()
             }
     }
@@ -420,6 +532,22 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         }
     };
 
+    let lorentz_content = match std::fs::read_to_string(path.join("lorentz.py")) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(ModelError::IOError(
+                path.join("lorentz.py").to_str().unwrap().to_owned(),
+                e,
+            ));
+        }
+    };
+    let lorentz_structures = match ufo_model::lorentz_structures(&lorentz_content) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(ModelError::ParseError("lorentz.py".into(), e));
+        }
+    };
+
     let vertices_content = match std::fs::read_to_string(path.join("vertices.py")) {
         Ok(x) => x,
         Err(e) => {
@@ -429,7 +557,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
             ));
         }
     };
-    let vertices = match ufo_model::vertices(&vertices_content, &couplings, &ident_map) {
+    let vertices = match ufo_model::vertices(&vertices_content, &couplings, &ident_map, &lorentz_structures) {
         Ok(x) => x,
         Err(e) => {
             return Err(ModelError::ParseError("vertices.py".into(), e));
@@ -461,7 +589,8 @@ pub fn sm() -> Model {
             .unzip();
     let coupling_orders = ufo_model::coupling_orders(SM_COUPLING_ORDERS).unwrap();
     let couplings = ufo_model::couplings(SM_COUPLINGS).unwrap();
-    let vertices = ufo_model::vertices(SM_VERTICES, &couplings, &ident_map).unwrap();
+    let lorentz_structures = ufo_model::lorentz_structures(SM_LORENTZ).unwrap();
+    let vertices = ufo_model::vertices(SM_VERTICES, &couplings, &ident_map, &lorentz_structures).unwrap();
     Model {
         particles,
         vertices,
@@ -476,6 +605,7 @@ mod tests {
     use indexmap::IndexMap;
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use test_log::test;
 
     #[test]
     fn peg_ufo_parse_test() {
@@ -518,6 +648,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_1".to_string(),
                         particles: vec!["G".to_string(); 3],
+                        spin_map: vec![],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
@@ -526,6 +657,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_2".to_string(),
                         particles: vec!["G".to_string(); 4],
+                        spin_map: vec![],
                         coupling_orders: HashMap::from([("QCD".to_string(), 2)]),
                     },
                 ),
@@ -534,6 +666,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_3".to_string(),
                         particles: vec!["u~".to_string(), "u".to_string(), "G".to_string()],
+                        spin_map: vec![1, 0],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
@@ -542,6 +675,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_4".to_string(),
                         particles: vec!["c~".to_string(), "c".to_string(), "G".to_string()],
+                        spin_map: vec![1, 0],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
@@ -550,13 +684,27 @@ mod tests {
                     InteractionVertex {
                         name: "V_5".to_string(),
                         particles: vec!["t~".to_string(), "t".to_string(), "G".to_string()],
+                        spin_map: vec![1, 0],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
             ]),
             couplings: vec!["QCD".to_string()],
         };
-        println!("{:#?}", model_ref);
         assert_eq!(model, model_ref);
+    }
+
+    #[test]
+    fn ufo_sm_test() {
+        let path = PathBuf::from("tests/resources/Standard_Model_UFO");
+        let model = parse_ufo_model(&path);
+        assert!(model.is_ok());
+    }
+
+    #[test]
+    fn ufo_lorentz_test() {
+        let structure = "P(3,1)*Metric(1,2) - P(3,2)*Metric(1,2) - P(2,1)*Metric(1,3) + P(2,3)*Metric(1,3) + P(1,2)*Metric(2,3) - P(1,3)*Metric(2,3)";
+        let res = ufo_model::lorentz_structure(structure).unwrap();
+        assert_eq!(res, vec![]);
     }
 }

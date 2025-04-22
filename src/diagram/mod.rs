@@ -154,7 +154,7 @@ impl Diagram {
                 propagator_symmetry *= factorial(count);
             }
         }
-        return Diagram {
+        let mut d =  Diagram {
             incoming_legs,
             outgoing_legs,
             propagators,
@@ -195,8 +195,10 @@ impl Diagram {
                         .unwrap()
                 })
                 .collect_vec(),
-            sign: workspace.calculate_sign(),
+            sign: 1,
         };
+        d.sign = DiagramView::new(workspace.model.as_ref(), &d, workspace.momentum_labels.as_ref()).calculate_sign();
+        return d;
     }
 
     pub fn count_opi_components(&self) -> usize {
@@ -469,6 +471,7 @@ mod tests {
     use crate::topology::filter::TopologySelector;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use test_log::test;
 
     #[test]
     pub fn diagram_generator_qcd_g_prop_opi_3loop() {

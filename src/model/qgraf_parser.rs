@@ -146,9 +146,7 @@ peg::parser!(
                                     log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
                                 }
                             }
-                            _ => {
-                                log::error!("Vertex at {}: coupling '{}' is only allowed to have non-negative int value. Ignoring.", pos, coupling);
-                            }
+                            _ => (),
                         }
                     }
                 }
@@ -156,6 +154,7 @@ peg::parser!(
                 Ok(InteractionVertex {
                     name: vertex_name,
                     particles: fields.iter().map(|f| String::from(*f)).collect_vec(),
+                    spin_map: vec![],
                     coupling_orders: coupling_map,
                 })
             }
@@ -217,7 +216,7 @@ pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
     let mut particle_counter: usize = 1;
     let mut vertex_counter: usize = 1;
     return match qgraf_model::qgraf_model(&content, &mut particle_counter, &mut vertex_counter) {
-        Ok(m) => Ok(m),
+        Ok(m) => Ok(build_spin_maps(m)),
         Err(e) => Err(ModelError::ParseError(
             path.file_name().unwrap().to_str().unwrap().to_owned(),
             e,
@@ -225,17 +224,39 @@ pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
     };
 }
 
+fn build_spin_maps(mut model: Model) -> Model {
+    for v in model.vertices.values_mut() {
+        let mut fermions =  v.particles.iter().enumerate().filter_map(
+            |(i, s)| if model.particles.get(s).unwrap().statistic == Statistic::Fermi {Some(i)} else {None}
+        ).collect_vec();
+        if !fermions.is_empty() {
+            if fermions.len() > 2 {
+                log::warn!("Ambiguous spin flow mapping for vertex '{}', the calculated diagram signs for diagrams \
+                containing this vertex might be wrong!", v.name);
+            }
+            let mut spin_map = vec![-1; v.particles.len()];
+            while let Some(index) = fermions.pop() {
+                let out_leg = fermions.pop().unwrap();
+                spin_map[index] = out_leg as isize;
+                spin_map[out_leg] = index as isize;
+            }
+            v.spin_map = spin_map;
+        }
+    }
+    return model;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::Statistic;
     use std::path::PathBuf;
+    use test_log::test;
 
     #[test]
     fn qgraf_qcd_test() {
         let path = PathBuf::from("tests/resources/qcd.qgraf");
         let model = parse_qgraf_model(&path).unwrap();
-        println!("{:#?}", model);
         let model_ref = Model {
             particles: IndexMap::from([
                 (
@@ -297,6 +318,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_1".to_string(),
                         particles: vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
+                        spin_map: vec![1, 0, -1],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
@@ -305,6 +327,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_2".to_string(),
                         particles: vec!["gluon".to_string(); 3],
+                        spin_map: vec![],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),
@@ -313,6 +336,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_3".to_string(),
                         particles: vec!["gluon".to_string(); 4],
+                        spin_map: vec![],
                         coupling_orders: HashMap::from([("QCD".to_string(), 2)]),
                     },
                 ),
@@ -321,6 +345,7 @@ mod tests {
                     InteractionVertex {
                         name: "V_4".to_string(),
                         particles: vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
+                        spin_map: vec![1, 0, -1],
                         coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
                     },
                 ),

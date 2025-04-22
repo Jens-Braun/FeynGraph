@@ -399,6 +399,7 @@ mod test {
     use crate::topology::matrix::SymmetricMatrix;
     use crate::topology::{Edge, Node, Topology, TopologyContainer};
     use itertools::Itertools;
+    use test_log::test;
 
     #[test]
     fn connection_test() {

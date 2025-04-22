@@ -131,12 +131,16 @@ class Vertex:
     """The class representing an internal vertex."""
 
     def propagators(self) -> list[Leg | Propagator]:
-        """Get the propagators connected to this vertex."""
+        """
+        Get the propagators connected to this vertex. If one of the propagators is a self-loop, it will only 
+        appear once in the list of propagators!
+        """
 
     def propagators_ordered(self) -> list[Leg | Propagator]:
         """
         Get the propagators connected to this vertex ordered such, that the sequence of particles matches the
-        definition of the interaction in the model.
+        definition of the interaction in the model. If one of the propagators is a self-loop, it will only 
+        appear once in the list of propagators!
         """
     
     def interaction(self) -> InteractionVertex:

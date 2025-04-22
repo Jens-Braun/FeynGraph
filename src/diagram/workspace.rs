@@ -587,6 +587,7 @@ mod tests {
     use crate::topology::{components::NodeClassification, Edge, Node, Topology, TopologyGenerator};
     use std::path::PathBuf;
     use std::sync::Arc;
+    use test_log::test;
 
     #[test]
     fn assign_qcd_gluon_4point_tree_test() {

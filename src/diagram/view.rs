@@ -28,6 +28,7 @@ impl<'a> DiagramView<'a> {
             diagram: self,
             leg: p,
             leg_index: i,
+            invert_particle: false,
         });
     }
 
@@ -38,6 +39,7 @@ impl<'a> DiagramView<'a> {
             diagram: self,
             leg: p,
             leg_index: i + self.diagram.incoming_legs.len(),
+            invert_particle: true
         });
     }
 
@@ -53,6 +55,7 @@ impl<'a> DiagramView<'a> {
                 diagram: self,
                 propagator: p,
                 index: i,
+                invert: false
             });
     }
 
@@ -63,6 +66,7 @@ impl<'a> DiagramView<'a> {
             diagram: self,
             propagator: &self.diagram.propagators[index],
             index,
+            invert: false
         };
     }
 
@@ -143,6 +147,79 @@ impl<'a> DiagramView<'a> {
     pub fn sign(&self) -> i8 {
         return self.diagram.sign;
     }
+
+    fn trace_fermi_line(&self, vertex: VertexView, ray: usize, visited_props: &mut [bool], visited_legs: &mut [bool]) -> usize {
+        let initial_vertex = vertex.index;
+        let mut to_visit: Vec<VertexView> = vec![vertex];
+        let mut in_ray = ray;
+        while let Some(current) = to_visit.pop() {
+            let out_ray = current.interaction().spin_map[in_ray] as usize;
+            let out_prop = current.propagators_ordered().nth(out_ray).unwrap();
+            match out_prop {
+                Either::Left(leg) => {
+                    if visited_legs[leg.leg_index] { continue; }
+                    visited_legs[leg.leg_index] = true;
+                    return leg.leg_index;
+                },
+                Either::Right(prop) => {
+                    if visited_props[prop.index] { continue; }
+                    visited_props[prop.index] = true;
+                    if prop.propagator.vertices[0] == current.index {
+                        in_ray = prop.ray_index_ordered(1);
+                        to_visit.push(self.vertex(prop.propagator.vertices[1]));
+                    } else {
+                        in_ray = prop.ray_index_ordered(0);
+                        to_visit.push(self.vertex(prop.propagator.vertices[0]));
+                    }
+                }
+            }
+        }
+        return initial_vertex;
+    }
+
+    pub(crate) fn calculate_sign(&self) -> i8 {
+        let mut visited_legs = vec![false; self.n_ext()];
+        let mut visited_props = vec![false; self.diagram.propagators.len()];
+        let mut external_fermions = Vec::new();
+        for leg in self.incoming().chain(self.outgoing()) {
+            let vertex = leg.vertex();
+            let ray = leg.ray_index_ordered();
+            if visited_legs[leg.leg_index] || !leg.particle().is_fermi() { continue; }
+            visited_legs[leg.leg_index] = true;
+            let final_leg = self.trace_fermi_line(vertex, ray, &mut visited_props, &mut visited_legs);
+            if leg.leg_index < final_leg {
+                external_fermions.push(leg.leg_index);
+                external_fermions.push(final_leg);
+            } else {
+                external_fermions.push(final_leg);
+                external_fermions.push(leg.leg_index);
+            }
+        }
+        let mut n_ext_swap: usize = 0;
+        for i in 0..external_fermions.len() {
+            for j in i + 1..external_fermions.len() {
+                if external_fermions[i] > external_fermions[j] {
+                    n_ext_swap += 1;
+                }
+            }
+        }
+        let mut fermi_loops: usize = 0;
+        for prop in self.propagators() {
+            if visited_props[prop.index] || !prop.particle().is_fermi() {
+                continue;
+            }
+            if prop.propagator.vertices[0] == prop.propagator.vertices[1] {
+                fermi_loops += 1;
+                visited_props[prop.index] = true;
+                continue;
+            }
+            let vertex = prop.vertex(1);
+            let ray = prop.ray_index_ordered(1);
+            let _ = self.trace_fermi_line(vertex, ray, &mut visited_props, &mut visited_legs);
+            fermi_loops += 1;
+        }
+        return if (n_ext_swap + fermi_loops) % 2 == 0 { 1 } else { -1 };
+    }
 }
 
 impl std::fmt::Display for DiagramView<'_> {
@@ -192,6 +269,7 @@ pub struct LegView<'a> {
     pub(crate) diagram: &'a DiagramView<'a>,
     pub(crate) leg: &'a Leg,
     pub(crate) leg_index: usize,
+    pub(crate) invert_particle: bool,
 }
 
 impl LegView<'_> {
@@ -202,7 +280,11 @@ impl LegView<'_> {
 
     /// Get the particle assigned to the leg
     pub fn particle(&self) -> &Particle {
-        return self.model.get_particle(self.leg.particle);
+        return if self.invert_particle {
+            self.model.get_anti(self.leg.particle)
+        } else {
+            self.model.get_particle(self.leg.particle)
+        }
     }
 
     /// Get the external leg's ray index, i.e. the index of the leg of the vertex to which the external leg is
@@ -212,6 +294,16 @@ impl LegView<'_> {
             .propagators
             .iter()
             .position(|p| (*p + self.diagram.n_ext() as isize) as usize == self.leg_index)
+            .unwrap();
+    }
+
+    /// Get the external leg's ray index, i.e. the index of the leg of the vertex to which the external leg is
+    /// connected to (_from the vertex perspective_). The ray index is given with respect to the propagators orderd
+    /// as in the interaction vertex.
+    pub fn ray_index_ordered(&self) -> usize {
+        return self.vertex()
+            .propagators_ordered()
+            .position(|p| p.left().map(|l| l.leg_index) == Some(self.leg_index))
             .unwrap();
     }
 
@@ -262,61 +354,91 @@ pub struct PropagatorView<'a> {
     pub(crate) diagram: &'a DiagramView<'a>,
     pub(crate) propagator: &'a Propagator,
     pub(crate) index: usize,
+    pub(crate) invert: bool,
 }
 
 impl PropagatorView<'_> {
     /// Get an iterator over the vertices connected by the propagator
     pub fn vertices(&self) -> impl Iterator<Item = VertexView> {
-        return self.propagator.vertices.iter().map(|i| self.diagram.vertex(*i));
+        return if self.invert {
+            [
+                self.diagram.vertex(self.propagator.vertices[1]), 
+                self.diagram.vertex(self.propagator.vertices[0])
+            ].into_iter()
+        } else {
+            [
+                self.diagram.vertex(self.propagator.vertices[0]), 
+                self.diagram.vertex(self.propagator.vertices[1])
+            ].into_iter()
+        }
     }
 
     /// Get the `index`-th vertex connected to the propagator
     pub fn vertex(&self, index: usize) -> VertexView {
-        return self.diagram.vertex(self.propagator.vertices[index]);
+        let i = if self.invert { 1 - index } else { index };
+        return self.diagram.vertex(self.propagator.vertices[i]);
     }
 
     /// Get the particle assigned to the propagator
     pub fn particle(&self) -> &Particle {
-        return self.model.get_particle(self.propagator.particle);
+        return if self.invert {
+            self.model.get_anti(self.propagator.particle)
+        } else {
+            self.model.get_particle(self.propagator.particle)
+        }
     }
 
     /// Get the propagators ray index with respect to the `index`-th vertex it is connected to, i.e. the index of the
     /// leg of the `index`-th vertex to which the propagator is connected to
     pub fn ray_index(&self, index: usize) -> usize {
-        return self.diagram.diagram.vertices[self.propagator.vertices[index]]
+        let i = if self.invert { 1 - index } else { index };
+        return self.diagram.diagram.vertices[self.propagator.vertices[i]]
             .propagators
             .iter()
             .position(|p| *p == self.index as isize)
             .unwrap();
     }
 
+    /// Get the propagators ray index with respect to the `index`-th vertex it is connected to, i.e. the index of the
+    /// leg of the `index`-th vertex to which the propagator is connected to. The ray index is given with respect to the 
+    /// propagators orderd as in the interaction vertex.
+    pub fn ray_index_ordered(&self, index: usize) -> usize {
+        return self.vertex(index)
+        .propagators_ordered()
+        .position(|p| p.right().map(|p| p.index) == Some(self.index))
+        .unwrap();
+    }
+
     /// Get the internal representation of the momentum flowing through the propagator
-    pub fn momentum(&self) -> &[i8] {
-        return &self.propagator.momentum;
+    pub fn momentum(&self) -> Vec<i8> {
+        return if self.invert {
+            self.propagator.momentum.iter().map(|x| -*x).collect_vec()
+        } else {
+            self.propagator.momentum.clone()
+        };
     }
 
     /// Get the string-formatted momentum flowing through the propagator
     pub fn momentum_str(&self) -> String {
-        let mut result = String::with_capacity(5 * self.diagram.momentum_labels.len());
+        let momentum_labels = self.diagram.momentum_labels;
+        let mut result = String::with_capacity(5 * momentum_labels.len());
         let mut first: bool = true;
         for (i, coefficient) in self.propagator.momentum.iter().enumerate() {
             if *coefficient == 0 {
                 continue;
             }
-            match *coefficient {
-                1 => {
-                    if !first {
-                        write!(&mut result, "+").unwrap();
-                    } else {
-                        first = false;
-                    }
-                    write!(&mut result, "{}", self.diagram.momentum_labels[i]).unwrap();
-                }
-                -1 => {
-                    write!(&mut result, "-{}", self.diagram.momentum_labels[i]).unwrap();
-                }
-                x if x < 0 => write!(&mut result, "-{}*{}", x.abs(), self.diagram.momentum_labels[i]).unwrap(),
-                x => write!(&mut result, "{}*{}", x, self.diagram.momentum_labels[i]).unwrap(),
+            let sign;
+            if first {
+                sign = "";
+                first = false;
+            } else {
+                sign = "+";
+            }
+            match *coefficient * if self.invert { -1 } else { 1 } {
+                1 => write!(&mut result, "{}{}", sign, momentum_labels[i]).unwrap(),
+                -1 => write!(&mut result, "-{}", momentum_labels[i]).unwrap(),
+                x if x < 0 => write!(&mut result, "-{}*{}", x.abs(), momentum_labels[i]).unwrap(),
+                x => write!(&mut result, "{}{}*{}", sign, x, momentum_labels[i]).unwrap(),
             }
         }
         return result;
@@ -345,11 +467,20 @@ pub struct VertexView<'a> {
 }
 
 impl VertexView<'_> {
-    /// Get an iterator over the propagators connected to the vertex
+    /// Get an iterator over the propagators connected to the vertex. If one of the propagators is a self-loop, it will
+    /// only appear once in the list of propagators!
     pub fn propagators(&self) -> impl Iterator<Item = Either<LegView, PropagatorView>> {
         return self.vertex.propagators.iter().map(|i| {
             if *i >= 0 {
-                Either::Right(self.diagram.propagator(*i as usize))
+                Either::Right(
+                    PropagatorView {
+                        model: self.model,
+                        diagram: self.diagram,
+                        propagator: &self.diagram.diagram.propagators[*i as usize],
+                        index: *i as usize,
+                        invert: self.diagram.diagram.propagators[*i as usize].vertices[0] == self.index,
+                    }
+                )
             } else {
                 let index = (*i + self.diagram.n_ext() as isize) as usize;
                 let leg = if index < self.diagram.diagram.incoming_legs.len() {
@@ -362,6 +493,7 @@ impl VertexView<'_> {
                     diagram: self.diagram,
                     leg,
                     leg_index: index,
+                    invert_particle: false
                 })
             }
         });
@@ -369,9 +501,26 @@ impl VertexView<'_> {
 
     /// Get an iterator over the propagators connected to the vertex ordered like the particles in the interaction
     pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView, PropagatorView>> {
-        let views = self.propagators().collect_vec();
-        let mut perm = Vec::with_capacity(self.vertex.propagators.len());
-        let mut seen = vec![false; self.vertex.propagators.len()];
+        let mut views = self.propagators().collect_vec();
+        let mut sl_views = Vec::new();
+        for view in views.iter() {
+            if let Either::Right(view) = view {
+                if view.propagator.vertices[0] == view.propagator.vertices[1] {
+                    sl_views.push(
+                        Either::Right(PropagatorView {
+                            model: view.model,
+                            diagram: view.diagram,
+                            propagator: view.propagator,
+                            index: view.index,
+                            invert: !view.invert
+                        })
+                    )
+                }
+            } 
+        }
+        views.extend(sl_views);
+        let mut perm = Vec::with_capacity(views.len());
+        let mut seen = vec![false; views.len()];
         for ref_particle in self.model.vertex(self.vertex.interaction).particles.iter() {
             for (i, part) in views
                 .iter()

@@ -758,6 +758,7 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
     use std::sync::Arc;
+    use test_log::test;
 
     #[test]
     fn topology_generator_custom_function_test() {

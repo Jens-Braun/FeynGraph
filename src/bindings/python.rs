@@ -1099,9 +1099,9 @@ impl PyDiagramGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pyo3::prelude::*;
     use pyo3::types::PyFunction;
     use pyo3_ffi::c_str;
+    use test_log::test;
 
     #[test]
     fn py_topology_generator_py_function() {
