@@ -154,25 +154,36 @@ impl Diagram {
                 propagator_symmetry *= factorial(count);
             }
         }
-        let mut d =  Diagram {
+        let vertices = workspace
+            .vertex_candidates
+            .iter()
+            .skip(workspace.topology.n_external)
+            .map(|candidate| {
+                Vertex::new(
+                    candidate
+                        .edges
+                        .iter()
+                        .map(|edge| {
+                            let prop = *edge as isize - workspace.topology.n_external as isize;
+                            if prop >= 0
+                                && propagators[prop as usize].vertices[0] == propagators[prop as usize].vertices[1]
+                            {
+                                vec![prop, prop]
+                            } else {
+                                vec![prop]
+                            }
+                        })
+                        .flatten()
+                        .collect_vec(),
+                    candidate.candidates[0],
+                )
+            })
+            .collect_vec();
+        let mut d = Diagram {
             incoming_legs,
             outgoing_legs,
             propagators,
-            vertices: workspace
-                .vertex_candidates
-                .iter()
-                .skip(workspace.topology.n_external)
-                .map(|candidate| {
-                    Vertex::new(
-                        candidate
-                            .edges
-                            .iter()
-                            .map(|edge| *edge as isize - workspace.topology.n_external as isize)
-                            .collect_vec(),
-                        candidate.candidates[0],
-                    )
-                })
-                .collect_vec(),
+            vertices,
             vertex_symmetry,
             propagator_symmetry,
             bridges: workspace

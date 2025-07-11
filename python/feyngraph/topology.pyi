@@ -13,6 +13,9 @@ class Topology:
     def symmetry_factor(self) -> int:
         """Get the topology's symmetry factor"""
 
+    def draw_tikz(self, path: str):
+        """Draw the topology in the TikZ format"""
+
 class Edge:
     """The internal representaion of a graph edge."""
 
@@ -35,7 +38,7 @@ class Node:
 class TopologySelector:
     """
     A selector class which determines whether a topology is to be kept or to be discarded. The available critera are
-    
+
     - node degrees: select only topologies for which the number of nodes with a specified degree matches any of the
     given counts
     - node partition: select only topologies matching any of the given node partitions, i.e. a topology for which the
@@ -43,7 +46,7 @@ class TopologySelector:
     - opi components: select only topologies for which the number of one-particle-irreducible components matches any of
     the given counts
     - custom functions: select only topologies for which any of the given custom functions return `true`
-    
+
     """
 
     def select_node_degree(self, degree: int, selection: int):
@@ -58,7 +61,7 @@ class TopologySelector:
         """
         Add a constraint to only select topologies for which the number of nodes of all given degree exactly matches
         he specified count.
-        
+
         Examples:
         ```python
         selector = TopologySelector()
@@ -66,7 +69,7 @@ class TopologySelector:
         selector.select_node_partition([(3, 4), (4, 1)])
         ```
         """
-    
+
     def select_opi_components(self, opi_count: int):
         """Add a constraints to only select topologies with `opi_count` one-particle-irreducible components."""
 
@@ -74,17 +77,27 @@ class TopologySelector:
         """
         Add a constraint to only select topologies for which the given function returns `true`. The function receives
         a single topology as input and should return a boolean.
-        
+
         Examples:
         ```python
         def no_self_loop(topo: feyngraph.topology.Topology) -> bool:
             return any(edge.get_nodes()[0] == edge.get_nodes()[1] for edge in topo.get_edges())
-    
+
         selector = feyngraph.topology.TopologySelector()
         selector.add_custom_function(no_self_loop)
         ```
         """
-    
+
+    def select_on_shell(self):
+        """
+        Select only topologies with no self-energy insertions on external legs. This implementation considers internal
+        edges carrying a single external momentum and no loop momentum, which is equivalent to a self-energy insertion
+        on an external edge.
+        """
+
+    def select_self_loops(self, n: int):
+        """Select only topologies containing exactly `n` self-loops."""
+
     def clear(self):
         """Clear all criteria."""
 
@@ -100,11 +113,30 @@ class TopologyContainer:
     def query(self, selector: TopologySelector):
         """Query whether there is a topology in the container, which would be selected by `selector`."""
 
+    def draw(self, topologies: list[int], n_cols: Optional[int] = 4) -> str:
+        """
+        Draw the specified topologies into a large canvas. Returns an SVG string, which can be displayed e.g. in a
+        Jupyter notebook.
+
+        Example:
+        ```python
+        from from IPython.display import SVG
+        from feyngraph.topology import TopologyGenerator, TopologyModel
+        topos = TopologyGenerator(4, 0, TopologyModel([3, 4]))
+        SVG(topos.draw(range(len(topos))))
+        ```
+
+        Parameters:
+            topologies: list of IDs of topologies to draw
+            n_cols: number of topologies to draw in each row
+        """
+
+
 class TopologyGenerator:
     """
     The main generator class of the topology module.
-    
-    Examples:    
+
+    Examples:
     ```python
     model = TopologyModel([3, 4])
     selector = TopologySelector()

@@ -2,11 +2,11 @@
 
 use crate::{
     diagram::{
-        filter::DiagramSelector, view::DiagramView, Diagram, DiagramContainer, DiagramGenerator, Leg, Propagator,
-        Vertex,
+        Diagram, DiagramContainer, DiagramGenerator, Leg, Propagator, Vertex, filter::DiagramSelector,
+        view::DiagramView,
     },
     model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
-    topology::{filter::TopologySelector, Edge, Node, Topology, TopologyContainer, TopologyGenerator},
+    topology::{Edge, Node, Topology, TopologyContainer, TopologyGenerator, filter::TopologySelector},
     util,
 };
 use either::Either;
@@ -254,6 +254,14 @@ impl PyTopologySelector {
         }))
     }
 
+    fn select_on_shell(&mut self) {
+        self.0.set_on_shell();
+    }
+
+    fn select_self_loops(&mut self, n: usize) {
+        self.0.add_self_loop_count(n);
+    }
+
     fn clear(&mut self) {
         self.0.clear_criteria();
     }
@@ -335,8 +343,17 @@ impl PyTopology {
         return self.0.node_symmetry * self.0.edge_symmetry;
     }
 
+    fn draw_tikz(&self, path: String) -> PyResult<()> {
+        self.0.draw_tikz(path)?;
+        Ok(())
+    }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
+    }
+
+    fn _repr_svg_(&self) -> String {
+        return self.0.draw_svg();
     }
 
     fn __str__(&self) -> String {
@@ -352,6 +369,11 @@ struct PyTopologyContainer(TopologyContainer);
 impl PyTopologyContainer {
     fn query(&self, selector: &PyTopologySelector) -> Option<usize> {
         return self.0.query(&selector.0);
+    }
+
+    #[pyo3(signature = (topologies, n_cols = None))]
+    fn draw(&self, topologies: Vec<usize>, n_cols: Option<usize>) -> String {
+        return self.0.draw_svg(&topologies, n_cols);
     }
 
     fn __len__(&self) -> usize {
@@ -411,6 +433,14 @@ struct PyLeg {
 
 #[pymethods]
 impl PyLeg {
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.leg);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{}", self);
+    }
+
     pub fn vertices(&self) -> Vec<PyVertex> {
         return vec![PyVertex {
             container: self.container.clone(),
@@ -485,6 +515,29 @@ impl PyLeg {
             }
         }
         return result;
+    }
+}
+
+impl std::fmt::Display for PyLeg {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if self.leg_index >= self.diagram.diagram.incoming_legs.len() {
+            write!(
+                f,
+                "{}[{} -> ], p = {},",
+                self.particle().name(),
+                self.leg.vertex,
+                self.momentum_str()
+            )?;
+        } else {
+            write!(
+                f,
+                "{}[-> {}], p = {},",
+                self.particle().name(),
+                self.leg.vertex,
+                self.momentum_str()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -570,10 +623,46 @@ impl PyPropagator {
 
     pub fn ray_index(&self, index: usize) -> usize {
         let i = if self.invert { 1 - index } else { index };
-        return self.diagram.diagram.vertices[self.propagator.vertices[i]]
+        let pos = self.diagram.diagram.vertices[self.propagator.vertices[i]]
             .propagators
             .iter()
             .position(|p| *p == self.index as isize)
+            .unwrap();
+        return if self.propagator.vertices[0] == self.propagator.vertices[1] {
+            // If the propagator is a self-loop, the vertex' propagator list contains `self.index` twice - at `pos` and at `pos+1`.
+            // Since the direction of a self-loop is always ambiguous, it is fixed such that it always runs from the leg at `pos`
+            // to the leg at `pos+1`.
+            pos + i
+        } else {
+            pos
+        };
+    }
+
+    pub fn ray_index_ordered(&self, index: usize) -> usize {
+        let i = if self.invert { 1 - index } else { index };
+        return self
+            .vertex(i)
+            .propagators_ordered()
+            .iter()
+            .position(|p| {
+                if let either::Right(p) = p {
+                    if p.index == self.index {
+                        if self.propagator.vertices[0] == self.propagator.vertices[1] {
+                            if i == 1 {
+                                return p.particle().is_anti();
+                            } else {
+                                return !p.particle().is_anti();
+                            }
+                        } else {
+                            return true;
+                        }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    false
+                }
+            })
             .unwrap();
     }
 
@@ -617,14 +706,25 @@ impl PyPropagator {
 
 impl std::fmt::Display for PyPropagator {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}[{} -> {}], p = {},",
-            self.particle().name(),
-            self.propagator.vertices[0],
-            self.propagator.vertices[1],
-            self.momentum_str()
-        )?;
+        if self.invert {
+            write!(
+                f,
+                "{}[{} -> {}], p = {},",
+                self.particle().name(),
+                self.propagator.vertices[1],
+                self.propagator.vertices[0],
+                self.momentum_str()
+            )?;
+        } else {
+            write!(
+                f,
+                "{}[{} -> {}], p = {},",
+                self.particle().name(),
+                self.propagator.vertices[0],
+                self.propagator.vertices[1],
+                self.momentum_str()
+            )?;
+        }
         Ok(())
     }
 }
@@ -654,17 +754,20 @@ impl PyVertex {
             .vertex
             .propagators
             .iter()
-            .map(|i| {
-                if *i >= 0 {
+            .enumerate()
+            .map(|(i, prop)| {
+                if *prop >= 0 {
                     Either::Right(PyPropagator {
                         container: self.container.clone(),
                         diagram: self.diagram.clone(),
-                        propagator: Arc::new(self.diagram.diagram.propagators[*i as usize].clone()),
-                        index: *i as usize,
-                        invert: self.diagram.diagram.propagators[*i as usize].vertices[0] == self.index,
+                        propagator: Arc::new(self.diagram.diagram.propagators[*prop as usize].clone()),
+                        index: *prop as usize,
+                        invert: (self.diagram.diagram.propagators[*prop as usize].vertices[0] == self.index
+                            && self.diagram.diagram.propagators[*prop as usize].vertices[1] != self.index)
+                            || (i > 0 && self.vertex.propagators[i - 1] == self.vertex.propagators[i]),
                     })
                 } else {
-                    let index = (*i + self.diagram.n_ext() as isize) as usize;
+                    let index = (*prop + self.diagram.n_ext() as isize) as usize;
                     let leg = if index < self.diagram.diagram.incoming_legs.len() {
                         &self.diagram.diagram.incoming_legs[index]
                     } else {
@@ -816,6 +919,24 @@ impl PyDiagram {
                 &self.container.momentum_labels
             )
         );
+    }
+
+    fn _repr_svg_(&self) -> String {
+        return DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_svg();
+    }
+
+    fn draw_tikz(&self, file: PathBuf) {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_tikz(file);
     }
 
     pub fn incoming(&self) -> Vec<PyLeg> {
@@ -1026,6 +1147,11 @@ struct PyDiagramContainer(Arc<DiagramContainer>);
 impl PyDiagramContainer {
     fn query(&self, selector: &PyDiagramSelector) -> Option<usize> {
         return self.0.query(&selector.0);
+    }
+
+    #[pyo3(signature = (diagrams, n_cols = None))]
+    fn draw(&self, diagrams: Vec<usize>, n_cols: Option<usize>) -> String {
+        return self.0.draw_svg(&diagrams, n_cols);
     }
 
     fn __len__(&self) -> usize {

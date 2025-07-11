@@ -29,6 +29,7 @@ pub enum LineStyle {
     Scurly,
     Swavy,
     Double,
+    None,
 }
 
 #[derive(PartialEq, Debug, Hash, Clone, Eq)]
@@ -39,14 +40,14 @@ pub enum Statistic {
 
 #[derive(Debug, PartialEq, Hash, Clone, Eq)]
 pub struct Particle {
-    name: String,
-    anti_name: String,
-    pdg_code: isize,
-    texname: String,
-    antitexname: String,
-    linestyle: LineStyle,
-    self_anti: bool,
-    statistic: Statistic,
+    pub(crate) name: String,
+    pub(crate) anti_name: String,
+    pub(crate) pdg_code: isize,
+    pub(crate) texname: String,
+    pub(crate) antitexname: String,
+    pub(crate) linestyle: LineStyle,
+    pub(crate) self_anti: bool,
+    pub(crate) statistic: Statistic,
 }
 
 impl Particle {
@@ -258,7 +259,7 @@ impl Model {
         interaction: usize,
         remaining_coupling_orders: &Option<HashMap<String, usize>>,
     ) -> bool {
-        return if let Some(ref remaining_orders) = remaining_coupling_orders {
+        return if let Some(remaining_orders) = remaining_coupling_orders {
             for (coupling, order) in self.vertices[interaction].get_coupling_orders() {
                 if let Some(remaining_order) = remaining_orders.get(coupling) {
                     if order > remaining_order {

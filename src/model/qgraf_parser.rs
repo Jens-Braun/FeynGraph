@@ -100,8 +100,8 @@ peg::parser!(
                     (Some(4), _) => LineStyle::Double,
                     (Some(-2), _) => LineStyle::Dotted,
                     _ => {
-                        log::warn!("Unable to determine linestyle for particle {}, using default 'dashed'", name);
-                        LineStyle::Dashed
+                        log::warn!("Unable to determine linestyle for particle {}", name);
+                        LineStyle::None
                     },
                 };
                 let pdg_code = *particle_counter;
@@ -226,13 +226,25 @@ pub(crate) fn parse_qgraf_model(path: &Path) -> Result<Model, ModelError> {
 
 fn build_spin_maps(mut model: Model) -> Model {
     for v in model.vertices.values_mut() {
-        let mut fermions =  v.particles.iter().enumerate().filter_map(
-            |(i, s)| if model.particles.get(s).unwrap().statistic == Statistic::Fermi {Some(i)} else {None}
-        ).collect_vec();
+        let mut fermions = v
+            .particles
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                if model.particles.get(s).unwrap().statistic == Statistic::Fermi {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
         if !fermions.is_empty() {
             if fermions.len() > 2 {
-                log::warn!("Ambiguous spin flow mapping for vertex '{}', the calculated diagram signs for diagrams \
-                containing this vertex might be wrong!", v.name);
+                log::warn!(
+                    "Ambiguous spin flow mapping for vertex '{}', the calculated diagram signs for diagrams \
+                containing this vertex might be wrong!",
+                    v.name
+                );
             }
             let mut spin_map = vec![-1; v.particles.len()];
             while let Some(index) = fermions.pop() {

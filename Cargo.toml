@@ -1,7 +1,7 @@
 [package]
 name = "feyngraph"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [lib]
 name = "feyngraph"
@@ -15,16 +15,20 @@ thiserror = "2"
 indexmap = "2"
 either = "1"
 peg = "0.8"
-pyo3 = { version = "0.24", features = ["auto-initialize", "either"], optional = true}
+pyo3 = { version = "0.24", features = [
+    "auto-initialize",
+    "either",
+], optional = true }
 pyo3-ffi = { version = "0.24", optional = true }
-pyo3-log = { version = "0.12", optional = true}
+pyo3-log = { version = "0.12", optional = true }
 
 [dev-dependencies]
 paste = "1"
 tempfile = "3"
 regex = "1"
 test-log = "0.2"
+approx = "0.5"
 
 [features]
-default = ["python-bindings"]
+default = []
 python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]

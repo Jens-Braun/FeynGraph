@@ -213,7 +213,7 @@ impl TopologyWorkspace {
 
     /// Check whether a found graph is a representative of its orbit. This is decided by regarding the entries
     /// of the adjacency matrix as digits of a number, different graphs are then ordered by the size of this
-    /// number. The graph is a representative, if its coding is larger or equal to the codings of all other
+    /// number. The graph is a representative if its coding is larger or equal to the codings of all other
     /// permutations of the adjacency matrix. Since the nodes are classified by their topological properties,
     /// only permutations within a class have to be considered.
     ///

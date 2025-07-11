@@ -1,5 +1,5 @@
 use crate::topology::matrix::SymmetricMatrix;
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use std::cmp::Ordering;
 
 /// Node struct used internally by [TopologyWorkspace] during the generation of topologies
@@ -122,7 +122,7 @@ impl NodeClassification {
     }
 
     /// Return an iterator over the nodes in `class`.
-    pub(crate) fn class_iter(&self, class: usize) -> impl Iterator<Item = usize> {
+    pub(crate) fn class_iter(&self, class: usize) -> impl Iterator<Item = usize> + use<> {
         return self.boundaries[class]..self.boundaries[class + 1];
     }
 

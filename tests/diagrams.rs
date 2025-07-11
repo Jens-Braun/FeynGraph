@@ -1,5 +1,9 @@
 #![allow(dead_code, non_snake_case)]
-use feyngraph::{diagram::DiagramGenerator, model::Model};
+use feyngraph::{
+    diagram::DiagramGenerator,
+    model::{Model, TopologyModel},
+    topology::TopologyGenerator,
+};
 use itertools::Itertools;
 use paste::paste;
 use std::path::PathBuf;
@@ -20,7 +24,7 @@ macro_rules! test_diagrams {
                 ).unwrap();
                 let in_particles = vec![$(model.get_particle_index(stringify!($particle_in)).unwrap()),+];
                 let out_particles = vec![$(model.get_particle_index(stringify!($particle_out)).unwrap()),+];
-                let n_topos = DiagramGenerator::new(
+                let n_diags = DiagramGenerator::new(
                     in_particles,
                     out_particles,
                     $n_loops,
@@ -49,7 +53,7 @@ macro_rules! test_diagrams {
                 ).unwrap();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
-                    assert_eq!(n_qgraf, n_topos);
+                    assert_eq!(n_qgraf, n_diags);
                 } else if let Err(e) = n_qgraf {
                     println!("{}", std::fs::read_to_string(qgraf_model.path().to_str().unwrap()).unwrap());
                     println!("{}", std::fs::read_to_string(qgraf_config.path().to_str().unwrap()).unwrap());
@@ -73,7 +77,7 @@ macro_rules! test_diagrams {
                 ).unwrap();
                 let in_particles = vec![$(model.get_particle_index($particle_in).unwrap()),+];
                 let out_particles = vec![$(model.get_particle_index($particle_out).unwrap()),+];
-                let n_topos = DiagramGenerator::new(
+                let n_diags = DiagramGenerator::new(
                     in_particles,
                     out_particles,
                     $n_loops,
@@ -102,7 +106,7 @@ macro_rules! test_diagrams {
                 ).unwrap();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
-                    assert_eq!(n_qgraf, n_topos);
+                    assert_eq!(n_qgraf, n_diags);
                 } else if let Err(e) = n_qgraf {
                     println!("{}", std::fs::read_to_string(qgraf_model.path().to_str().unwrap()).unwrap());
                     println!("{}", std::fs::read_to_string(qgraf_config.path().to_str().unwrap()).unwrap());
@@ -140,4 +144,36 @@ test_diagrams!(QCD_UFO, G => G, 4);
 test_diagrams!(QCD_UFO, u => u, 3);
 test_diagrams!(QCD_UFO, u => u, 4);
 
-//test_diagrams!(SMEFT, u => u, 1);
+#[test]
+fn diags_QCD_4F_UFO_uubar_uubar_loops_0() {
+    let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_4F_UFO")).unwrap();
+    let in_particles = vec![
+        model.get_particle_index("u").unwrap(),
+        model.get_particle_index("u~").unwrap(),
+    ];
+    let out_particles = vec![
+        model.get_particle_index("u").unwrap(),
+        model.get_particle_index("u~").unwrap(),
+    ];
+    let topos = TopologyGenerator::new(4, 0, TopologyModel::from(&model), None).generate();
+    let generator = DiagramGenerator::new(in_particles, out_particles, 0, model.clone(), None);
+    let diags = generator.assign_topology(&topos[0]);
+    assert_eq!(2, diags.len());
+}
+
+#[test]
+fn diags_SMEFT_epem_epem_loops_2() {
+    let model = Model::from_ufo(&PathBuf::from("tests/resources/SMEFT")).unwrap();
+    let in_particles = vec![
+        model.get_particle_index("e+").unwrap(),
+        model.get_particle_index("e-").unwrap(),
+    ];
+    let out_particles = vec![
+        model.get_particle_index("e+").unwrap(),
+        model.get_particle_index("e-").unwrap(),
+    ];
+    let topos = TopologyGenerator::new(4, 2, TopologyModel::from(&model), None).generate();
+    let generator = DiagramGenerator::new(in_particles, out_particles, 2, model, None);
+    let diags = generator.assign_topology(&topos[34]);
+    assert!(diags.len() > 0);
+}

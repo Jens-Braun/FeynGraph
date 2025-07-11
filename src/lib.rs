@@ -6,3 +6,4 @@ pub mod diagram;
 pub mod model;
 pub mod topology;
 pub(crate) mod util;
+mod drawing;

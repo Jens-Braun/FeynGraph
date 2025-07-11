@@ -152,13 +152,30 @@ impl<'a> AssignWorkspace<'a> {
             .unwrap();
 
         if self.vertex_candidates[next_vertex].remaining_legs == 0 {
-            if let Some(vertex_symmetry) = self.is_representative() {
-                let diagram = Diagram::from(self, vertex_symmetry);
-                if self
-                    .selector
-                    .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
-                {
-                    self.diagram_buffer.inner_ref_mut().push(diagram);
+            if let Some(v_last) = self.vertex_candidates.iter().position(|c| c.candidates.len() > 1) {
+                let candidates = self.vertex_candidates[v_last].candidates.clone();
+                for c in candidates.iter() {
+                    self.vertex_candidates[v_last].candidates = vec![*c];
+                    if let Some(vertex_symmetry) = self.is_representative() {
+                        let diagram = Diagram::from(self, vertex_symmetry);
+                        if self
+                            .selector
+                            .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
+                        {
+                            self.diagram_buffer.inner_ref_mut().push(diagram);
+                        }
+                    }
+                }
+                self.vertex_candidates[v_last].candidates = candidates;
+            } else {
+                if let Some(vertex_symmetry) = self.is_representative() {
+                    let diagram = Diagram::from(self, vertex_symmetry);
+                    if self
+                        .selector
+                        .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
+                    {
+                        self.diagram_buffer.inner_ref_mut().push(diagram);
+                    }
                 }
             }
             return;
