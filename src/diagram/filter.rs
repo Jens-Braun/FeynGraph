@@ -1,10 +1,10 @@
-use crate::diagram::view::DiagramView;
 use crate::diagram::Diagram;
+use crate::diagram::view::DiagramView;
 use crate::model::Model;
-use crate::topology::filter::TopologySelector;
 use crate::topology::Topology;
+use crate::topology::filter::TopologySelector;
+use crate::util::HashMap;
 use itertools::Itertools;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A struct that decides whether a diagram is to be kept or discarded. Only diagrams for which
@@ -38,9 +38,9 @@ impl Default for DiagramSelector {
             opi_components: Vec::new(),
             self_loops: Vec::new(),
             on_shell: false,
-            coupling_powers: HashMap::new(),
-            propagator_counts: HashMap::new(),
-            vertex_counts: HashMap::new(),
+            coupling_powers: HashMap::default(),
+            propagator_counts: HashMap::default(),
+            vertex_counts: HashMap::default(),
             custom_functions: Vec::new(),
             topology_functions: Vec::new(),
         };

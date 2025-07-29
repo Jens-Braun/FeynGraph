@@ -1,5 +1,10 @@
-use itertools::{izip, Itertools};
+use indexmap::IndexMap as OriginalIndexMap;
+use itertools::{Itertools, izip};
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use thiserror::Error;
+
+pub(crate) type IndexMap<K, V> = OriginalIndexMap<K, V, FxBuildHasher>;
+pub(crate) type HashMap<K, V> = FxHashMap<K, V>;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -47,8 +52,18 @@ pub(crate) fn find_partitions(values: impl Iterator<Item = usize>, sum: usize) -
 /// The `i`-th entry of the connection map contains the index `j` to which index `i` is connected. For indices
 /// for which no information is available, the map contains the entry `-1`.
 pub(crate) fn contract_indices(mut connections: Vec<(isize, isize)>) -> Vec<isize> {
-    if connections.is_empty() { return vec![]; }
-    let mut res = vec![-1; *connections.iter().map(|(x, y)| if x > y {x} else {y}).max().unwrap() as usize + 1];
+    if connections.is_empty() {
+        return vec![];
+    }
+    let mut res = vec![
+        -1;
+        *connections
+            .iter()
+            .map(|(x, y)| if x > y { x } else { y })
+            .max()
+            .unwrap() as usize
+            + 1
+    ];
     while !connections.is_empty() {
         let (start, mut current) = connections.swap_remove(connections.iter().position(|(i, _)| *i >= 0).unwrap());
         while current < 0 {

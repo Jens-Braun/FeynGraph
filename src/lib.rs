@@ -3,7 +3,14 @@
 
 mod bindings;
 pub mod diagram;
+mod drawing;
 pub mod model;
 pub mod topology;
 pub(crate) mod util;
-mod drawing;
+
+pub mod prelude {
+    pub use crate::{
+        diagram::{DiagramGenerator, filter::DiagramSelector},
+        model::Model,
+    };
+}

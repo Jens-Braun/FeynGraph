@@ -15,6 +15,7 @@ thiserror = "2"
 indexmap = "2"
 either = "1"
 peg = "0.8"
+rustc-hash = "2"
 pyo3 = { version = "0.24", features = [
     "auto-initialize",
     "either",
@@ -28,7 +29,16 @@ tempfile = "3"
 regex = "1"
 test-log = "0.2"
 approx = "0.5"
+criterion = "0.6"
 
 [features]
 default = []
 python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]
+
+[[bench]]
+name = "topologies"
+harness = false
+
+[[bench]]
+name = "diagrams"
+harness = false

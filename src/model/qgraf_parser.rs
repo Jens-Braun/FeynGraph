@@ -1,9 +1,9 @@
 use crate::model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic};
-use indexmap::IndexMap;
+use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
 use log;
 use peg;
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 #[derive(Debug)]
 enum Value<'a> {
@@ -120,7 +120,7 @@ peg::parser!(
         rule vertex(vertex_counter: &mut usize) -> InteractionVertex =
             pos: position!() "[" _ fields:(name() **<3,> (_ "," _)) _
             couplings:(";" _ couplings:(property() ** (_ "," _))? {couplings})? _ "]" {?
-                let mut coupling_map = HashMap::new();
+                let mut coupling_map = HashMap::default();
                 let mut vertex_name = format!("V_{}", vertex_counter);
                 if let Some(Some(couplings)) = couplings {
                     for (coupling, value) in couplings {
@@ -151,12 +151,12 @@ peg::parser!(
                     }
                 }
                 *vertex_counter += 1;
-                Ok(InteractionVertex {
-                    name: vertex_name,
-                    particles: fields.iter().map(|f| String::from(*f)).collect_vec(),
-                    spin_map: vec![],
-                    coupling_orders: coupling_map,
-                })
+                Ok(InteractionVertex::new(
+                    vertex_name,
+                    fields.iter().map(|f| String::from(*f)).collect_vec(),
+                    vec![],
+                    coupling_map,
+                ))
             }
 
         rule misc() -> &'input str =
@@ -170,8 +170,8 @@ peg::parser!(
                     / m:misc() {ModelEntry::Misc(m)}
                 ) ** _
             ) _ {
-                let mut particles = IndexMap::new();
-                let mut vertices = IndexMap::new();
+                let mut particles = IndexMap::default();
+                let mut vertices = IndexMap::default();
                 let mut couplings = Vec::new();
 
                 for entry in entries {
@@ -197,11 +197,11 @@ peg::parser!(
                     }
                 }
 
-                Model {
+                Model::new(
                     particles,
                     vertices,
                     couplings
-                }
+                )
             }
     }
 );
@@ -269,8 +269,8 @@ mod tests {
     fn qgraf_qcd_test() {
         let path = PathBuf::from("tests/resources/qcd.qgraf");
         let model = parse_qgraf_model(&path).unwrap();
-        let model_ref = Model {
-            particles: IndexMap::from([
+        let model_ref = Model::new(
+            IndexMap::from_iter([
                 (
                     String::from("quark"),
                     Particle::new(
@@ -324,46 +324,46 @@ mod tests {
                     ),
                 ),
             ]),
-            vertices: IndexMap::from([
+            IndexMap::from_iter([
                 (
                     "V_1".to_string(),
-                    InteractionVertex {
-                        name: "V_1".to_string(),
-                        particles: vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
-                        spin_map: vec![1, 0, -1],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_1".to_string(),
+                        vec!["antiquark".to_string(), "quark".to_string(), "gluon".to_string()],
+                        vec![1, 0, -1],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
                 (
                     "V_2".to_string(),
-                    InteractionVertex {
-                        name: "V_2".to_string(),
-                        particles: vec!["gluon".to_string(); 3],
-                        spin_map: vec![],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_2".to_string(),
+                        vec!["gluon".to_string(); 3],
+                        vec![],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
                 (
                     "V_3".to_string(),
-                    InteractionVertex {
-                        name: "V_3".to_string(),
-                        particles: vec!["gluon".to_string(); 4],
-                        spin_map: vec![],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 2)]),
-                    },
+                    InteractionVertex::new(
+                        "V_3".to_string(),
+                        vec!["gluon".to_string(); 4],
+                        vec![],
+                        HashMap::from_iter([("QCD".to_string(), 2)]),
+                    ),
                 ),
                 (
                     "V_4".to_string(),
-                    InteractionVertex {
-                        name: "V_4".to_string(),
-                        particles: vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
-                        spin_map: vec![1, 0, -1],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_4".to_string(),
+                        vec!["antighost".to_string(), "ghost".to_string(), "gluon".to_string()],
+                        vec![1, 0, -1],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
             ]),
-            couplings: vec!["QCD".to_string()],
-        };
+            vec!["QCD".to_string()],
+        );
         assert_eq!(model, model_ref);
     }
 

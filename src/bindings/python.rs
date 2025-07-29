@@ -1,5 +1,6 @@
 #![cfg(not(doctest))]
 
+use crate::util::HashMap;
 use crate::{
     diagram::{
         Diagram, DiagramContainer, DiagramGenerator, Leg, Propagator, Vertex, filter::DiagramSelector,
@@ -14,7 +15,6 @@ use itertools::Itertools;
 use pyo3::exceptions::{PyIOError, PyIndexError, PySyntaxError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFunction};
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;

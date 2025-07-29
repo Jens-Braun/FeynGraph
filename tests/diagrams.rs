@@ -177,3 +177,20 @@ fn diags_SMEFT_epem_epem_loops_2() {
     let diags = generator.assign_topology(&topos[34]);
     assert!(diags.len() > 0);
 }
+
+#[test]
+fn diags_SM_uu_uu__loops_1() {
+    let model = Model::default();
+    let diag_gen = DiagramGenerator::new(
+        vec![model.get_particle_index("u").unwrap().clone(); 2],
+        vec![
+            model.get_particle_index("u").unwrap().clone(),
+            model.get_particle_index("u").unwrap().clone(),
+            model.get_particle_index("g").unwrap().clone(),
+        ],
+        1,
+        model,
+        None,
+    );
+    diag_gen.generate();
+}

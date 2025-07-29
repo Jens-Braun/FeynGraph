@@ -1,12 +1,12 @@
+use crate::util::{HashMap, IndexMap};
 use crate::{
     model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic},
     util::contract_indices,
 };
-use indexmap::IndexMap;
 use itertools::Itertools;
 use log;
 use peg;
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 const SM_PARTICLES: &str = include_str!("../../tests/resources/Standard_Model_UFO/particles.py");
 const SM_COUPLING_ORDERS: &str = include_str!("../../tests/resources/Standard_Model_UFO/coupling_orders.py");
@@ -106,7 +106,7 @@ peg::parser! {
         }
         rule si_dict() -> Value<'input> =
             "{" _ entries:((key:string() _ ":" _ val:value() {(key, val)}) ** (_ "," _)) _ "}" {?
-                let mut result = HashMap::new();
+                let mut result = HashMap::default();
                 for (k, v) in entries.into_iter().map(
                     |(key, val)| (key.str().unwrap().to_owned(), val.int().map(|i| i as usize))
                 ) {
@@ -124,7 +124,7 @@ peg::parser! {
 
         rule co_dict() -> Value<'input> =
             "{" _ entries:(("(" _ i:int() _ "," _ j:int() ")" _ ":" _ c:("C." _ c:name() {c}) {((i, j), c)}) ** (_ "," _)) _ "}" {?
-                let mut result = HashMap::new();
+                let mut result = HashMap::default();
                 for ((i, j), c) in entries.into_iter() {
                     let i = i.int()?.try_into().or(Err("Non-negative int"))?;
                     let j = j.int()?.try_into().or(Err("Non-negative int"))?;
@@ -335,21 +335,21 @@ peg::parser! {
                 if unique_coupling_orders.len() > 1 || unique_spin_mappings.len() > 1 {
                     for (spin_map, lorentz_indices) in unique_spin_mappings.iter() {
                         if unique_coupling_orders.is_empty() {
-                            vertices.push(InteractionVertex {
-                                particles: particles.clone(),
-                                name: format!("{}_{}", &name, vertices.len()),
-                                spin_map: spin_map.clone(),
-                                coupling_orders: HashMap::new(),
-                            })
+                            vertices.push(InteractionVertex::new(
+                                format!("{}_{}", &name, vertices.len()),
+                                particles.clone(),
+                                spin_map.clone(),
+                                HashMap::default(),
+                            ))
                         } else {
                             for (d, l) in unique_coupling_orders.iter() {
                                 if l.iter().any(|(_, i)| lorentz_indices.contains(i)) {
-                                    vertices.push(InteractionVertex {
-                                        particles: particles.clone(),
-                                        name: format!("{}_{}", &name, vertices.len()),
-                                        spin_map: spin_map.clone(),
-                                        coupling_orders: (*d).clone(),
-                                    })
+                                    vertices.push(InteractionVertex::new(
+                                        format!("{}_{}", &name, vertices.len()),
+                                        particles.clone(),
+                                        spin_map.clone(),
+                                        (*d).clone(),
+                                    ))
                                 }
                             }
                         }
@@ -358,20 +358,20 @@ peg::parser! {
 
                 match (unique_spin_mappings.len(), unique_coupling_orders.len()) {
                     (1, 0) => {
-                        vertices.push(InteractionVertex {
-                            particles: particles.clone(),
+                        vertices.push(InteractionVertex::new(
                             name,
-                            spin_map: unique_spin_mappings[0].0.clone(),
-                            coupling_orders: HashMap::new(),
-                        })
+                            particles.clone(),
+                            unique_spin_mappings[0].0.clone(),
+                            HashMap::default(),
+                        ))
                     },
                     (1, 1) => {
-                        vertices.push(InteractionVertex {
-                            particles: particles.clone(),
+                        vertices.push(InteractionVertex::new(
                             name,
-                            spin_map: unique_spin_mappings[0].0.clone(),
-                            coupling_orders: unique_coupling_orders[0].0.clone(),
-                        })
+                            particles.clone(),
+                            unique_spin_mappings[0].0.clone(),
+                            unique_coupling_orders[0].0.clone(),
+                        ))
                     },
                     (1, x) => {
                         log::warn!(
@@ -595,11 +595,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         }
     }
 
-    Ok(Model {
-        particles,
-        vertices,
-        couplings: coupling_orders,
-    })
+    Ok(Model::new(particles, vertices, coupling_orders))
 }
 
 pub fn sm() -> Model {
@@ -613,19 +609,14 @@ pub fn sm() -> Model {
     let couplings = ufo_model::couplings(SM_COUPLINGS).unwrap();
     let lorentz_structures = ufo_model::lorentz_structures(SM_LORENTZ).unwrap();
     let vertices = ufo_model::vertices(SM_VERTICES, &couplings, &ident_map, &lorentz_structures).unwrap();
-    Model {
-        particles,
-        vertices,
-        couplings: coupling_orders,
-    }
+    Model::new(particles, vertices, coupling_orders)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{InteractionVertex, LineStyle, Model, Particle, Statistic};
-    use indexmap::IndexMap;
-    use std::collections::HashMap;
+    use crate::util::{HashMap, IndexMap};
     use std::path::PathBuf;
     use test_log::test;
 
@@ -633,8 +624,8 @@ mod tests {
     fn peg_ufo_parse_test() {
         let path = PathBuf::from("tests/resources/QCD_UFO");
         let model = parse_ufo_model(&path).unwrap();
-        let model_ref = Model {
-            particles: IndexMap::from([
+        let model_ref = Model::new(
+            IndexMap::from_iter([
                 (
                     String::from("u"),
                     Particle::new("u", "u~", 9000001, "u", "u~", LineStyle::Straight, Statistic::Fermi),
@@ -664,55 +655,55 @@ mod tests {
                     Particle::new("G", "G", 9000004, "G", "G", LineStyle::Curly, Statistic::Bose),
                 ),
             ]),
-            vertices: IndexMap::from([
+            IndexMap::from_iter([
                 (
                     "V_1".to_string(),
-                    InteractionVertex {
-                        name: "V_1".to_string(),
-                        particles: vec!["G".to_string(); 3],
-                        spin_map: vec![],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_1".to_string(),
+                        vec!["G".to_string(); 3],
+                        vec![],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
                 (
                     "V_2".to_string(),
-                    InteractionVertex {
-                        name: "V_2".to_string(),
-                        particles: vec!["G".to_string(); 4],
-                        spin_map: vec![],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 2)]),
-                    },
+                    InteractionVertex::new(
+                        "V_2".to_string(),
+                        vec!["G".to_string(); 4],
+                        vec![],
+                        HashMap::from_iter([("QCD".to_string(), 2)]),
+                    ),
                 ),
                 (
                     "V_3".to_string(),
-                    InteractionVertex {
-                        name: "V_3".to_string(),
-                        particles: vec!["u~".to_string(), "u".to_string(), "G".to_string()],
-                        spin_map: vec![1, 0],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_3".to_string(),
+                        vec!["u~".to_string(), "u".to_string(), "G".to_string()],
+                        vec![1, 0],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
                 (
                     "V_4".to_string(),
-                    InteractionVertex {
-                        name: "V_4".to_string(),
-                        particles: vec!["c~".to_string(), "c".to_string(), "G".to_string()],
-                        spin_map: vec![1, 0],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_4".to_string(),
+                        vec!["c~".to_string(), "c".to_string(), "G".to_string()],
+                        vec![1, 0],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
                 (
                     "V_5".to_string(),
-                    InteractionVertex {
-                        name: "V_5".to_string(),
-                        particles: vec!["t~".to_string(), "t".to_string(), "G".to_string()],
-                        spin_map: vec![1, 0],
-                        coupling_orders: HashMap::from([("QCD".to_string(), 1)]),
-                    },
+                    InteractionVertex::new(
+                        "V_5".to_string(),
+                        vec!["t~".to_string(), "t".to_string(), "G".to_string()],
+                        vec![1, 0],
+                        HashMap::from_iter([("QCD".to_string(), 1)]),
+                    ),
                 ),
             ]),
-            couplings: vec!["QCD".to_string()],
-        };
+            vec!["QCD".to_string()],
+        );
         assert_eq!(model, model_ref);
     }
 

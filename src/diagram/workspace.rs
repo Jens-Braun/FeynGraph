@@ -3,10 +3,10 @@ use crate::diagram::filter::DiagramSelector;
 use crate::diagram::{Diagram, DiagramContainer};
 use crate::model::Model;
 use crate::topology::Topology;
+use crate::util::HashMap;
 use crate::util::generate_permutations;
 use itertools::{FoldWhile, Itertools};
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub(crate) struct AssignWorkspace<'a> {
@@ -117,11 +117,7 @@ impl<'a> AssignWorkspace<'a> {
                         .counts()
                         .into_iter()
                         .all(|(particle_index, count)| {
-                            count
-                                <= self
-                                    .model
-                                    .vertex(*candidate)
-                                    .count_particles(self.model.get_particle(*particle_index).get_name())
+                            count <= self.model.vertex(*candidate).particle_count(particle_index)
                         })
                 })
             }
@@ -299,7 +295,7 @@ impl<'a> AssignWorkspace<'a> {
                 if !particles.contains(&particle_index)
                     // Check for remaining open connections of `particle`
                     && (connected_particles.iter().filter(|i| **i == particle_index).count()
-                        < self.model.vertex(*interaction_candidate).count_particles(candidate_particle_str))
+                        < self.model.vertex(*interaction_candidate).particle_count(&particle_index))
                     // Check if this assignment violates ordering of the edges into the connected class
                     && self.check_propagator_ordering(vertex, leg, particle_index)
                 {
@@ -362,13 +358,13 @@ impl<'a> AssignWorkspace<'a> {
             {
                 return false;
             }
-            for (particle, count) in connected_particles.iter().counts().into_iter() {
-                if count
-                    > self
-                        .model
-                        .vertex(*candidate)
-                        .count_particles(self.model.get_particle(*particle).get_name())
+            let mut counts = self.model.vertex(*candidate).particle_counts().clone();
+            for particle in connected_particles.iter() {
+                if let Some(c) = counts.get_mut(particle)
+                    && *c > 0
                 {
+                    *c -= 1;
+                } else {
                     return false;
                 }
             }
@@ -454,10 +450,10 @@ impl<'a> AssignWorkspace<'a> {
             if vertex.degree == 1 {
                 continue;
             }
-            match vertex.candidates[0].cmp(&self.vertex_candidates[perm[i] - 1].candidates[0]) {
-                Ordering::Equal => {}
-                x => {
-                    if result.is_none() {
+            if result.is_none() {
+                match vertex.candidates[0].cmp(&self.vertex_candidates[perm[i] - 1].candidates[0]) {
+                    Ordering::Equal => {}
+                    x => {
                         result = Some(x);
                     }
                 }
@@ -466,51 +462,76 @@ impl<'a> AssignWorkspace<'a> {
                 if self.vertex_candidates[*connected_vertex].degree == 1
                     || (i == perm[i] - 1 && *connected_vertex == perm[*connected_vertex] - 1)
                 {
+                    // Current nodes not affected by permutation
                     continue;
                 }
-                let ref_particle_ids = vertex
-                    .edges
-                    .iter()
-                    .filter(|edge| {
-                        self.topology.get_edge(**edge).connected_nodes == [i, *connected_vertex]
-                            || self.topology.get_edge(**edge).connected_nodes == [*connected_vertex, i]
-                    })
-                    .map(|edge| self.propagator_candidates[*edge].particle.unwrap())
-                    .sorted_unstable()
-                    .collect_vec();
-                // Direction of the edges between the nodes is inverted by the permutation
-                let invert = (i < *connected_vertex && perm[i] > perm[*connected_vertex])
-                    || (i > *connected_vertex && perm[i] < perm[*connected_vertex]);
-                let permuted_particle_ids = self.vertex_candidates[perm[i] - 1]
-                    .edges
-                    .iter()
-                    .filter(|edge| {
-                        self.topology.get_edge(**edge).connected_nodes == [perm[i] - 1, perm[*connected_vertex] - 1]
-                            || self.topology.get_edge(**edge).connected_nodes
-                                == [perm[*connected_vertex] - 1, perm[i] - 1]
-                    })
-                    .map(|edge| {
-                        if invert {
-                            self.model
-                                .get_anti_index(self.propagator_candidates[*edge].particle.unwrap())
-                        } else {
-                            self.propagator_candidates[*edge].particle.unwrap()
-                        }
-                    })
-                    .sorted_unstable()
-                    .collect_vec();
-                match ref_particle_ids.len().cmp(&permuted_particle_ids.len()) {
-                    Ordering::Equal => (),
-                    x => result = Some(x),
-                }
-                for (ref_p, perm_p) in ref_particle_ids.into_iter().zip(permuted_particle_ids) {
-                    match ref_p.cmp(&perm_p) {
+                if result.is_none() {
+                    let ref_particle_ids = vertex
+                        .edges
+                        .iter()
+                        .filter(|edge| {
+                            self.topology.get_edge(**edge).connected_nodes == [i, *connected_vertex]
+                                || self.topology.get_edge(**edge).connected_nodes == [*connected_vertex, i]
+                        })
+                        .map(|edge| self.propagator_candidates[*edge].particle.unwrap())
+                        .sorted_unstable()
+                        .collect_vec();
+                    // Direction of the edges between the nodes is inverted by the permutation
+                    let invert = (i < *connected_vertex && perm[i] > perm[*connected_vertex])
+                        || (i > *connected_vertex && perm[i] < perm[*connected_vertex]);
+                    let permuted_particle_ids = self.vertex_candidates[perm[i] - 1]
+                        .edges
+                        .iter()
+                        .filter(|edge| {
+                            self.topology.get_edge(**edge).connected_nodes == [perm[i] - 1, perm[*connected_vertex] - 1]
+                                || self.topology.get_edge(**edge).connected_nodes
+                                    == [perm[*connected_vertex] - 1, perm[i] - 1]
+                        })
+                        .map(|edge| {
+                            if invert {
+                                self.model
+                                    .get_anti_index(self.propagator_candidates[*edge].particle.unwrap())
+                            } else {
+                                self.propagator_candidates[*edge].particle.unwrap()
+                            }
+                        })
+                        .sorted_unstable()
+                        .collect_vec();
+                    match ref_particle_ids.len().cmp(&permuted_particle_ids.len()) {
                         Ordering::Equal => (),
-                        x => {
-                            if result.is_none() {
+                        Ordering::Greater => return Ordering::Greater,
+                        x => result = Some(x),
+                    }
+                    for (ref_p, perm_p) in ref_particle_ids.into_iter().zip(permuted_particle_ids) {
+                        match ref_p.cmp(&perm_p) {
+                            Ordering::Equal => (),
+                            x => {
                                 result = Some(x);
                             }
                         }
+                    }
+                } else {
+                    // Ordering is already defined if result is Some, therefore only need to check for validity of permutation
+                    let ref_particle_len = vertex
+                        .edges
+                        .iter()
+                        .filter(|edge| {
+                            self.topology.get_edge(**edge).connected_nodes == [i, *connected_vertex]
+                                || self.topology.get_edge(**edge).connected_nodes == [*connected_vertex, i]
+                        })
+                        .count();
+                    let permuted_particle_len = self.vertex_candidates[perm[i] - 1]
+                        .edges
+                        .iter()
+                        .filter(|edge| {
+                            self.topology.get_edge(**edge).connected_nodes == [perm[i] - 1, perm[*connected_vertex] - 1]
+                                || self.topology.get_edge(**edge).connected_nodes
+                                    == [perm[*connected_vertex] - 1, perm[i] - 1]
+                        })
+                        .count();
+                    match ref_particle_len.cmp(&permuted_particle_len) {
+                        Ordering::Equal => (),
+                        x => return x,
                     }
                 }
             }
@@ -601,7 +622,7 @@ mod tests {
     use crate::diagram::workspace::AssignWorkspace;
     use crate::model::{Model, TopologyModel};
     use crate::topology::filter::TopologySelector;
-    use crate::topology::{components::NodeClassification, Edge, Node, Topology, TopologyGenerator};
+    use crate::topology::{Edge, Node, Topology, TopologyGenerator, components::NodeClassification};
     use std::path::PathBuf;
     use std::sync::Arc;
     use test_log::test;

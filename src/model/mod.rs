@@ -1,7 +1,5 @@
-use crate::model::Statistic::Fermi;
-use indexmap::IndexMap;
+use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
-use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -111,7 +109,7 @@ impl Particle {
     }
 
     pub fn is_fermi(&self) -> bool {
-        return self.statistic == Fermi;
+        return self.statistic == Statistic::Fermi;
     }
 }
 
@@ -121,15 +119,45 @@ pub struct InteractionVertex {
     pub(crate) particles: Vec<String>,
     pub(crate) spin_map: Vec<isize>,
     pub(crate) coupling_orders: HashMap<String, usize>,
+    pub(crate) particle_counts: HashMap<usize, usize>,
 }
 
 impl InteractionVertex {
+    pub(crate) fn new(
+        name: String,
+        particles: Vec<String>,
+        spin_map: Vec<isize>,
+        coupling_orders: HashMap<String, usize>,
+    ) -> Self {
+        return Self {
+            name,
+            particles,
+            spin_map,
+            coupling_orders,
+            particle_counts: HashMap::default(),
+        };
+    }
+
+    pub(crate) fn build_counts(&mut self, particles: &IndexMap<String, Particle>) {
+        for (p, count) in self.particles.iter().counts() {
+            self.particle_counts.insert(particles.get_index_of(p).unwrap(), count);
+        }
+    }
+
     pub fn particles_iter(&self) -> impl Iterator<Item = &String> {
         return self.particles.iter();
     }
 
-    pub fn count_particles(&self, key: &String) -> usize {
-        return self.particles.iter().filter(|k| **k == *key).count();
+    pub fn particle_counts(&self) -> &HashMap<usize, usize> {
+        return &self.particle_counts;
+    }
+
+    pub fn particle_count(&self, particle: &usize) -> usize {
+        if let Some(c) = self.particle_counts.get(particle) {
+            return *c;
+        } else {
+            return 0;
+        }
     }
 
     pub fn get_coupling_orders(&self) -> &HashMap<String, usize> {
@@ -157,6 +185,7 @@ pub struct Model {
     particles: IndexMap<String, Particle>,
     vertices: IndexMap<String, InteractionVertex>,
     couplings: Vec<String>,
+    anti_map: Vec<usize>,
 }
 
 impl Default for Model {
@@ -166,6 +195,38 @@ impl Default for Model {
 }
 
 impl Model {
+    pub fn new(
+        particles: IndexMap<String, Particle>,
+        mut vertices: IndexMap<String, InteractionVertex>,
+        couplings: Vec<String>,
+    ) -> Self {
+        let anti_map = particles
+            .values()
+            .enumerate()
+            .map(|(i, p)| {
+                if p.self_anti {
+                    i
+                } else {
+                    particles
+                        .values()
+                        .find_position(|q| q.pdg_code == -p.pdg_code)
+                        .as_ref()
+                        .unwrap()
+                        .0
+                }
+            })
+            .collect_vec();
+        for v in vertices.values_mut() {
+            v.build_counts(&particles);
+        }
+        return Self {
+            particles,
+            vertices,
+            couplings,
+            anti_map,
+        };
+    }
+
     pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
         return ufo_parser::parse_ufo_model(path);
     }
@@ -175,28 +236,11 @@ impl Model {
     }
 
     pub fn get_anti_index(&self, particle_index: usize) -> usize {
-        return if self.particles[particle_index].self_anti {
-            particle_index
-        } else {
-            self.particles
-                .values()
-                .find_position(|p| p.pdg_code == -self.particles[particle_index].pdg_code)
-                .as_ref()
-                .unwrap()
-                .0
-        };
+        return self.anti_map[particle_index];
     }
 
     pub fn get_anti(&self, particle_index: usize) -> &Particle {
-        return if self.particles[particle_index].self_anti {
-            &self.particles[particle_index]
-        } else {
-            self.particles
-                .values()
-                .find(|p| p.pdg_code == -self.particles[particle_index].pdg_code)
-                .as_ref()
-                .unwrap()
-        };
+        return &self.particles[self.anti_map[particle_index]];
     }
 
     pub fn normalize(&self, particle_index: usize) -> usize {
