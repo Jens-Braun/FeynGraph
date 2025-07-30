@@ -1,0 +1,222 @@
+#![cfg(not(doctest))]
+
+use crate::util::HashMap;
+use crate::{
+    model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
+    util,
+};
+use diagrams::{PyDiagram, PyDiagramContainer, PyDiagramGenerator, PyDiagramSelector};
+use pyo3::exceptions::{PyIOError, PySyntaxError, PyValueError};
+use pyo3::prelude::*;
+use std::path::PathBuf;
+use topology::{PyTopology, PyTopologyContainer, PyTopologyGenerator, PyTopologyModel, PyTopologySelector};
+
+pub(crate) mod diagrams;
+pub(crate) mod topology;
+
+#[pymodule]
+#[allow(non_snake_case)]
+fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    pyo3_log::init();
+    let topology_submodule = PyModule::new(m.py(), "topology")?;
+    topology_submodule.add_class::<PyTopologyModel>()?;
+    topology_submodule.add_class::<PyTopology>()?;
+    topology_submodule.add_class::<PyTopologyContainer>()?;
+    topology_submodule.add_class::<PyTopologyGenerator>()?;
+    topology_submodule.add_class::<PyTopologySelector>()?;
+    m.add_submodule(&topology_submodule)?;
+    m.add_class::<PyModel>()?;
+    m.add_class::<PyDiagram>()?;
+    m.add_class::<PyDiagramGenerator>()?;
+    m.add_class::<PyDiagramContainer>()?;
+    m.add_class::<PyDiagramSelector>()?;
+    m.add_function(wrap_pyfunction!(set_threads, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_diagrams, m)?)?;
+    return Ok(());
+}
+
+#[pyfunction]
+fn set_threads(n_threads: usize) {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(n_threads)
+        .build_global()
+        .unwrap();
+}
+
+#[pyfunction]
+#[pyo3(signature = (
+    particles_in,
+    particles_out,
+    n_loops = 0,
+    model = PyModel::__new__(),
+    diagram_selector = None,
+))]
+fn generate_diagrams(
+    py: Python<'_>,
+    particles_in: Vec<String>,
+    particles_out: Vec<String>,
+    n_loops: usize,
+    model: PyModel,
+    diagram_selector: Option<PyDiagramSelector>,
+) -> PyResult<PyDiagramContainer> {
+    let mut selector;
+    if let Some(in_selector) = diagram_selector {
+        selector = in_selector;
+    } else {
+        selector = PyDiagramSelector::new();
+        if n_loops > 0 {
+            selector.select_opi_components(1);
+        }
+    }
+    return Ok(PyDiagramGenerator::new(particles_in, particles_out, n_loops, model, Some(selector))?.generate(py));
+}
+
+impl From<ModelError> for PyErr {
+    fn from(err: ModelError) -> PyErr {
+        match err {
+            ModelError::IOError(_, _) => PyIOError::new_err(err.to_string()),
+            ModelError::ParseError(_, _) => PySyntaxError::new_err(err.to_string()),
+            ModelError::ContentError(_) => PySyntaxError::new_err(err.to_string()),
+        }
+    }
+}
+
+impl From<util::Error> for PyErr {
+    fn from(err: util::Error) -> PyErr {
+        match err {
+            util::Error::InputError(_) => PyValueError::new_err(err.to_string()),
+        }
+    }
+}
+
+#[derive(Clone)]
+#[pyclass]
+#[pyo3(name = "Model")]
+struct PyModel(Model);
+
+#[pymethods]
+impl PyModel {
+    #[new]
+    fn __new__() -> Self {
+        return PyModel(Model::default());
+    }
+
+    #[staticmethod]
+    fn from_ufo(path: PathBuf) -> PyResult<Self> {
+        return Ok(Self(Model::from_ufo(&path)?));
+    }
+
+    #[staticmethod]
+    fn from_qgraf(path: PathBuf) -> PyResult<Self> {
+        return Ok(Self(Model::from_qgraf(&path)?));
+    }
+
+    fn as_topology_model(&self) -> PyTopologyModel {
+        return PyTopologyModel(TopologyModel::from(&self.0));
+    }
+
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+}
+
+#[derive(Clone)]
+#[pyclass]
+#[pyo3(name = "Particle")]
+struct PyParticle(Particle);
+
+#[pymethods]
+impl PyParticle {
+    fn name(&self) -> String {
+        return self.0.get_name().clone();
+    }
+
+    fn anti_name(&self) -> String {
+        return self.0.get_anti_name().clone();
+    }
+
+    fn is_anti(&self) -> bool {
+        return self.0.is_anti();
+    }
+
+    fn is_fermi(&self) -> bool {
+        return self.0.is_fermi();
+    }
+
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+}
+
+#[derive(Clone)]
+#[pyclass]
+#[pyo3(name = "InteractionVertex")]
+struct PyInteractionVertex(InteractionVertex);
+
+#[pymethods]
+impl PyInteractionVertex {
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __str__(&self) -> String {
+        return format!("{:?}", self.0);
+    }
+
+    fn coupling_orders(&self) -> HashMap<String, usize> {
+        return self.0.coupling_orders.clone();
+    }
+}
+
+impl From<PyModel> for Model {
+    fn from(py_model: PyModel) -> Self {
+        return py_model.0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::types::PyFunction;
+    use pyo3_ffi::c_str;
+    use test_log::test;
+
+    #[test]
+    fn py_topology_generator_py_function() {
+        let filter: Py<PyFunction> = Python::with_gil(|py| -> Py<PyFunction> {
+            PyModule::from_code(
+                py,
+                c_str!(
+                    "def no_self_loops(topo):
+    for edge in topo.edges():
+        nodes = edge.nodes()
+        if nodes[0] == nodes[1]:
+            return False
+    return True
+           "
+                ),
+                c_str!(""),
+                c_str!(""),
+            )
+            .unwrap()
+            .getattr("no_self_loops")
+            .unwrap()
+            .downcast_into()
+            .unwrap()
+            .unbind()
+        });
+        let mut selector = PyTopologySelector::new();
+        selector.add_custom_function(filter);
+        let generator = PyTopologyGenerator::new(2, 1, PyTopologyModel::new(vec![3, 4]), Some(selector));
+        let topologies = Python::with_gil(|py| generator.generate(py));
+        assert_eq!(topologies.__len__(), 1);
+    }
+}

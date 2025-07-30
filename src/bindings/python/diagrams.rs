@@ -1,424 +1,19 @@
-#![cfg(not(doctest))]
-
-use crate::util::HashMap;
+use super::{PyInteractionVertex, PyModel, PyParticle, topology::PyTopology};
 use crate::{
     diagram::{
         Diagram, DiagramContainer, DiagramGenerator, Leg, Propagator, Vertex, filter::DiagramSelector,
         view::DiagramView,
     },
-    model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
-    topology::{Edge, Node, Topology, TopologyContainer, TopologyGenerator, filter::TopologySelector},
-    util,
+    model::Model,
 };
 use either::Either;
 use itertools::Itertools;
-use pyo3::exceptions::{PyIOError, PyIndexError, PySyntaxError, PyValueError};
+use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFunction};
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-#[pymodule]
-#[allow(non_snake_case)]
-fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    pyo3_log::init();
-    let topology_submodule = PyModule::new(m.py(), "topology")?;
-    topology_submodule.add_class::<PyTopologyModel>()?;
-    topology_submodule.add_class::<PyTopology>()?;
-    topology_submodule.add_class::<PyTopologyContainer>()?;
-    topology_submodule.add_class::<PyTopologyGenerator>()?;
-    topology_submodule.add_class::<PyTopologySelector>()?;
-    m.add_submodule(&topology_submodule)?;
-    m.add_class::<PyModel>()?;
-    m.add_class::<PyDiagram>()?;
-    m.add_class::<PyDiagramGenerator>()?;
-    m.add_class::<PyDiagramContainer>()?;
-    m.add_class::<PyDiagramSelector>()?;
-    m.add_function(wrap_pyfunction!(set_threads, m)?)?;
-    m.add_function(wrap_pyfunction!(generate_diagrams, m)?)?;
-    return Ok(());
-}
-
-#[pyfunction]
-fn set_threads(n_threads: usize) {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(n_threads)
-        .build_global()
-        .unwrap();
-}
-
-#[pyfunction]
-#[pyo3(signature = (
-    particles_in,
-    particles_out,
-    n_loops = 0,
-    model = PyModel::__new__(),
-    diagram_selector = None,
-))]
-fn generate_diagrams(
-    py: Python<'_>,
-    particles_in: Vec<String>,
-    particles_out: Vec<String>,
-    n_loops: usize,
-    model: PyModel,
-    diagram_selector: Option<PyDiagramSelector>,
-) -> PyResult<PyDiagramContainer> {
-    let mut selector;
-    if let Some(in_selector) = diagram_selector {
-        selector = in_selector;
-    } else {
-        selector = PyDiagramSelector::new();
-        if n_loops > 0 {
-            selector.select_opi_components(1);
-        }
-    }
-    return Ok(PyDiagramGenerator::new(particles_in, particles_out, n_loops, model, Some(selector))?.generate(py));
-}
-
-impl From<ModelError> for PyErr {
-    fn from(err: ModelError) -> PyErr {
-        match err {
-            ModelError::IOError(_, _) => PyIOError::new_err(err.to_string()),
-            ModelError::ParseError(_, _) => PySyntaxError::new_err(err.to_string()),
-            ModelError::ContentError(_) => PySyntaxError::new_err(err.to_string()),
-        }
-    }
-}
-
-impl From<util::Error> for PyErr {
-    fn from(err: util::Error) -> PyErr {
-        match err {
-            util::Error::InputError(_) => PyValueError::new_err(err.to_string()),
-        }
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "TopologyModel")]
-struct PyTopologyModel(TopologyModel);
-
-#[pymethods]
-impl PyTopologyModel {
-    #[new]
-    fn new(degrees: Vec<usize>) -> Self {
-        return Self(TopologyModel::from(degrees));
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-impl From<PyTopologyModel> for TopologyModel {
-    fn from(py_model: PyTopologyModel) -> Self {
-        return py_model.0;
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "Model")]
-struct PyModel(Model);
-
-#[pymethods]
-impl PyModel {
-    #[new]
-    fn __new__() -> Self {
-        return PyModel(Model::default());
-    }
-
-    #[staticmethod]
-    fn from_ufo(path: PathBuf) -> PyResult<Self> {
-        return Ok(Self(Model::from_ufo(&path)?));
-    }
-
-    #[staticmethod]
-    fn from_qgraf(path: PathBuf) -> PyResult<Self> {
-        return Ok(Self(Model::from_qgraf(&path)?));
-    }
-
-    fn as_topology_model(&self) -> PyTopologyModel {
-        return PyTopologyModel(TopologyModel::from(&self.0));
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "Particle")]
-struct PyParticle(Particle);
-
-#[pymethods]
-impl PyParticle {
-    fn name(&self) -> String {
-        return self.0.get_name().clone();
-    }
-
-    fn anti_name(&self) -> String {
-        return self.0.get_anti_name().clone();
-    }
-
-    fn is_anti(&self) -> bool {
-        return self.0.is_anti();
-    }
-
-    fn is_fermi(&self) -> bool {
-        return self.0.is_fermi();
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "InteractionVertex")]
-struct PyInteractionVertex(InteractionVertex);
-
-#[pymethods]
-impl PyInteractionVertex {
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-
-    fn coupling_orders(&self) -> HashMap<String, usize> {
-        return self.0.coupling_orders.clone();
-    }
-}
-
-impl From<PyModel> for Model {
-    fn from(py_model: PyModel) -> Self {
-        return py_model.0;
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "TopologySelector")]
-struct PyTopologySelector(TopologySelector);
-
-#[pymethods]
-impl PyTopologySelector {
-    #[new]
-    fn new() -> Self {
-        return Self(TopologySelector::default());
-    }
-
-    fn select_node_degree(&mut self, degree: usize, selection: usize) {
-        self.0.add_node_degree(degree, selection);
-    }
-
-    fn select_node_degree_range(&mut self, degree: usize, start: usize, end: usize) {
-        self.0.add_node_degree_range(degree, start..end);
-    }
-
-    fn select_node_partition(&mut self, partition: Vec<(usize, usize)>) {
-        self.0.add_node_partition(partition);
-    }
-
-    fn select_opi_components(&mut self, opi_count: usize) {
-        self.0.add_opi_count(opi_count);
-    }
-
-    fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
-        self.0.add_custom_function(Arc::new(move |topo: &Topology| -> bool {
-            Python::with_gil(|py| -> bool {
-                py_function
-                    .call1(py, (PyTopology(topo.clone()),))
-                    .unwrap()
-                    .extract(py)
-                    .unwrap()
-            })
-        }))
-    }
-
-    fn select_on_shell(&mut self) {
-        self.0.set_on_shell();
-    }
-
-    fn select_self_loops(&mut self, n: usize) {
-        self.0.add_self_loop_count(n);
-    }
-
-    fn clear(&mut self) {
-        self.0.clear_criteria();
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-impl From<PyTopologySelector> for TopologySelector {
-    fn from(selector: PyTopologySelector) -> Self {
-        return selector.0;
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "Node")]
-struct PyNode(Node);
-
-#[pymethods]
-impl PyNode {
-    fn nodes(&self) -> Vec<usize> {
-        return self.0.adjacent_nodes.clone();
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "Edge")]
-struct PyEdge(Edge);
-
-#[pymethods]
-impl PyEdge {
-    fn nodes(&self) -> [usize; 2] {
-        return self.0.connected_nodes;
-    }
-
-    fn momentum(&self) -> Vec<i8> {
-        return self.0.momenta.as_ref().unwrap().clone();
-    }
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{:?}", self.0);
-    }
-}
-
-#[derive(Clone)]
-#[pyclass]
-#[pyo3(name = "Topology")]
-struct PyTopology(Topology);
-
-#[pymethods]
-impl PyTopology {
-    fn nodes(&self) -> Vec<PyNode> {
-        return self.0.nodes_iter().map(|node| PyNode(node.clone())).collect_vec();
-    }
-
-    fn edges(&self) -> Vec<PyEdge> {
-        return self.0.edges_iter().map(|edge| PyEdge(edge.clone())).collect_vec();
-    }
-
-    fn symmetry_factor(&self) -> usize {
-        return self.0.node_symmetry * self.0.edge_symmetry;
-    }
-
-    fn draw_tikz(&self, path: String) -> PyResult<()> {
-        self.0.draw_tikz(path)?;
-        Ok(())
-    }
-
-    fn __repr__(&self) -> String {
-        return format!("{:#?}", self.0);
-    }
-
-    fn _repr_svg_(&self) -> String {
-        return self.0.draw_svg();
-    }
-
-    fn __str__(&self) -> String {
-        return format!("{}", self.0);
-    }
-}
-
-#[pyclass]
-#[pyo3(name = "TopologyContainer")]
-struct PyTopologyContainer(TopologyContainer);
-
-#[pymethods]
-impl PyTopologyContainer {
-    fn query(&self, selector: &PyTopologySelector) -> Option<usize> {
-        return self.0.query(&selector.0);
-    }
-
-    #[pyo3(signature = (topologies, n_cols = None))]
-    fn draw(&self, topologies: Vec<usize>, n_cols: Option<usize>) -> String {
-        return self.0.draw_svg(&topologies, n_cols);
-    }
-
-    fn __len__(&self) -> usize {
-        return self.0.len();
-    }
-    fn __getitem__(&self, i: usize) -> PyResult<PyTopology> {
-        if i >= self.0.len() {
-            return Err(PyIndexError::new_err("Index out of bounds"));
-        }
-        return Ok(PyTopology((*self.0.get(i)).clone()));
-    }
-}
-
-#[pyclass]
-#[pyo3(name = "TopologyGenerator")]
-struct PyTopologyGenerator(TopologyGenerator);
-
-#[pymethods]
-impl PyTopologyGenerator {
-    #[new]
-    #[pyo3(signature = (n_external, n_loops, model, selector=None))]
-    fn new(
-        n_external: usize,
-        n_loops: usize,
-        model: PyTopologyModel,
-        selector: Option<PyTopologySelector>,
-    ) -> PyTopologyGenerator {
-        return if let Some(selector) = selector {
-            Self(TopologyGenerator::new(
-                n_external,
-                n_loops,
-                model.into(),
-                Some(selector.into()),
-            ))
-        } else {
-            Self(TopologyGenerator::new(n_external, n_loops, model.into(), None))
-        };
-    }
-
-    fn generate(&self, py: Python<'_>) -> PyTopologyContainer {
-        return py.allow_threads(|| -> PyTopologyContainer {
-            return PyTopologyContainer(self.0.generate());
-        });
-    }
-}
 
 #[derive(Clone)]
 #[pyclass]
@@ -899,7 +494,7 @@ impl std::fmt::Display for PyVertex {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Diagram")]
-struct PyDiagram {
+pub(super) struct PyDiagram {
     pub(crate) diagram: Arc<Diagram>,
     pub(crate) container: Arc<DiagramContainer>,
 }
@@ -930,16 +525,17 @@ impl PyDiagram {
         .draw_svg();
     }
 
-    fn draw_tikz(&self, file: PathBuf) {
+    fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
         DiagramView::new(
             self.container.model.as_ref().unwrap(),
             self.diagram.as_ref(),
             &self.container.momentum_labels,
         )
-        .draw_tikz(file);
+        .draw_tikz(file)?;
+        Ok(())
     }
 
-    pub fn incoming(&self) -> Vec<PyLeg> {
+    fn incoming(&self) -> Vec<PyLeg> {
         return self
             .diagram
             .incoming_legs
@@ -955,7 +551,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn outgoing(&self) -> Vec<PyLeg> {
+    fn outgoing(&self) -> Vec<PyLeg> {
         return self
             .diagram
             .outgoing_legs
@@ -971,7 +567,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn propagators(&self) -> Vec<PyPropagator> {
+    fn propagators(&self) -> Vec<PyPropagator> {
         return self
             .diagram
             .propagators
@@ -987,7 +583,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn propagator(&self, index: usize) -> PyPropagator {
+    fn propagator(&self, index: usize) -> PyPropagator {
         return PyPropagator {
             container: self.container.clone(),
             diagram: Arc::new(self.clone()),
@@ -997,7 +593,7 @@ impl PyDiagram {
         };
     }
 
-    pub fn vertex(&self, index: usize) -> PyVertex {
+    fn vertex(&self, index: usize) -> PyVertex {
         return PyVertex {
             container: self.container.clone(),
             diagram: Arc::new(self.clone()),
@@ -1006,7 +602,7 @@ impl PyDiagram {
         };
     }
 
-    pub fn vertices(&self) -> Vec<PyVertex> {
+    fn vertices(&self) -> Vec<PyVertex> {
         return self
             .diagram
             .vertices
@@ -1021,7 +617,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn loop_vertices(&self, index: usize) -> Vec<PyVertex> {
+    fn loop_vertices(&self, index: usize) -> Vec<PyVertex> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -1047,7 +643,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn chord(&self, index: usize) -> Vec<PyPropagator> {
+    fn chord(&self, index: usize) -> Vec<PyPropagator> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -1064,19 +660,19 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    pub fn bridges(&self) -> Vec<PyPropagator> {
+    fn bridges(&self) -> Vec<PyPropagator> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i)).collect_vec();
     }
 
-    pub fn n_ext(&self) -> usize {
+    fn n_ext(&self) -> usize {
         return self.diagram.incoming_legs.len() + self.diagram.outgoing_legs.len();
     }
 
-    pub fn symmetry_factor(&self) -> usize {
+    fn symmetry_factor(&self) -> usize {
         return self.diagram.vertex_symmetry * self.diagram.propagator_symmetry;
     }
 
-    pub fn sign(&self) -> i8 {
+    fn sign(&self) -> i8 {
         return self.diagram.sign;
     }
 }
@@ -1084,16 +680,16 @@ impl PyDiagram {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "DiagramSelector")]
-struct PyDiagramSelector(DiagramSelector);
+pub(super) struct PyDiagramSelector(DiagramSelector);
 
 #[pymethods]
 impl PyDiagramSelector {
     #[new]
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         return Self(DiagramSelector::default());
     }
 
-    fn select_opi_components(&mut self, opi_count: usize) {
+    pub(super) fn select_opi_components(&mut self, opi_count: usize) {
         self.0.add_opi_count(opi_count);
     }
 
@@ -1141,7 +737,7 @@ impl PyDiagramSelector {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "DiagramContainer")]
-struct PyDiagramContainer(Arc<DiagramContainer>);
+pub(super) struct PyDiagramContainer(Arc<DiagramContainer>);
 
 #[pymethods]
 impl PyDiagramContainer {
@@ -1170,13 +766,13 @@ impl PyDiagramContainer {
 
 #[pyclass]
 #[pyo3(name = "DiagramGenerator")]
-struct PyDiagramGenerator(DiagramGenerator);
+pub(super) struct PyDiagramGenerator(DiagramGenerator);
 
 #[pymethods]
 impl PyDiagramGenerator {
     #[new]
     #[pyo3(signature = (incoming, outgoing, n_loops, model, selector=None))]
-    fn new(
+    pub(super) fn new(
         incoming: Vec<String>,
         outgoing: Vec<String>,
         n_loops: usize,
@@ -1209,7 +805,7 @@ impl PyDiagramGenerator {
         return Ok(());
     }
 
-    fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
+    pub(super) fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
         return py.allow_threads(|| -> PyDiagramContainer {
             return PyDiagramContainer(Arc::new(self.0.generate()));
         });
@@ -1219,44 +815,5 @@ impl PyDiagramGenerator {
         return py.allow_threads(|| -> PyDiagramContainer {
             return PyDiagramContainer(Arc::new(self.0.assign_topology(&topo.0)));
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pyo3::types::PyFunction;
-    use pyo3_ffi::c_str;
-    use test_log::test;
-
-    #[test]
-    fn py_topology_generator_py_function() {
-        let filter: Py<PyFunction> = Python::with_gil(|py| -> Py<PyFunction> {
-            PyModule::from_code(
-                py,
-                c_str!(
-                    "def no_self_loops(topo):
-    for edge in topo.edges():
-        nodes = edge.nodes()
-        if nodes[0] == nodes[1]:
-            return False
-    return True
-           "
-                ),
-                c_str!(""),
-                c_str!(""),
-            )
-            .unwrap()
-            .getattr("no_self_loops")
-            .unwrap()
-            .downcast_into()
-            .unwrap()
-            .unbind()
-        });
-        let mut selector = PyTopologySelector::new();
-        selector.add_custom_function(filter);
-        let generator = PyTopologyGenerator::new(2, 1, PyTopologyModel::new(vec![3, 4]), Some(selector));
-        let topologies = Python::with_gil(|py| generator.generate(py));
-        assert_eq!(topologies.__len__(), 1);
     }
 }
