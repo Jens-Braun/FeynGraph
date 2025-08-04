@@ -18,7 +18,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Leg")]
-struct PyLeg {
+pub(crate) struct PyLeg {
     container: Arc<DiagramContainer>,
     diagram: Arc<PyDiagram>,
     leg: Arc<Leg>,
@@ -139,7 +139,7 @@ impl std::fmt::Display for PyLeg {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Propagator")]
-struct PyPropagator {
+pub(crate) struct PyPropagator {
     container: Arc<DiagramContainer>,
     diagram: Arc<PyDiagram>,
     propagator: Arc<Propagator>,
@@ -327,7 +327,7 @@ impl std::fmt::Display for PyPropagator {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Vertex")]
-struct PyVertex {
+pub(crate) struct PyVertex {
     container: Arc<DiagramContainer>,
     diagram: Arc<PyDiagram>,
     vertex: Arc<Vertex>,
@@ -494,7 +494,7 @@ impl std::fmt::Display for PyVertex {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Diagram")]
-pub(super) struct PyDiagram {
+pub(crate) struct PyDiagram {
     pub(crate) diagram: Arc<Diagram>,
     pub(crate) container: Arc<DiagramContainer>,
 }
@@ -525,7 +525,7 @@ impl PyDiagram {
         .draw_svg();
     }
 
-    fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
+    pub(crate) fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
         DiagramView::new(
             self.container.model.as_ref().unwrap(),
             self.diagram.as_ref(),
@@ -535,7 +535,7 @@ impl PyDiagram {
         Ok(())
     }
 
-    fn incoming(&self) -> Vec<PyLeg> {
+    pub(crate) fn incoming(&self) -> Vec<PyLeg> {
         return self
             .diagram
             .incoming_legs
@@ -551,7 +551,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn outgoing(&self) -> Vec<PyLeg> {
+    pub(crate) fn outgoing(&self) -> Vec<PyLeg> {
         return self
             .diagram
             .outgoing_legs
@@ -567,7 +567,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn propagators(&self) -> Vec<PyPropagator> {
+    pub(crate) fn propagators(&self) -> Vec<PyPropagator> {
         return self
             .diagram
             .propagators
@@ -583,7 +583,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn propagator(&self, index: usize) -> PyPropagator {
+    pub(crate) fn propagator(&self, index: usize) -> PyPropagator {
         return PyPropagator {
             container: self.container.clone(),
             diagram: Arc::new(self.clone()),
@@ -593,7 +593,7 @@ impl PyDiagram {
         };
     }
 
-    fn vertex(&self, index: usize) -> PyVertex {
+    pub(crate) fn vertex(&self, index: usize) -> PyVertex {
         return PyVertex {
             container: self.container.clone(),
             diagram: Arc::new(self.clone()),
@@ -602,7 +602,7 @@ impl PyDiagram {
         };
     }
 
-    fn vertices(&self) -> Vec<PyVertex> {
+    pub(crate) fn vertices(&self) -> Vec<PyVertex> {
         return self
             .diagram
             .vertices
@@ -617,7 +617,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn loop_vertices(&self, index: usize) -> Vec<PyVertex> {
+    pub(crate) fn loop_vertices(&self, index: usize) -> Vec<PyVertex> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -643,7 +643,7 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn chord(&self, index: usize) -> Vec<PyPropagator> {
+    pub(crate) fn chord(&self, index: usize) -> Vec<PyPropagator> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -660,19 +660,19 @@ impl PyDiagram {
             .collect_vec();
     }
 
-    fn bridges(&self) -> Vec<PyPropagator> {
+    pub(crate) fn bridges(&self) -> Vec<PyPropagator> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i)).collect_vec();
     }
 
-    fn n_ext(&self) -> usize {
+    pub(crate) fn n_ext(&self) -> usize {
         return self.diagram.incoming_legs.len() + self.diagram.outgoing_legs.len();
     }
 
-    fn symmetry_factor(&self) -> usize {
+    pub(crate) fn symmetry_factor(&self) -> usize {
         return self.diagram.vertex_symmetry * self.diagram.propagator_symmetry;
     }
 
-    fn sign(&self) -> i8 {
+    pub(crate) fn sign(&self) -> i8 {
         return self.diagram.sign;
     }
 }
@@ -680,16 +680,16 @@ impl PyDiagram {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "DiagramSelector")]
-pub(super) struct PyDiagramSelector(DiagramSelector);
+pub(crate) struct PyDiagramSelector(DiagramSelector);
 
 #[pymethods]
 impl PyDiagramSelector {
     #[new]
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         return Self(DiagramSelector::default());
     }
 
-    pub(super) fn select_opi_components(&mut self, opi_count: usize) {
+    pub(crate) fn select_opi_components(&mut self, opi_count: usize) {
         self.0.add_opi_count(opi_count);
     }
 
@@ -737,7 +737,7 @@ impl PyDiagramSelector {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "DiagramContainer")]
-pub(super) struct PyDiagramContainer(Arc<DiagramContainer>);
+pub(crate) struct PyDiagramContainer(Arc<DiagramContainer>);
 
 #[pymethods]
 impl PyDiagramContainer {
@@ -766,13 +766,13 @@ impl PyDiagramContainer {
 
 #[pyclass]
 #[pyo3(name = "DiagramGenerator")]
-pub(super) struct PyDiagramGenerator(DiagramGenerator);
+pub(crate) struct PyDiagramGenerator(DiagramGenerator);
 
 #[pymethods]
 impl PyDiagramGenerator {
     #[new]
     #[pyo3(signature = (incoming, outgoing, n_loops, model, selector=None))]
-    pub(super) fn new(
+    pub(crate) fn new(
         incoming: Vec<String>,
         outgoing: Vec<String>,
         n_loops: usize,
@@ -805,7 +805,7 @@ impl PyDiagramGenerator {
         return Ok(());
     }
 
-    pub(super) fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
+    pub(crate) fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
         return py.allow_threads(|| -> PyDiagramContainer {
             return PyDiagramContainer(Arc::new(self.0.generate()));
         });

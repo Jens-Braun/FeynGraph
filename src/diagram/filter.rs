@@ -192,7 +192,7 @@ impl DiagramSelector {
         return self.propagator_counts.iter().all(|(particle, counts)| {
             counts.iter().any(|count| {
                 view.propagators()
-                    .filter(|prop| *prop.particle().get_name() == *particle)
+                    .filter(|prop| *prop.particle().name() == *particle)
                     .count()
                     == *count
             })

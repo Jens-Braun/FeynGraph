@@ -43,10 +43,10 @@ macro_rules! test_diagrams {
                     &qgraf_config,
                     &qgraf_model.path().to_str().unwrap(),
                     &in_particles.iter().map(
-                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
                     ).collect_vec(),
                     &out_particles.iter().map(
-                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
                     ).collect_vec(),
                     $n_loops,
                     &vec![]
@@ -96,10 +96,10 @@ macro_rules! test_diagrams {
                     &qgraf_config,
                     &qgraf_model.path().to_str().unwrap(),
                     &in_particles.iter().map(
-                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
                     ).collect_vec(),
                     &out_particles.iter().map(
-                        |p| if p.get_pdg() > 0 {format!("part{}", p.get_pdg())} else {format!("anti{}", p.get_pdg().abs())}
+                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
                     ).collect_vec(),
                     $n_loops,
                     &vec![]

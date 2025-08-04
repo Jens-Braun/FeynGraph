@@ -49,15 +49,15 @@ pub struct Particle {
 }
 
 impl Particle {
-    pub fn get_name(&self) -> &String {
+    pub fn name(&self) -> &String {
         return &self.name;
     }
 
-    pub fn get_anti_name(&self) -> &String {
+    pub fn anti_name(&self) -> &String {
         return &self.anti_name;
     }
 
-    pub fn get_pdg(&self) -> isize {
+    pub fn pdg(&self) -> isize {
         return self.pdg_code;
     }
 
@@ -160,11 +160,11 @@ impl InteractionVertex {
         }
     }
 
-    pub fn get_coupling_orders(&self) -> &HashMap<String, usize> {
+    pub fn coupling_orders(&self) -> &HashMap<String, usize> {
         return &self.coupling_orders;
     }
 
-    pub fn get_degree(&self) -> usize {
+    pub fn degree(&self) -> usize {
         return self.particles.len();
     }
 }
@@ -304,7 +304,7 @@ impl Model {
         remaining_coupling_orders: &Option<HashMap<String, usize>>,
     ) -> bool {
         return if let Some(remaining_orders) = remaining_coupling_orders {
-            for (coupling, order) in self.vertices[interaction].get_coupling_orders() {
+            for (coupling, order) in self.vertices[interaction].coupling_orders() {
                 if let Some(remaining_order) = remaining_orders.get(coupling) {
                     if order > remaining_order {
                         return false;

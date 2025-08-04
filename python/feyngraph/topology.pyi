@@ -147,7 +147,7 @@ class TopologyGenerator:
     ```
     """
 
-    def __new__(cls, n_external: int, n_loops: int, model: TopologyModel, selector: Optional[TopologySelector]) -> TopologyGenerator:
+    def __new__(cls, n_external: int, n_loops: int, model: TopologyModel, selector: Optional[TopologySelector] = None) -> TopologyGenerator:
         """
         Create a new topology generator.
 

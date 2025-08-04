@@ -7,6 +7,8 @@ from typing import Optional, Callable
 
 from feyngraph.topology import Topology
 
+_WOLFRAM_ENABLED: bool
+
 
 def set_threads(n_threads: int):
     """
@@ -368,6 +370,9 @@ class Particle:
 
     def is_fermi(self) -> bool:
         """Return true if the particle obeys Fermi-Dirac statistics"""
+
+    def pdg(self) -> int:
+        """Get the particle's PDG ID"""
 
 class InteractionVertex:
     """Internal representaion of an interaction vertex."""

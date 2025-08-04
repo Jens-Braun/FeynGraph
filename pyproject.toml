@@ -3,7 +3,7 @@ requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
 [tool.maturin]
-features = ["python-bindings", "pyo3/extension-module"]
+features = ["python-bindings", "pyo3/extension-module", "wolfram-bindings"]
 python-source = "python"
 
 [project]
@@ -17,5 +17,5 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
-    "Topic :: Scientific/Engineering :: Physics"
+    "Topic :: Scientific/Engineering :: Physics",
 ]

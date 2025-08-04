@@ -19,6 +19,7 @@ rustc-hash = "2"
 pyo3 = { version = "0.24", features = [
     "auto-initialize",
     "either",
+    "multiple-pymethods",
 ], optional = true }
 pyo3-ffi = { version = "0.24", optional = true }
 pyo3-log = { version = "0.12", optional = true }
@@ -34,6 +35,7 @@ criterion = "0.6"
 [features]
 default = []
 python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]
+wolfram-bindings = ["python-bindings"]
 
 [[bench]]
 name = "topologies"

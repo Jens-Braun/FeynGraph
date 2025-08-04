@@ -1,5 +1,7 @@
 #![cfg(not(doctest))]
 
+#[cfg(feature = "wolfram-bindings")]
+use super::wolfram::diagrams_feynarts;
 use crate::util::HashMap;
 use crate::{
     model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
@@ -32,6 +34,12 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDiagramSelector>()?;
     m.add_function(wrap_pyfunction!(set_threads, m)?)?;
     m.add_function(wrap_pyfunction!(generate_diagrams, m)?)?;
+    #[cfg(feature = "wolfram-bindings")]
+    m.add("_WOLFRAM_ENABLED", true)?;
+    #[cfg(not(feature = "wolfram-bindings"))]
+    m.add("_WOLFRAM_ENABLED", false)?;
+    #[cfg(feature = "wolfram-bindings")]
+    m.add_function(wrap_pyfunction!(diagrams_feynarts, m)?)?;
     return Ok(());
 }
 
@@ -92,7 +100,7 @@ impl From<util::Error> for PyErr {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Model")]
-struct PyModel(Model);
+pub(crate) struct PyModel(Model);
 
 #[pymethods]
 impl PyModel {
@@ -127,24 +135,28 @@ impl PyModel {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Particle")]
-struct PyParticle(Particle);
+pub(crate) struct PyParticle(Particle);
 
 #[pymethods]
 impl PyParticle {
-    fn name(&self) -> String {
-        return self.0.get_name().clone();
+    pub(crate) fn name(&self) -> String {
+        return self.0.name().clone();
     }
 
-    fn anti_name(&self) -> String {
-        return self.0.get_anti_name().clone();
+    pub(crate) fn anti_name(&self) -> String {
+        return self.0.anti_name().clone();
     }
 
-    fn is_anti(&self) -> bool {
+    pub(crate) fn is_anti(&self) -> bool {
         return self.0.is_anti();
     }
 
-    fn is_fermi(&self) -> bool {
+    pub(crate) fn is_fermi(&self) -> bool {
         return self.0.is_fermi();
+    }
+
+    pub(crate) fn pdg(&self) -> isize {
+        return self.0.pdg();
     }
 
     fn __repr__(&self) -> String {
@@ -159,7 +171,7 @@ impl PyParticle {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "InteractionVertex")]
-struct PyInteractionVertex(InteractionVertex);
+pub(crate) struct PyInteractionVertex(InteractionVertex);
 
 #[pymethods]
 impl PyInteractionVertex {

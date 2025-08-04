@@ -11,12 +11,12 @@ use std::sync::Arc;
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "TopologyModel")]
-pub(super) struct PyTopologyModel(pub(super) TopologyModel);
+pub(crate) struct PyTopologyModel(pub(crate) TopologyModel);
 
 #[pymethods]
 impl PyTopologyModel {
     #[new]
-    pub(super) fn new(degrees: Vec<usize>) -> Self {
+    pub(crate) fn new(degrees: Vec<usize>) -> Self {
         return Self(TopologyModel::from(degrees));
     }
 
@@ -38,12 +38,12 @@ impl From<PyTopologyModel> for TopologyModel {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "TopologySelector")]
-pub(super) struct PyTopologySelector(TopologySelector);
+pub(crate) struct PyTopologySelector(TopologySelector);
 
 #[pymethods]
 impl PyTopologySelector {
     #[new]
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         return Self(TopologySelector::default());
     }
 
@@ -63,7 +63,7 @@ impl PyTopologySelector {
         self.0.add_opi_count(opi_count);
     }
 
-    pub(super) fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
+    pub(crate) fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
         self.0.add_custom_function(Arc::new(move |topo: &Topology| -> bool {
             Python::with_gil(|py| -> bool {
                 py_function
@@ -105,11 +105,11 @@ impl From<PyTopologySelector> for TopologySelector {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Node")]
-struct PyNode(Node);
+pub(crate) struct PyNode(Node);
 
 #[pymethods]
 impl PyNode {
-    fn nodes(&self) -> Vec<usize> {
+    pub(crate) fn nodes(&self) -> Vec<usize> {
         return self.0.adjacent_nodes.clone();
     }
 
@@ -125,15 +125,15 @@ impl PyNode {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Edge")]
-struct PyEdge(Edge);
+pub(crate) struct PyEdge(Edge);
 
 #[pymethods]
 impl PyEdge {
-    fn nodes(&self) -> [usize; 2] {
+    pub(crate) fn nodes(&self) -> [usize; 2] {
         return self.0.connected_nodes;
     }
 
-    fn momentum(&self) -> Vec<i8> {
+    pub(crate) fn momentum(&self) -> Vec<i8> {
         return self.0.momenta.as_ref().unwrap().clone();
     }
     fn __repr__(&self) -> String {
@@ -148,19 +148,19 @@ impl PyEdge {
 #[derive(Clone)]
 #[pyclass]
 #[pyo3(name = "Topology")]
-pub(super) struct PyTopology(pub(super) Topology);
+pub(crate) struct PyTopology(pub(crate) Topology);
 
 #[pymethods]
 impl PyTopology {
-    fn nodes(&self) -> Vec<PyNode> {
+    pub(crate) fn nodes(&self) -> Vec<PyNode> {
         return self.0.nodes_iter().map(|node| PyNode(node.clone())).collect_vec();
     }
 
-    fn edges(&self) -> Vec<PyEdge> {
+    pub(crate) fn edges(&self) -> Vec<PyEdge> {
         return self.0.edges_iter().map(|edge| PyEdge(edge.clone())).collect_vec();
     }
 
-    fn symmetry_factor(&self) -> usize {
+    pub(crate) fn symmetry_factor(&self) -> usize {
         return self.0.node_symmetry * self.0.edge_symmetry;
     }
 
@@ -184,7 +184,7 @@ impl PyTopology {
 
 #[pyclass]
 #[pyo3(name = "TopologyContainer")]
-pub(super) struct PyTopologyContainer(TopologyContainer);
+pub(crate) struct PyTopologyContainer(pub(crate) TopologyContainer);
 
 #[pymethods]
 impl PyTopologyContainer {
@@ -197,7 +197,7 @@ impl PyTopologyContainer {
         return self.0.draw_svg(&topologies, n_cols);
     }
 
-    pub(super) fn __len__(&self) -> usize {
+    pub(crate) fn __len__(&self) -> usize {
         return self.0.len();
     }
     fn __getitem__(&self, i: usize) -> PyResult<PyTopology> {
@@ -210,13 +210,13 @@ impl PyTopologyContainer {
 
 #[pyclass]
 #[pyo3(name = "TopologyGenerator")]
-pub(super) struct PyTopologyGenerator(TopologyGenerator);
+pub(crate) struct PyTopologyGenerator(TopologyGenerator);
 
 #[pymethods]
 impl PyTopologyGenerator {
     #[new]
     #[pyo3(signature = (n_external, n_loops, model, selector=None))]
-    pub(super) fn new(
+    pub(crate) fn new(
         n_external: usize,
         n_loops: usize,
         model: PyTopologyModel,
@@ -234,7 +234,7 @@ impl PyTopologyGenerator {
         };
     }
 
-    pub(super) fn generate(&self, py: Python<'_>) -> PyTopologyContainer {
+    pub(crate) fn generate(&self, py: Python<'_>) -> PyTopologyContainer {
         return py.allow_threads(|| -> PyTopologyContainer {
             return PyTopologyContainer(self.0.generate());
         });

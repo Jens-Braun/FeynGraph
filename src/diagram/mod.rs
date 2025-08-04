@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use crate::diagram::view::DiagramView;
 use crate::diagram::workspace::AssignWorkspace;
-use crate::util::factorial;
 use crate::util::Error;
+use crate::util::factorial;
 use rayon::prelude::*;
 
 mod components;
@@ -290,6 +290,13 @@ impl DiagramContainer {
 
     pub fn get(&self, i: usize) -> DiagramView {
         return DiagramView::new(self.model.as_ref().unwrap(), &self.data[i], &self.momentum_labels);
+    }
+
+    pub fn views(&self) -> impl Iterator<Item = DiagramView<'_>> {
+        return self
+            .data
+            .iter()
+            .map(|d| DiagramView::new(self.model.as_ref().unwrap(), d, &self.momentum_labels));
     }
 
     /// Search for diagrams which would be selected by `selector`. Returns the index of the first selected diagram

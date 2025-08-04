@@ -8,23 +8,23 @@ use std::process::Command;
 pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<(), Box<dyn Error>> {
     writeln!(out, "% Particles")?;
     for particle in model.particles_iter() {
-        if particle.get_pdg() < 0 {
+        if particle.pdg() < 0 {
             continue;
         }
         if particle.self_anti() {
             writeln!(
                 out,
                 "[ part{}, part{}, {}]",
-                particle.get_pdg(),
-                particle.get_pdg(),
+                particle.pdg(),
+                particle.pdg(),
                 if particle.is_fermi() { "-" } else { "+" }
             )?;
         } else {
             writeln!(
                 out,
                 "[ part{}, anti{}, {}]",
-                particle.get_pdg(),
-                particle.get_pdg(),
+                particle.pdg(),
+                particle.pdg(),
                 if particle.is_fermi() { "-" } else { "+" }
             )?;
         }
@@ -35,17 +35,17 @@ pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<
         write!(out, "[ ")?;
         for (i, particle) in vertex.particles_iter().enumerate() {
             let p = model.get_particle_name(particle).unwrap();
-            if p.get_pdg() > 0 {
-                write!(out, "part{}", p.get_pdg())?;
+            if p.pdg() > 0 {
+                write!(out, "part{}", p.pdg())?;
             } else {
-                write!(out, "anti{}", p.get_pdg().abs())?;
+                write!(out, "anti{}", p.pdg().abs())?;
             }
-            if i != vertex.get_degree() - 1 {
+            if i != vertex.degree() - 1 {
                 write!(out, ", ")?;
             }
         }
         write!(out, "; ")?;
-        let coupling_orders = vertex.get_coupling_orders();
+        let coupling_orders = vertex.coupling_orders();
         for (i, coupling) in model_couplings.iter().enumerate() {
             if let Some(order) = coupling_orders.get(coupling) {
                 write!(out, "{}='{}'", coupling, order)?;

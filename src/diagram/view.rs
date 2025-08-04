@@ -239,11 +239,11 @@ impl std::fmt::Display for DiagramView<'_> {
         writeln!(f, "Diagram {{")?;
         write!(f, "    Process: ")?;
         for incoming in self.incoming() {
-            write!(f, "{} ", incoming.particle().get_name())?;
+            write!(f, "{} ", incoming.particle().name())?;
         }
         write!(f, "-> ")?;
         for outgoing in self.outgoing() {
-            write!(f, "{} ", outgoing.particle().get_name())?;
+            write!(f, "{} ", outgoing.particle().name())?;
         }
         writeln!(f)?;
         write!(f, "    Vertices: [ ")?;
@@ -354,7 +354,7 @@ impl std::fmt::Display for LegView<'_> {
             write!(
                 f,
                 "{}[{} -> ], p = {},",
-                self.particle().get_name(),
+                self.particle().name(),
                 self.leg.vertex,
                 self.momentum_str()
             )?;
@@ -362,7 +362,7 @@ impl std::fmt::Display for LegView<'_> {
             write!(
                 f,
                 "{}[-> {}], p = {},",
-                self.particle().get_name(),
+                self.particle().name(),
                 self.leg.vertex,
                 self.momentum_str()
             )?;
@@ -502,7 +502,7 @@ impl std::fmt::Display for PropagatorView<'_> {
             write!(
                 f,
                 "{}[{} -> {}], p = {},",
-                self.particle().get_name(),
+                self.particle().name(),
                 self.propagator.vertices[1],
                 self.propagator.vertices[0],
                 self.momentum_str()
@@ -511,7 +511,7 @@ impl std::fmt::Display for PropagatorView<'_> {
             write!(
                 f,
                 "{}[{} -> {}], p = {},",
-                self.particle().get_name(),
+                self.particle().name(),
                 self.propagator.vertices[0],
                 self.propagator.vertices[1],
                 self.momentum_str()
@@ -571,7 +571,7 @@ impl VertexView<'_> {
                 .map(|view| either::for_both!(view, p => p.particle()))
                 .enumerate()
             {
-                if !seen[i] && part.get_name() == ref_particle {
+                if !seen[i] && part.name() == ref_particle {
                     perm.push(i);
                     seen[i] = true;
                 } else {

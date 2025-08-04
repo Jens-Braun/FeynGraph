@@ -103,7 +103,7 @@ impl<'a> AssignWorkspace<'a> {
                 .vertices_iter()
                 .enumerate()
                 .filter_map(|(i, interaction)| {
-                    if interaction.get_degree() == self.vertex_candidates[index].degree {
+                    if interaction.degree() == self.vertex_candidates[index].degree {
                         Some(i)
                     } else {
                         None
@@ -375,7 +375,7 @@ impl<'a> AssignWorkspace<'a> {
     fn update_coupling_orders(&mut self, vertex_id: usize) {
         let vertex = self.model.vertex(vertex_id);
         if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
-            for (coupling, power) in vertex.get_coupling_orders() {
+            for (coupling, power) in vertex.coupling_orders() {
                 if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
                     *remaining_power -= power;
                 } else {
@@ -390,7 +390,7 @@ impl<'a> AssignWorkspace<'a> {
     fn restore_coupling_orders(&mut self, vertex_id: usize) {
         let vertex = self.model.vertex(vertex_id);
         if let Some(remaining_powers) = self.remaining_coupling_orders.as_mut() {
-            for (coupling, power) in vertex.get_coupling_orders() {
+            for (coupling, power) in vertex.coupling_orders() {
                 if let Some(remaining_power) = remaining_powers.get_mut(coupling) {
                     *remaining_power += power;
                 } else {
