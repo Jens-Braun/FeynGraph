@@ -1,4 +1,4 @@
-site_name: FeynGraph
+site_name: FeynGraph User Guide
 site_author: Jens Braun
 site_description: "FeynGraph: A modern Feynman diagram generation toolkit"
 
@@ -8,49 +8,119 @@ repo_url: https://github.com/Jens-Braun/FeynGraph
 copyright: Copyright &copy; 2025 Jens Braun
 
 theme:
-    name: material
-    features:
-        - announce.dismiss
-        - content.code.annotate
-        - content.code.copy
-        - content.tooltips
-        - navigation.footer
-        - navigation.indexes
-        - navigation.sections
-        - navigation.tabs
-        - navigation.top
-        - search.highlight
-        - search.share
-        - search.suggest
-        - toc.follow
-
-nav:
-    - Home: index.md
-    - "API Reference": 
-        - FeynGraph: feyngraph.md
-        - Topology: topology.md
+  name: material
+  features:
+    - announce.dismiss
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/link
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+  font:
+    text: Fira Sans
+    code: Fira Code
 
 markdown_extensions:
-    - pymdownx.highlight:
-        anchor_linenums: true
-        line_spans: __span
-        pygments_lang_class: true
-    - pymdownx.inlinehilite
-    - pymdownx.snippets
-    - pymdownx.superfences
-    - toc:
-        permalink: true
+  - abbr
+  - admonition
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: squidfunk
+      repo: mkdocs-material
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascript/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css
 
 plugins:
-    - search
-    - mkdocstrings:
-        handlers:
-            python:
-                paths: [python]
-                options:
-                    docstring_options:
-                        merge_init_into_class: true
-                    show_signature_annotations: true
-                    signature_crossrefs: true
-                    show_source: false
-                    summary: true
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            docstring_options:
+              merge_init_into_class: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            show_source: false
+            summary: true
+
+nav:
+  - Home: index.md
+  - Library Usage:
+      - usage/library/index.md
+      - Topologies: usage/library/topologies.md
+      - Feynman Diagrams: usage/library/diagrams.md
+      - Drawing: usage/library/drawing.md
+  - Command Line Interface:
+      - usage/cli/index.md
+  - API Reference:
+      - FeynGraph: reference/feyngraph.md
+      - Topology: reference/topology.md

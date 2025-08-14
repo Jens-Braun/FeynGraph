@@ -1,17 +1,40 @@
-# Welcome to MkDocs
+# FeynGraph
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+FeynGraph is a modern Feynman diagram generation toolkit aiming to be as versatile as possible while remining pleasent to use. The library itself is written in Rust, additional language bindings are available for Python and Wolfram Mathematica.
 
-## Commands
+## Installation
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+=== ":simple-python: Python"
+    The FeynGraph Python bindings are published to PyPI and can therefore easily istalled with e.g. `pip`
+    ```
+    pip install feyngraph
+    ```
+    In addition to the library interface, there is also a more classical [command line utility](usage/cli/index.md). This requires some extra dependencies, which can be installed with e.g.
+    ```
+    pip install feyngraph[cli]
+    ```
+    ### Building From Source
+    The FeynGraph Python libaray can also easily be built from source, which requires a [Rust toolchain](https://www.rust-lang.org/tools/install) and [`maturin`](https://www.maturin.rs/). Then, in the cloned repository, a Python wheel can be compiled by running
+    ```
+    maturin build -r
+    ```
+    The library can also immediatly be installed by running
+    ```
+    pip install .
+    ```
+=== ":simple-rust: Rust"
+    To use FeynGraph in a Rust project, it can simply be added to the project with
+    ```
+    cargo add feyngraph
+    ```
+    or be manually added to `Cargo.toml` as
+    ```toml
+    [dependencies]
+    feyngraph = "0.1"
+    ```
+=== ":simple-wolframmathematica: Mathematica"
+    FeynGraph includes experimental Wolfram Mathematica bindings which use Mathematica's `ExternalEvaluate` system to call the FeynGraph Python library. To use the interface, make sure to configure a Python environment in which FeynGraph is installed as described [here](https://reference.wolfram.com/language/workflow/ConfigurePythonForExternalEvaluate.html). Then, running
+    ```mathematica
+    ExternalEvaluate["Python", "import feyngraph; feyngraph.import_wolfram()"] // ToExpression
+    ```
+    imports the FeynGraph Mathematica interface.

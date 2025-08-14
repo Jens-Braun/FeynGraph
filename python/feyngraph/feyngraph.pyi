@@ -5,7 +5,7 @@ A modern Feynman diagram generation toolkit.
 from __future__ import annotations
 from typing import Optional, Callable
 
-from feyngraph.topology import Topology
+from feyngraph.topology import Topology, TopologyModel
 
 _WOLFRAM_ENABLED: bool
 
@@ -78,6 +78,12 @@ class Diagram:
     def n_ext(self) -> int:
         """Get  the number of external legs."""
 
+    def n_in(self) -> int:
+        """Get  the number of incoming external legs."""
+
+    def n_out(self) -> int:
+        """Get  the number of outgoing external legs."""
+
     def symmetry_factor(self) -> int:
         """Get the diagram's symmetry factor."""
 
@@ -87,20 +93,30 @@ class Diagram:
     def draw_tikz(self, file: str):
         """Draw the diagram in TikZ (TikZiT) format and write the result to `file`"""
 
+    def draw_svg(self, file: str):
+        """Draw the diagram in SVG format and write the result to `file`"""
+
 class Leg:
     """The class representing an external leg."""
 
-    def vertex(self) -> Vertex:
-        """Get the vertex this leg is attached to."""
+    def vertex(self, _index: int = 0) -> Vertex:
+        """
+        Get the vertex this leg is attached to. This function accepts an addition `_index` parameter to make its
+        signature identical to `Propagator.index`, but the parameter is always ignored.
+        """
 
     def particle(self) -> Particle:
         """Get the particle assigned to this leg."""
 
-    def ray_index(self) -> int:
+    def ray_index(self, _vertex: int = 0) -> int:
         """
         Get the external leg's ray index, i.e. the index of the leg of the vertex to which the external leg is
-        connected to (_from the vertex perspective_)
+        connected to (_from the vertex perspective_). This function accepts an addition `_vertex` parameter to make its
+        signature identical to `Propagator.ray_index`, but the parameter is always ignored.
         """
+
+    def id(self) -> int:
+        """Get the leg's internal id"""
 
     def momentum(self) -> list[int]:
         """
@@ -310,7 +326,7 @@ class DiagramGenerator:
             outgoing: list[str],
             n_loops: int,
             model: Model,
-            selector: DiagramSelector
+            selector: DiagramSelector | None = None
             ) -> DiagramGenerator:
         """
         Create a new Diagram generator for the given process
@@ -327,9 +343,20 @@ class DiagramGenerator:
         Generate the diagrams of the given process
         """
 
+    def count(self) -> int:
+        """
+        Generate the diagrams of the given process without keeping them, only retaining the total number of found
+        diagrams.
+        """
+
     def assign_topology(self, topo: Topology) -> DiagramContainer:
         """
         Assign particles and interactions to the given topology.
+        """
+
+    def assign_topologies(self, topos: list[Topology]) -> DiagramContainer:
+        """
+        Assign particles and interactions to the given topologies.
         """
 
 class Model:
@@ -353,6 +380,15 @@ class Model:
         intended for backwards compatibility, especially for the models included in GoSam. UFO models should be
         preferred whenever possible.
         """
+
+    def particles(self) -> list[Particle]:
+        """Return the list of particles contained in the model."""
+
+    def vertices(self) -> list[InteractionVertex]:
+        """Return the list of vertices contained in the model."""
+
+    def as_topology_model(self) -> TopologyModel:
+        """Return the topology model dervied from the model."""
 
 class Particle:
     """
@@ -378,7 +414,7 @@ class InteractionVertex:
     """Internal representaion of an interaction vertex."""
 
     def coupling_orders(self):
-        """Get a list of coupling orders of the interaction"""
+        """Get a list of coupling orders of the interaction."""
 
-    def particles(self):
-        """Get a list of particles flowing into the vertex"""
+    def name(self):
+        """Get the name of the interaction vertex."""

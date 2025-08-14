@@ -123,6 +123,14 @@ impl PyModel {
         return PyTopologyModel(TopologyModel::from(&self.0));
     }
 
+    fn particles(&self) -> Vec<PyParticle> {
+        return self.0.particles_iter().map(|p| PyParticle(p.clone())).collect();
+    }
+
+    fn vertices(&self) -> Vec<PyInteractionVertex> {
+        return self.0.vertices_iter().map(|v| PyInteractionVertex(v.clone())).collect();
+    }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }
@@ -185,6 +193,10 @@ impl PyInteractionVertex {
 
     fn coupling_orders(&self) -> HashMap<String, usize> {
         return self.0.coupling_orders.clone();
+    }
+
+    fn name(&self) -> String {
+        return self.0.name.clone();
     }
 }
 

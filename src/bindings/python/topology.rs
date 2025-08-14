@@ -113,6 +113,10 @@ impl PyNode {
         return self.0.adjacent_nodes.clone();
     }
 
+    fn degree(&self) -> usize {
+        return self.0.degree;
+    }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }

@@ -134,11 +134,19 @@ impl DiagramView<'_> {
         Ok(())
     }
 
-    pub fn draw_svg(&self) -> String {
+    pub fn draw_svg_str(&self) -> String {
         let mut svg = SVGBackend::new();
         svg.init(1, 1);
         self.draw(&mut svg);
         return svg.finish();
+    }
+
+    pub fn draw_svg(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
+        let mut svg = SVGBackend::new();
+        svg.init(1, 1);
+        self.draw(&mut svg);
+        std::fs::write(path, svg.finish())?;
+        Ok(())
     }
 }
 

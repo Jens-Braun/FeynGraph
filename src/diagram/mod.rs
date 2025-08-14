@@ -288,7 +288,7 @@ impl DiagramContainer {
         return self.data.is_empty();
     }
 
-    pub fn get(&self, i: usize) -> DiagramView {
+    pub fn get(&self, i: usize) -> DiagramView<'_> {
         return DiagramView::new(self.model.as_ref().unwrap(), &self.data[i], &self.momentum_labels);
     }
 
@@ -318,6 +318,9 @@ impl DiagramContainer {
 
 impl From<Vec<DiagramContainer>> for DiagramContainer {
     fn from(containers: Vec<DiagramContainer>) -> Self {
+        if containers.is_empty() {
+            return DiagramContainer::new(None, &[]);
+        }
         let mut result = DiagramContainer::with_capacity(
             containers[0].model.as_deref(),
             &containers[0].momentum_labels,

@@ -1,0 +1,23 @@
+{
+{%- for diag in diagrams %}
+  "{{ loop.index0 }}": {
+    "symmetry_factor": {{ diag.symmetry_factor() }},
+    "sign": {{ diag.sign() }},
+    "legs": {
+    {%- for leg in diag.incoming() + diag.outgoing() %}
+      "{{ leg.id() }}": {"particle": "{{ leg.particle().name() }}", "vertex": {{ leg.vertex().id() }}, "ray_index": {{ leg.ray_index() }}}{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    },
+    "propagators": {
+    {%- for p in diag.propagators() %}
+      "{{ p.id() }}": {"particle": "{{ p.particle().name() }}", "vertices": [{{ p.vertex(0).id() }}, {{ p.vertex(1).id() }}], "ray_indices": [{{ p.ray_index(0) }}, {{ p.ray_index(1) }}], "momentum": "{{ p.momentum_str() }}"}{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    },
+    "vertices": {
+    {%- for vertex in diag.vertices() %}
+      "{{ vertex.id() }}": {"interaction": "{{ vertex.interaction().name() }}", "propagators": [{% for p in vertex.propagators_ordered() %}{{ p.id() }}{% if not loop.last %}, {% endif %}{% endfor %}]}{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    }
+  }{% if not loop.last %},{% endif %}
+{%- endfor %}
+}

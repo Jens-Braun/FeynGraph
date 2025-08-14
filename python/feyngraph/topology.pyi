@@ -35,6 +35,9 @@ class Node:
     def nodes(self) -> list[int]:
         """Get a list of the ids of the adjacent nodes."""
 
+    def degree(self) -> int:
+        """Get the degree of the node."""
+
 class TopologySelector:
     """
     A selector class which determines whether a topology is to be kept or to be discarded. The available critera are
@@ -130,6 +133,11 @@ class TopologyContainer:
             topologies: list of IDs of topologies to draw
             n_cols: number of topologies to draw in each row
         """
+    def __len__(self) -> int:
+        """"""
+
+    def __getitem__(self, index: int) -> Topology:
+        """"""
 
 
 class TopologyGenerator:

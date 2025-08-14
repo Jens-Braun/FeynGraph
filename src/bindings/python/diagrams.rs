@@ -44,6 +44,8 @@ impl PyLeg {
             index: self.leg.vertex,
         }];
     }
+
+    #[pyo3(signature = (_index = 0))]
     pub fn vertex(&self, _index: usize) -> PyVertex {
         return PyVertex {
             container: self.container.clone(),
@@ -75,12 +77,17 @@ impl PyLeg {
         };
     }
 
+    #[pyo3(signature = (_vertex = 0))]
     pub fn ray_index(&self, _vertex: usize) -> usize {
         return self.diagram.diagram.vertices[self.leg.vertex]
             .propagators
             .iter()
             .position(|p| (*p + self.diagram.n_ext() as isize) as usize == self.leg_index)
             .unwrap();
+    }
+
+    pub fn id(&self) -> usize {
+        return self.leg_index;
     }
 
     pub fn momentum(&self) -> Vec<i8> {
@@ -295,7 +302,7 @@ impl PyPropagator {
     }
 
     pub fn id(&self) -> usize {
-        return self.index;
+        return self.index + self.diagram.n_ext();
     }
 }
 
@@ -522,7 +529,7 @@ impl PyDiagram {
             self.diagram.as_ref(),
             &self.container.momentum_labels,
         )
-        .draw_svg();
+        .draw_svg_str();
     }
 
     pub(crate) fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
@@ -532,6 +539,16 @@ impl PyDiagram {
             &self.container.momentum_labels,
         )
         .draw_tikz(file)?;
+        Ok(())
+    }
+
+    pub(crate) fn draw_svg(&self, file: PathBuf) -> PyResult<()> {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_svg(file)?;
         Ok(())
     }
 
@@ -675,6 +692,14 @@ impl PyDiagram {
     pub(crate) fn sign(&self) -> i8 {
         return self.diagram.sign;
     }
+
+    pub(crate) fn n_in(&self) -> usize {
+        return self.diagram.n_in();
+    }
+
+    pub(crate) fn n_out(&self) -> usize {
+        return self.diagram.n_out();
+    }
 }
 
 #[derive(Clone)]
@@ -811,9 +836,24 @@ impl PyDiagramGenerator {
         });
     }
 
+    pub(crate) fn count(&self, py: Python<'_>) -> usize {
+        return py.allow_threads(|| -> usize {
+            return self.0.count();
+        });
+    }
+
     fn assign_topology(&self, py: Python<'_>, topo: &PyTopology) -> PyDiagramContainer {
         return py.allow_threads(|| -> PyDiagramContainer {
             return PyDiagramContainer(Arc::new(self.0.assign_topology(&topo.0)));
+        });
+    }
+
+    fn assign_topologies(&self, py: Python<'_>, topos: Vec<PyTopology>) -> PyDiagramContainer {
+        return py.allow_threads(|| -> PyDiagramContainer {
+            return PyDiagramContainer(Arc::new(
+                self.0
+                    .assign_topologies(&topos.iter().map(|t| t.0.clone()).collect_vec()),
+            ));
         });
     }
 }

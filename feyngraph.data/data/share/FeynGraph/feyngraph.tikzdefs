@@ -1,0 +1,6 @@
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\usetikzlibrary{decorations.markings}
+\usetikzlibrary{decorations.pathmorphing}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{decorations.shapes}
