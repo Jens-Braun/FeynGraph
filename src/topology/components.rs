@@ -50,7 +50,7 @@ impl NodeClassification {
         let mut boundaries: Vec<usize> = Vec::with_capacity(node_degrees.len());
         let mut previous = node_degrees[0];
         for (node_index, node_degree) in node_degrees.iter().enumerate() {
-            if *node_degree == 1 || *node_degree != previous {
+            if *node_degree == 1 || node_index == 0 || *node_degree != previous {
                 boundaries.push(node_index);
                 previous = *node_degree;
             }

@@ -1,5 +1,3 @@
-#![cfg(not(doctest))]
-
 #[cfg(feature = "wolfram-bindings")]
 use super::wolfram::diagrams_feynarts;
 use crate::util::HashMap;
@@ -209,13 +207,12 @@ impl From<PyModel> for Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pyo3::types::PyFunction;
     use pyo3_ffi::c_str;
     use test_log::test;
 
     #[test]
     fn py_topology_generator_py_function() {
-        let filter: Py<PyFunction> = Python::with_gil(|py| -> Py<PyFunction> {
+        let filter: Py<PyAny> = Python::with_gil(|py| -> Py<PyAny> {
             PyModule::from_code(
                 py,
                 c_str!(
@@ -232,8 +229,6 @@ mod tests {
             )
             .unwrap()
             .getattr("no_self_loops")
-            .unwrap()
-            .downcast_into()
             .unwrap()
             .unbind()
         });

@@ -5,7 +5,7 @@ use crate::model::LineStyle;
 use std::f64::consts::PI;
 use std::fmt::Write;
 
-/// Support and control points for a cubic Bezier approximation of the parameteric curve
+/// Support and control points for a cubic Bezier approximation of the parametric curve
 /// $$\begin{pmatrix} \left(2 + \frac{3}{4} t - 2 \cos t\right) / \left(2 + \frac{9 \pi}{4}\right) \\ -\frac{2}{2} \sin t\end{pmatrix}$$
 const CURL_SUPPORT: [Vec2D; 2] = [
     Vec2D {
@@ -451,8 +451,8 @@ impl DrawingBackend for SVGBackend {
             .map(|v| v.y)
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
-        let x_scale = 0.8 * 300. / (xmax - xmin);
-        let y_scale = 0.8 * 300. / (ymax - ymin);
+        let x_scale = 0.8 * 300. / if xmax == xmin { 3. } else { xmax - xmin };
+        let y_scale = 0.8 * 300. / if xmax == xmin { 3. } else { ymax - ymin };
         let scale = x_scale.min(y_scale);
         self.scale = scale;
         self.shift.x = -(xmax + xmin) / 2. + 150. / scale;

@@ -5,7 +5,6 @@ use crate::{
 use itertools::Itertools;
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
-use pyo3::types::PyFunction;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -63,7 +62,7 @@ impl PyTopologySelector {
         self.0.add_opi_count(opi_count);
     }
 
-    pub(crate) fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
+    pub(crate) fn add_custom_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_custom_function(Arc::new(move |topo: &Topology| -> bool {
             Python::with_gil(|py| -> bool {
                 py_function

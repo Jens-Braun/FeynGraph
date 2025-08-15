@@ -1,12 +1,12 @@
 use crate::topology::filter::TopologySelector;
+use crate::topology::{Topology, TopologyContainer};
 use crate::topology::{
     components::{NodeClassification, TopologyNode},
     matrix::SymmetricMatrix,
 };
-use crate::topology::{Topology, TopologyContainer};
 use crate::util::generate_permutations;
 use itertools::{FoldWhile, Itertools};
-use std::cmp::{min, Ordering};
+use std::cmp::{Ordering, min};
 
 /// Workspace struct for the generation of all topologies of a given list of nodes.
 #[derive(Debug)]
@@ -173,7 +173,7 @@ impl TopologyWorkspace {
 
     /// Find the next class used as initial class for constructing new edges. This is always the first class
     /// with open connections, except if there is a class which already has connections, but is not saturated.
-    /// Then this class is chosen. Since nodes with different connection structures are places in different
+    /// Then this class is chosen. Since nodes with different connection structures are placed in different
     /// classes by the refinement procedure, only the first node of each class has to be considered.
     fn find_next_class(&self) -> Option<usize> {
         let mut next_class = None;
@@ -316,9 +316,12 @@ impl TopologyWorkspace {
                         continue;
                     } else if target_node == node {
                         // Construct self-loops
-                        for multiplicity in if self.nodes[node].open_connections == self.nodes[node].max_connections {
+                        for multiplicity in if self.nodes[node].open_connections == self.nodes[node].max_connections
+                            && self.nodes.len() > 1
+                        {
                             // Node is completely disconnected from any other node
                             // -> at least one connection has to remain open in order to generate a connected graph
+                            // Only exception is for vacuum diagrams containing only a single node
                             1..=min(
                                 (self.nodes[node].max_connections - 1) / 2,
                                 self.remaining_edges - (self.connection_components - 1),
@@ -346,9 +349,11 @@ impl TopologyWorkspace {
                         for multiplicity in if self.nodes[node].open_connections == self.nodes[node].max_connections
                             && self.nodes[target_node].open_connections == self.nodes[node].max_connections
                             && self.nodes[node].max_connections == self.nodes[target_node].max_connections
+                            && self.nodes.len() > 2
                         {
                             // Both nodes are isolated from the remaining graph and have the same number of legs
                             // -> at least one connection has to remain open in order to generate a connected graph
+                            // Only exception is for vacuum diagrams with exactly two nodes
                             1..=(self.nodes[node].max_connections - 1)
                         } else {
                             1..=min(

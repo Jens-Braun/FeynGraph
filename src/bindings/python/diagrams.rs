@@ -10,7 +10,7 @@ use either::Either;
 use itertools::Itertools;
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyFunction};
+use pyo3::types::PyDict;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -726,7 +726,7 @@ impl PyDiagramSelector {
         self.0.set_on_shell();
     }
 
-    fn add_custom_function(&mut self, py_function: Py<PyFunction>) {
+    fn add_custom_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_unwrapped_custom_function(Arc::new(
             move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
                 let py_diag = PyDiagram {

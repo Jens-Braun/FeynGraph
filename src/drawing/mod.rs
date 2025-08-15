@@ -33,32 +33,37 @@ impl Topology {
                     .filter(|n| **n != nodes[0])
                     .map(|n| &layout[*n])
                     .collect_vec();
-                let angles = adjacent_nodes
-                    .iter()
-                    .map(|x2| {
-                        if (x2.y - x1.y) < 0. {
-                            (x2.y - x1.y).atan2(x2.x - x1.x) + 2. * f64::consts::PI
-                        } else {
-                            (x2.y - x1.y).atan2(x2.x - x1.x)
-                        }
-                    })
-                    .sorted_by(|theta1, theta2| theta1.partial_cmp(theta2).unwrap())
-                    .collect_vec();
-                let (n, max_angle_diff) = angles
-                    .iter()
-                    .circular_tuple_windows()
-                    .map(|(x, y)| {
-                        let delta = *y - *x;
-                        if delta > 0. {
-                            delta
-                        } else {
-                            2. * f64::consts::PI + delta
-                        }
-                    })
-                    .enumerate()
-                    .max_by(|(_, theta1), (_, theta2)| theta1.partial_cmp(theta2).unwrap())
-                    .unwrap();
-                b.draw_self_loops(*x1, 1., angles[n] + max_angle_diff / 2., chunk.count());
+                if adjacent_nodes.len() > 0 {
+                    let angles = adjacent_nodes
+                        .iter()
+                        .map(|x2| {
+                            if (x2.y - x1.y) < 0. {
+                                (x2.y - x1.y).atan2(x2.x - x1.x) + 2. * f64::consts::PI
+                            } else {
+                                (x2.y - x1.y).atan2(x2.x - x1.x)
+                            }
+                        })
+                        .sorted_by(|theta1, theta2| theta1.partial_cmp(theta2).unwrap())
+                        .collect_vec();
+                    let (n, max_angle_diff) = angles
+                        .iter()
+                        .circular_tuple_windows()
+                        .map(|(x, y)| {
+                            let delta = *y - *x;
+                            if delta > 0. {
+                                delta
+                            } else {
+                                2. * f64::consts::PI + delta
+                            }
+                        })
+                        .enumerate()
+                        .max_by(|(_, theta1), (_, theta2)| theta1.partial_cmp(theta2).unwrap())
+                        .unwrap();
+                    b.draw_self_loops(*x1, 1., angles[n] + max_angle_diff / 2., chunk.count());
+                } else {
+                    println!("{:?}", x1);
+                    b.draw_self_loops(*x1, 1., -std::f64::consts::PI / 2., chunk.count());
+                }
             } else {
                 let x1 = &layout[nodes[0]];
                 let x2 = &layout[nodes[1]];

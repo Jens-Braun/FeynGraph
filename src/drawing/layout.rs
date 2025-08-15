@@ -78,7 +78,10 @@ impl Layout for TopologyLayout<'_> {
         }
         let d = self.distances.as_ref().unwrap();
         let n_in = self.topo.n_external / 2;
-        let class_distances = d.iter().map(|row| *row.iter().take(n_in).min().unwrap()).collect_vec();
+        let class_distances = d
+            .iter()
+            .map(|row| *row.iter().take(n_in).min().unwrap_or(&0))
+            .collect_vec();
         let mut class_members = vec![Vec::new(); *class_distances.iter().max().unwrap() + 1];
         for (i, d) in class_distances.iter().enumerate() {
             class_members[*d].push(i);
@@ -288,10 +291,14 @@ pub(crate) trait Layout {
                 x.inner.into_iter().enumerate().for_each(|(j, x)| X[j + 1][i] = x);
             }
             let current_stress = stress(&X, &w, &d);
-            if prev_stress - current_stress < 1e-4 * prev_stress {
+            if current_stress == 0.0 || prev_stress - current_stress < 1e-4 * prev_stress {
                 break;
             }
             prev_stress = current_stress;
+        }
+
+        if n_ext < 2 {
+            return NodeLayout { node_positions: X };
         }
 
         // With correct relative placement, layout the external nodes again without considering internal nodes
@@ -309,7 +316,7 @@ pub(crate) trait Layout {
                 x.inner.into_iter().enumerate().for_each(|(j, x)| X[j + 1][i] = x);
             }
             let current_stress = sub_stress(&X, &w, &d, 0, n_ext);
-            if prev_stress - current_stress < 1e-4 * prev_stress {
+            if current_stress == 0.0 || prev_stress - current_stress < 1e-4 * prev_stress {
                 break;
             }
             prev_stress = current_stress;
@@ -333,7 +340,7 @@ pub(crate) trait Layout {
                 x.inner.into_iter().enumerate().for_each(|(j, x)| X[j + n_ext][i] = x);
             }
             let current_stress = stress(&X, &w, &d);
-            if prev_stress - current_stress < 1e-4 * prev_stress {
+            if current_stress == 0.0 || prev_stress - current_stress < 1e-4 * prev_stress {
                 break;
             }
             prev_stress = current_stress;
@@ -450,6 +457,9 @@ fn linear_solve(A: &Matrix, b: &Vector, x0: Option<Vector>, eps: Option<f64>) ->
     let mut x = x0.unwrap_or(Vector {
         inner: vec![0.; A.dim.1],
     });
+    if b.inner.iter().all(|x| *x == 0.0) {
+        return x;
+    }
     let eps = eps.unwrap_or(1e-8);
     let mut r = b.clone() - A * &x;
     let rhat = r.clone();
@@ -494,6 +504,8 @@ mod tests {
     use super::super::math::{Matrix, Vec2D};
     use super::*;
     use crate::diagram::{Leg, Propagator, Vertex};
+    use crate::model::TopologyModel;
+    use crate::topology::TopologyGenerator;
     use crate::topology::{Edge, Node, Topology, components::NodeClassification};
     use approx::assert_relative_eq;
 
@@ -786,5 +798,19 @@ mod tests {
 
         let layout = TopologyLayout::from(&topo).layout();
         println!("{:#?}", layout);
+    }
+
+    #[test]
+    fn propagator_layout_test() {
+        let topos = TopologyGenerator::new(2, 1, TopologyModel::from(vec![3, 4]), None).generate();
+        TopologyLayout::from(&topos[0]).layout();
+        assert!(true);
+    }
+
+    #[test]
+    fn vacuum_bubble_layout_test() {
+        let topos = TopologyGenerator::new(0, 2, TopologyModel::from(vec![3, 4]), None).generate();
+        TopologyLayout::from(&topos[0]).layout();
+        assert!(true);
     }
 }

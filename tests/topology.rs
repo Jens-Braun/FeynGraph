@@ -75,3 +75,17 @@ test_topo!([3, 4, 5], 5, 3);
 test_topo!([3, 4, 5, 6], 4, 0);
 test_topo!([3, 4, 5, 6], 4, 1);
 test_topo!([3, 4, 5, 6], 4, 2);
+
+#[test]
+fn test_topo_3_4_legs_0_loops_2() {
+    let model = TopologyModel::from(vec![3, 4]);
+    let n_topos = TopologyGenerator::new(0, 2, model, None).count_topologies();
+    assert_eq!(n_topos, 3);
+}
+
+#[test]
+fn test_topo_3_4_legs_0_loops_3() {
+    let model = TopologyModel::from(vec![3, 4]);
+    let n_topos = TopologyGenerator::new(0, 3, model, None).count_topologies();
+    assert_eq!(n_topos, 12);
+}

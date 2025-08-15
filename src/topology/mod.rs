@@ -165,12 +165,14 @@ impl Topology {
         }
 
         // Use global momentum conservation to eliminate the last external momentum
-        for edge in self.edges.iter_mut() {
-            if !(self.nodes[edge.connected_nodes[0]].degree == 1 || self.nodes[edge.connected_nodes[1]].degree == 1)
-                && edge.momenta.as_ref().unwrap()[self.n_external - 1] != 0
-            {
-                for i in 0..self.n_external {
-                    edge.momenta.as_mut().unwrap()[i] -= edge.momenta.as_ref().unwrap()[self.n_external - 1];
+        if self.n_external > 1 {
+            for edge in self.edges.iter_mut() {
+                if !(self.nodes[edge.connected_nodes[0]].degree == 1 || self.nodes[edge.connected_nodes[1]].degree == 1)
+                    && edge.momenta.as_ref().unwrap()[self.n_external - 1] != 0
+                {
+                    for i in 0..self.n_external {
+                        edge.momenta.as_mut().unwrap()[i] -= edge.momenta.as_ref().unwrap()[self.n_external - 1];
+                    }
                 }
             }
         }

@@ -16,12 +16,13 @@ indexmap = "2"
 either = "1"
 peg = "0.8"
 rustc-hash = "2"
-pyo3 = { version = "0.24", features = [
+pyo3 = { version = "0.25", features = [
     "auto-initialize",
     "either",
     "multiple-pymethods",
+    "abi3-py37",
 ], optional = true }
-pyo3-ffi = { version = "0.24", optional = true }
+pyo3-ffi = { version = "0.25", optional = true }
 pyo3-log = { version = "0.12", optional = true }
 
 [dev-dependencies]
@@ -30,7 +31,7 @@ tempfile = "3"
 regex = "1"
 test-log = "0.2"
 approx = "0.5"
-criterion = "0.6"
+criterion = "0.7"
 
 [features]
 default = []
