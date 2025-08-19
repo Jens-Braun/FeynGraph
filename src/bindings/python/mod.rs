@@ -55,7 +55,7 @@ fn set_threads(n_threads: usize) {
     particles_out,
     n_loops = 0,
     model = PyModel::__new__(),
-    diagram_selector = None,
+    selector = None,
 ))]
 fn generate_diagrams(
     py: Python<'_>,
@@ -63,18 +63,17 @@ fn generate_diagrams(
     particles_out: Vec<String>,
     n_loops: usize,
     model: PyModel,
-    diagram_selector: Option<PyDiagramSelector>,
+    selector: Option<PyDiagramSelector>,
 ) -> PyResult<PyDiagramContainer> {
-    let mut selector;
-    if let Some(in_selector) = diagram_selector {
-        selector = in_selector;
+    let diagram_selector;
+    if let Some(in_selector) = selector {
+        diagram_selector = in_selector;
     } else {
-        selector = PyDiagramSelector::new();
-        if n_loops > 0 {
-            selector.select_opi_components(1);
-        }
+        diagram_selector = PyDiagramSelector::new();
     }
-    return Ok(PyDiagramGenerator::new(particles_in, particles_out, n_loops, model, Some(selector))?.generate(py));
+    return Ok(
+        PyDiagramGenerator::new(particles_in, particles_out, n_loops, model, Some(diagram_selector))?.generate(py),
+    );
 }
 
 impl From<ModelError> for PyErr {

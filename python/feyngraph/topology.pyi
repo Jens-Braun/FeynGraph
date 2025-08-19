@@ -32,7 +32,7 @@ class Edge:
 class Node:
     """The internal representation of a graph node."""
 
-    def nodes(self) -> list[int]:
+    def adjacent(self) -> list[int]:
         """Get a list of the ids of the adjacent nodes."""
 
     def degree(self) -> int:

@@ -209,10 +209,8 @@ peg::parser! {
                     });
                 }
                 let mut statistic = Statistic::Bose;
-                if let Some(s) = twospin {
-                    if s < 0 || s % 2 == 1 {
-                        statistic = Statistic::Fermi;
-                    }
+                if let Some(s) = twospin && (s < 0 || s % 2 == 1) {
+                    statistic = Statistic::Fermi;
                 }
                 Ok((py_name, Value::Particle(Particle::new(
                     name.unwrap(),
@@ -398,14 +396,14 @@ peg::parser! {
             }
 
         rule lorentz_atom() -> (isize, isize) =
-            ("Idendity" /  "Gamma5" / "ProjM" / "ProjP"  / "C") _
+            ("Identity" /  "Gamma5" / "ProjM" / "ProjP"  / "C") _
             "(" _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
             / "Gamma" _ "(" _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
             / "Sigma" _ "(" _ int() _ "," _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
 
         pub rule lorentz_structure() -> Vec<(isize, isize)> =
             _ connections:((a:lorentz_atom() {Some(a)} / [_] {None})) ** _ {
-                connections.into_iter().filter_map(|x| x).collect_vec()
+                connections.into_iter().flatten().collect_vec()
             }
 
         rule lorentz() -> (&'input str, Vec<isize>) =

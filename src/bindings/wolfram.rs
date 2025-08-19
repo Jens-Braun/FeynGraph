@@ -64,21 +64,11 @@ pub(crate) fn diagrams_feynarts(
     particles_in: Vec<String>,
     particles_out: Vec<String>,
     n_loops: usize,
-) -> String {
+) -> PyResult<String> {
     let mut buffer = String::new();
     let sm = Model::default();
     let n_in = particles_in.len();
-    let particles_in: Vec<usize> = particles_in
-        .into_iter()
-        .map(|particle_string| sm.get_particle_index(&particle_string))
-        .try_collect()
-        .unwrap();
-    let particles_out: Vec<usize> = particles_out
-        .into_iter()
-        .map(|particle_string| sm.get_particle_index(&particle_string))
-        .try_collect()
-        .unwrap();
-    py.allow_threads(|| {
+    py.allow_threads(|| -> PyResult<()> {
         let topos = TopologyGenerator::new(
             particles_in.len() + particles_out.len(),
             n_loops,
@@ -91,17 +81,23 @@ pub(crate) fn diagrams_feynarts(
             "TopologyList[Process -> {{{}}} -> {{{}}}, Model -> \"SMQCD\", InsertionLevel -> {{Particles}}][",
             particles_in
                 .iter()
-                .map(|id| feynarts_particle_map(sm.get_particle(*id).pdg_code))
+                .map(|p| feynarts_particle_map(sm.get_particle_by_name(p).unwrap().pdg_code))
                 .join(", "),
             particles_out
                 .iter()
-                .map(|id| feynarts_particle_map(sm.get_particle(*id).pdg_code))
+                .map(|p| feynarts_particle_map(sm.get_particle_by_name(p).unwrap().pdg_code))
                 .join(", ")
         )
         .unwrap();
-        let generator = DiagramGenerator::new(particles_in, particles_out, n_loops, sm, None);
+        let generator = DiagramGenerator::new(
+            &particles_in.iter().map(String::as_ref).collect_vec(),
+            &particles_out.iter().map(String::as_ref).collect_vec(),
+            n_loops,
+            sm,
+            None,
+        )?;
         for topo in topos.iter() {
-            let diags = generator.assign_topology(topo);
+            let diags = generator.assign_topology(topo).unwrap();
             if diags.len() == 0 {
                 continue;
             }
@@ -121,8 +117,9 @@ pub(crate) fn diagrams_feynarts(
         }
         buffer.pop(); // Remove final ','
         write!(buffer, "]").unwrap();
-    });
-    return buffer;
+        return Ok(());
+    })?;
+    return Ok(buffer);
 }
 
 impl Topology {

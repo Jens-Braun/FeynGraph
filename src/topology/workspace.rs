@@ -243,16 +243,16 @@ impl TopologyWorkspace {
                 self.connect_node(class, self.node_classification.boundaries[class]);
             } else {
                 // If there is no class remaining to be connected, the graph is fully constructed
-                if self.connection_components == 1 {
-                    if let Some(node_symmetry) = self.is_representative() {
-                        // Only keep fully connected graphs which are representatives
-                        let topology = Topology::from(self, node_symmetry);
-                        if self.topology_selector.select(&topology) {
-                            if self.topology_buffer.is_some() {
-                                self.topology_buffer.as_mut().unwrap().push(topology);
-                            }
-                            self.count += 1;
+                if self.connection_components == 1
+                    && let Some(node_symmetry) = self.is_representative()
+                {
+                    // Only keep fully connected graphs which are representatives
+                    let topology = Topology::from(self, node_symmetry);
+                    if self.topology_selector.select(&topology) {
+                        if self.topology_buffer.is_some() {
+                            self.topology_buffer.as_mut().unwrap().push(topology);
                         }
+                        self.count += 1;
                     }
                 }
             }

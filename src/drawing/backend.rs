@@ -469,8 +469,8 @@ pub(crate) struct TikzBackend {
 }
 
 impl TikzBackend {
-    pub(crate) fn new() -> impl DrawingBackend {
-        TikzBackend {
+    pub(crate) fn new() -> Self {
+        Self {
             nodes: Vec::new(),
             node_buffer: String::new(),
             edge_buffer: String::new(),

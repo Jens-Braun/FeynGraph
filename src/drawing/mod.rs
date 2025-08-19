@@ -7,6 +7,7 @@ use backend::DrawingBackend;
 use itertools::Itertools;
 use layout::Layout;
 use std::f64;
+use std::ops::{Bound, RangeBounds};
 use std::path::Path;
 
 mod backend;
@@ -33,7 +34,7 @@ impl Topology {
                     .filter(|n| **n != nodes[0])
                     .map(|n| &layout[*n])
                     .collect_vec();
-                if adjacent_nodes.len() > 0 {
+                if !adjacent_nodes.is_empty() {
                     let angles = adjacent_nodes
                         .iter()
                         .map(|x2| {
@@ -72,6 +73,7 @@ impl Topology {
         }
     }
 
+    /// Draw the topology in the TikZ (TikZiT compatible) format and write the result to the file `path`.
     pub fn draw_tikz(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
         let mut tikz = TikzBackend::new();
         tikz.init(1, 1);
@@ -80,7 +82,17 @@ impl Topology {
         Ok(())
     }
 
-    pub fn draw_svg(&self) -> String {
+    /// Draw the topology in the SVG format and write the result to the file `path`.
+    pub fn draw_svg(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
+        let mut svg = TikzBackend::new();
+        svg.init(1, 1);
+        self.draw(&mut svg);
+        std::fs::write(path, svg.finish())?;
+        Ok(())
+    }
+
+    /// Draw the topology in SVG format and return the result as string.
+    pub fn draw_svg_string(&self) -> String {
         let mut svg = SVGBackend::new();
         svg.init(1, 1);
         self.draw(&mut svg);
@@ -89,12 +101,16 @@ impl Topology {
 }
 
 impl TopologyContainer {
+    /// Draw the topologies with indices `topologies` in SVG format in a grid on a single canvas. If specified, the
+    /// grid will have `n_cols` topologies per row, otherwise four.
     pub fn draw_svg(&self, topologies: &[usize], n_cols: Option<usize>) -> String {
         let n_topos = topologies.len();
         let n_cols = if let Some(n_cols) = n_cols {
             n_cols
+        } else if n_topos < 4 {
+            n_topos
         } else {
-            if n_topos < 4 { n_topos } else { 4 }
+            4
         };
         let n_rows = n_topos.div_ceil(n_cols);
         let mut svg = SVGBackend::new();
@@ -102,7 +118,46 @@ impl TopologyContainer {
         for (i, topo_id) in topologies.iter().enumerate() {
             svg.init_group(i / n_cols, i % n_cols);
             self.data[*topo_id].draw(&mut svg);
-            svg.draw_label_raw([150., 20.].into(), &format!("T{}", topologies[i]));
+            svg.draw_label_raw([150., 20.].into(), &format!("T{}", topo_id));
+            svg.finish_group();
+        }
+        return svg.finish();
+    }
+
+    /// Draw the topologies with indices in `range` in SVG format on a single canvas. If specified, the
+    /// grid will have `n_cols` topologies per row, otherwise four.
+    pub fn draw_svg_range(&self, range: impl RangeBounds<usize>, n_cols: Option<usize>) -> String {
+        let min = match range.start_bound() {
+            Bound::Included(n) => *n,
+            Bound::Excluded(n) if *n > 0 => *n - 1,
+            _ => 0,
+        };
+        let max = match range.end_bound() {
+            Bound::Included(n) => *n,
+            Bound::Excluded(n) => {
+                if *n > 0 {
+                    *n - 1
+                } else {
+                    0
+                }
+            }
+            Bound::Unbounded => self.data.len(),
+        };
+        let n_topos = max - min;
+        let n_cols = if let Some(n_cols) = n_cols {
+            n_cols
+        } else if n_topos < 4 {
+            n_topos
+        } else {
+            4
+        };
+        let n_rows = n_topos.div_ceil(n_cols);
+        let mut svg = SVGBackend::new();
+        svg.init(n_rows, n_cols);
+        for (i, topo_id) in (min..=max).enumerate() {
+            svg.init_group(i / n_cols, i % n_cols);
+            self.data[topo_id].draw(&mut svg);
+            svg.draw_label_raw([150., 20.].into(), &format!("T{}", topo_id));
             svg.finish_group();
         }
         return svg.finish();
@@ -131,6 +186,7 @@ impl DiagramView<'_> {
         }
     }
 
+    /// Draw the diagram in the TikZ (TikZiT compatible) format and write the result to the file `path`.
     pub fn draw_tikz(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
         let mut tikz = TikzBackend::new();
         tikz.init(1, 1);
@@ -139,6 +195,7 @@ impl DiagramView<'_> {
         Ok(())
     }
 
+    /// Draw the topology in the SVG format and return the result as string.
     pub fn draw_svg_str(&self) -> String {
         let mut svg = SVGBackend::new();
         svg.init(1, 1);
@@ -146,6 +203,7 @@ impl DiagramView<'_> {
         return svg.finish();
     }
 
+    /// Draw the topology in the SVG format and write the result to the file `path`.
     pub fn draw_svg(&self, path: impl AsRef<Path>) -> Result<(), std::io::Error> {
         let mut svg = SVGBackend::new();
         svg.init(1, 1);
@@ -156,12 +214,16 @@ impl DiagramView<'_> {
 }
 
 impl DiagramContainer {
+    /// Draw the diagrams with indices `diagrams` in SVG format in a grid on a single canvas. If specified, the
+    /// grid will have `n_cols` diagrams per row, otherwise four.
     pub fn draw_svg(&self, diagrams: &[usize], n_cols: Option<usize>) -> String {
         let n_diags = diagrams.len();
         let n_cols = if let Some(n_cols) = n_cols {
             n_cols
+        } else if n_diags < 4 {
+            n_diags
         } else {
-            if n_diags < 4 { n_diags } else { 4 }
+            4
         };
         let n_rows = n_diags.div_ceil(n_cols);
         let mut svg = SVGBackend::new();
@@ -175,6 +237,45 @@ impl DiagramContainer {
             )
             .draw(&mut svg);
             svg.draw_label_raw([150., 20.].into(), &format!("D{}", diagrams[i]));
+            svg.finish_group();
+        }
+        return svg.finish();
+    }
+
+    /// Draw the diagrams with indices in `range` in SVG format on a single canvas. If specified, the
+    /// grid will have `n_cols` diagrams per row, otherwise four.
+    pub fn draw_svg_range(&self, range: impl RangeBounds<usize>, n_cols: Option<usize>) -> String {
+        let min = match range.start_bound() {
+            Bound::Included(n) => *n,
+            Bound::Excluded(n) if *n > 0 => *n - 1,
+            _ => 0,
+        };
+        let max = match range.end_bound() {
+            Bound::Included(n) => *n,
+            Bound::Excluded(n) => {
+                if *n > 0 {
+                    *n - 1
+                } else {
+                    0
+                }
+            }
+            Bound::Unbounded => self.data.len(),
+        };
+        let n_diags = max - min;
+        let n_cols = if let Some(n_cols) = n_cols {
+            n_cols
+        } else if n_diags < 4 {
+            n_diags
+        } else {
+            4
+        };
+        let n_rows = n_diags.div_ceil(n_cols);
+        let mut svg = SVGBackend::new();
+        svg.init(n_rows, n_cols);
+        for (i, diag_id) in (min..=max).enumerate() {
+            svg.init_group(i / n_cols, i % n_cols);
+            DiagramView::new(self.model.as_ref().unwrap(), &self.data[diag_id], &self.momentum_labels).draw(&mut svg);
+            svg.draw_label_raw([150., 20.].into(), &format!("D{}", diag_id));
             svg.finish_group();
         }
         return svg.finish();

@@ -7,6 +7,15 @@ use std::sync::Arc;
 /// A struct that decides whether a topology is to be kept or discarded. Only topologies for which
 /// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
 /// then select diagrams which satisfy any of them.
+///
+/// # Examples
+/// ```rust
+/// use feyngraph::topology::TopologySelector;
+/// let mut s = TopologySelector::new();
+/// s.select_on_shell();
+/// s.select_self_loops(0);
+/// s.select_node_degree(4, 2);
+/// ```
 #[derive(Clone)]
 pub struct TopologySelector {
     /// Only keep topologies for which the count of nodes with the given `degree` is in `counts`, specified as a list of
@@ -39,7 +48,7 @@ impl TopologySelector {
     }
 
     /// Add a criterion to keep only diagrams with `selection` number of nodes with `degree`.
-    pub fn add_node_degree(&mut self, degree: usize, selection: usize) {
+    pub fn select_node_degree(&mut self, degree: usize, selection: usize) {
         if let Some((_, counts)) = &mut self
             .node_degrees
             .iter_mut()
@@ -53,7 +62,7 @@ impl TopologySelector {
 
     /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
     /// in `selection`.
-    pub fn add_node_degree_list(&mut self, degree: usize, mut selection: Vec<usize>) {
+    pub fn select_node_degree_list(&mut self, degree: usize, mut selection: Vec<usize>) {
         if let Some((_, counts)) = &mut self
             .node_degrees
             .iter_mut()
@@ -67,7 +76,7 @@ impl TopologySelector {
 
     /// Add a criterion to keep only diagrams for which the number of nodes with `degree` is contained
     /// in the range `selection`.
-    pub fn add_node_degree_range(&mut self, degree: usize, selection: Range<usize>) {
+    pub fn select_node_degree_range(&mut self, degree: usize, selection: Range<usize>) {
         if let Some((_, counts)) = &mut self
             .node_degrees
             .iter_mut()
@@ -82,30 +91,30 @@ impl TopologySelector {
     /// Add a criterion to keep only diagrams with the node partition given by `partition`. The node partition is the
     /// set of counts of nodes with given degrees, e.g. the partition
     /// ```rust
-    ///     use feyngraph::topology::filter::TopologySelector;
+    /// use feyngraph::topology::TopologySelector;
     /// let mut selector = TopologySelector::new();
-    /// selector.add_node_partition(vec![(3, 4), (4, 1)]);
+    /// selector.select_node_partition(vec![(3, 4), (4, 1)]);
     /// ```
     /// selects only topologies which include _exactly_ three nodes of degree 3 and one node of degree 4.
-    pub fn add_node_partition(&mut self, partition: Vec<(usize, usize)>) {
+    pub fn select_node_partition(&mut self, partition: Vec<(usize, usize)>) {
         self.node_partition.push(partition);
     }
 
     /// Add a criterion to keep only diagrams with `count` one-particle-irreducible components.
-    pub fn add_opi_count(&mut self, count: usize) {
+    pub fn select_opi_components(&mut self, count: usize) {
         self.opi_components.push(count);
     }
 
     /// Add a criterion to only keep topologies with `count` self loops. A self-loop is defined as an edge which ends
     /// on the same node it started on.
-    pub fn add_self_loop_count(&mut self, count: usize) {
+    pub fn select_self_loops(&mut self, count: usize) {
         self.self_loops.push(count);
     }
 
     /// Toggle the on-shell criterion. If true, only topologies with no self-energy insertions on external legs are
     /// kept. This implementation considers internal edges carrying a single external momentum and no loop momentum,
     /// which is equivalent to a self-energy insertion on an external edge.
-    pub fn set_on_shell(&mut self) {
+    pub fn select_on_shell(&mut self) {
         self.on_shell = !self.on_shell;
     }
 
@@ -125,25 +134,25 @@ impl TopologySelector {
     }
 
     pub(crate) fn select(&self, topo: &Topology) -> bool {
-        return self.select_node_degrees(topo)
-            && self.select_node_partition(topo)
-            && self.select_opi_components(topo)
-            && self.select_self_loops(topo)
-            && self.select_on_shell(topo)
-            && self.select_custom_criteria(topo);
+        return self.query_node_degrees(topo)
+            && self.query_node_partition(topo)
+            && self.query_opi_components(topo)
+            && self.query_self_loops(topo)
+            && self.query_on_shell(topo)
+            && self.query_custom_criteria(topo);
     }
 
-    fn select_node_degrees(&self, topo: &Topology) -> bool {
+    fn query_node_degrees(&self, topo: &Topology) -> bool {
         return self.node_degrees.iter().all(|(degree, counts)| {
             let topo_count = topo.nodes.iter().filter(|node| node.degree == *degree).count();
-            if counts.iter().any(|count| topo_count == *count) {
+            if counts.contains(&topo_count) {
                 return true;
             }
             return false;
         });
     }
 
-    fn select_node_partition(&self, topo: &Topology) -> bool {
+    fn query_node_partition(&self, topo: &Topology) -> bool {
         for partition in &self.node_partition {
             if partition
                 .iter()
@@ -155,7 +164,7 @@ impl TopologySelector {
         return true;
     }
 
-    fn select_opi_components(&self, topo: &Topology) -> bool {
+    fn query_opi_components(&self, topo: &Topology) -> bool {
         if self.opi_components.is_empty() {
             return true;
         }
@@ -165,7 +174,7 @@ impl TopologySelector {
             .any(|opi_count| *opi_count == topo.count_opi_componenets());
     }
 
-    fn select_self_loops(&self, topo: &Topology) -> bool {
+    fn query_self_loops(&self, topo: &Topology) -> bool {
         if self.self_loops.is_empty() {
             return true;
         }
@@ -175,14 +184,14 @@ impl TopologySelector {
             .any(|opi_count| *opi_count == topo.count_self_loops());
     }
 
-    fn select_on_shell(&self, topo: &Topology) -> bool {
+    fn query_on_shell(&self, topo: &Topology) -> bool {
         if !self.on_shell {
             return true;
         }
         return topo.on_shell();
     }
 
-    fn select_custom_criteria(&self, topo: &Topology) -> bool {
+    fn query_custom_criteria(&self, topo: &Topology) -> bool {
         if self.custom_functions.is_empty() {
             return true;
         }

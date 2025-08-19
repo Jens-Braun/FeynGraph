@@ -1,3 +1,5 @@
+//! A physical model used for diagram generation and drawing.
+
 use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
 use std::path::Path;
@@ -6,6 +8,7 @@ use thiserror::Error;
 mod qgraf_parser;
 mod ufo_parser;
 
+/// Custom error type for errors specific to a model.
 #[allow(clippy::large_enum_variant)]
 #[derive(Error, Debug)]
 pub enum ModelError {
@@ -17,6 +20,9 @@ pub enum ModelError {
     ParseError(String, #[source] peg::error::ParseError<peg::str::LineCol>),
 }
 
+/// Line style of a propagator, specified by the UFO 2.0 standard.
+///
+/// This property is used for drawing propagators.
 #[derive(PartialEq, Debug, Hash, Clone, Eq)]
 pub enum LineStyle {
     Dashed,
@@ -30,12 +36,16 @@ pub enum LineStyle {
     None,
 }
 
+/// Statistic deciding the commutation property of a field.
 #[derive(PartialEq, Debug, Hash, Clone, Eq)]
 pub enum Statistic {
     Fermi,
     Bose,
 }
 
+/// Internal representation of a particle.
+///
+/// Contains only the information necessary for diagram generation and drawing.
 #[derive(Debug, PartialEq, Hash, Clone, Eq)]
 pub struct Particle {
     pub(crate) name: String,
@@ -49,23 +59,37 @@ pub struct Particle {
 }
 
 impl Particle {
+    /// Get the particle's name. Corresponds to the UFO property `name`.
     pub fn name(&self) -> &String {
         return &self.name;
     }
 
+    /// Get the name of the particle's anti-particle. Corresponds the the UFO property `antiname`.
     pub fn anti_name(&self) -> &String {
         return &self.anti_name;
     }
 
+    /// Get the particle's PDG ID. Corresponds the the UFO property `pdg_code`.
     pub fn pdg(&self) -> isize {
         return self.pdg_code;
     }
 
+    /// Query whether the particle is an anti-particle, decided by the sign of the PDG ID.
     pub fn is_anti(&self) -> bool {
         return self.pdg_code <= 0;
     }
 
-    pub fn into_anti(self) -> Particle {
+    /// Query whether the particle is its own anti-particle.
+    pub fn self_anti(&self) -> bool {
+        return self.self_anti;
+    }
+
+    /// Query whether the particle obeys Fermi-Dirac statistics.
+    pub fn is_fermi(&self) -> bool {
+        return self.statistic == Statistic::Fermi;
+    }
+
+    pub(crate) fn into_anti(self) -> Particle {
         return Self {
             name: self.anti_name,
             anti_name: self.name,
@@ -77,10 +101,8 @@ impl Particle {
             statistic: self.statistic,
         };
     }
-}
 
-impl Particle {
-    pub fn new(
+    pub(crate) fn new(
         name: impl Into<String>,
         anti_name: impl Into<String>,
         pdg_code: isize,
@@ -103,16 +125,11 @@ impl Particle {
             statistic,
         };
     }
-
-    pub fn self_anti(&self) -> bool {
-        return self.self_anti;
-    }
-
-    pub fn is_fermi(&self) -> bool {
-        return self.statistic == Statistic::Fermi;
-    }
 }
 
+/// Internal representation of an interaction vertex.
+///
+/// Contains only the information necessary for diagram generation and drawing.
 #[derive(Debug, PartialEq, Clone)]
 pub struct InteractionVertex {
     pub(crate) name: String,
@@ -123,6 +140,21 @@ pub struct InteractionVertex {
 }
 
 impl InteractionVertex {
+    /// Get an iterator over the names of the particles attached to this vertex.
+    pub fn particles_iter(&self) -> impl Iterator<Item = &String> {
+        return self.particles.iter();
+    }
+
+    /// Get a map of the powers of couplings of the vertex.
+    pub fn coupling_orders(&self) -> &HashMap<String, usize> {
+        return &self.coupling_orders;
+    }
+
+    /// Get the degree of the vertex, i.e. the number of particles attached to it.
+    pub fn degree(&self) -> usize {
+        return self.particles.len();
+    }
+
     pub(crate) fn new(
         name: String,
         particles: Vec<String>,
@@ -144,28 +176,16 @@ impl InteractionVertex {
         }
     }
 
-    pub fn particles_iter(&self) -> impl Iterator<Item = &String> {
-        return self.particles.iter();
-    }
-
-    pub fn particle_counts(&self) -> &HashMap<usize, usize> {
+    pub(crate) fn particle_counts(&self) -> &HashMap<usize, usize> {
         return &self.particle_counts;
     }
 
-    pub fn particle_count(&self, particle: &usize) -> usize {
+    pub(crate) fn particle_count(&self, particle: &usize) -> usize {
         if let Some(c) = self.particle_counts.get(particle) {
             return *c;
         } else {
             return 0;
         }
-    }
-
-    pub fn coupling_orders(&self) -> &HashMap<String, usize> {
-        return &self.coupling_orders;
-    }
-
-    pub fn degree(&self) -> usize {
-        return self.particles.len();
     }
 }
 
@@ -180,6 +200,15 @@ impl std::fmt::Display for InteractionVertex {
     }
 }
 
+/// Internal representation of a physical model.
+///
+/// This model structure strongly resembles the Python representation of a UFO model, but only contains the information
+/// necessary for diagram generation and drawing.
+///
+/// A model can currently be imported from two formats, [UFO 2.0](https://arxiv.org/abs/2304.09883)
+/// models and [QGRAF](http://cefema-gt.tecnico.ulisboa.pt/~paulo/qgraf.html) models.
+///
+/// The [`default`](Self::default()) implementation of the model is the Standard Model in Feynman gauge.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Model {
     particles: IndexMap<String, Particle>,
@@ -195,7 +224,7 @@ impl Default for Model {
 }
 
 impl Model {
-    pub fn new(
+    pub(crate) fn new(
         particles: IndexMap<String, Particle>,
         mut vertices: IndexMap<String, InteractionVertex>,
         couplings: Vec<String>,
@@ -227,73 +256,96 @@ impl Model {
         };
     }
 
+    /// Import a model in the [UFO 2.0](https://arxiv.org/abs/2304.09883) format. The specified `path` should point to
+    /// the folder containing the Python source files.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use std::path::PathBuf;
+    /// use feyngraph::Model;
+    /// let model = Model::from_ufo(&PathBuf::from("tests/resources/Standard_Model_UFO")).unwrap();
+    /// ```
     pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
         return ufo_parser::parse_ufo_model(path);
     }
 
+    /// Import a model in [QGRAF's](http://cefema-gt.tecnico.ulisboa.pt/~paulo/qgraf.html) model format. The parser is
+    /// not exhaustive in the options QGRAF supports and is only intended for backwards compatibility, especially for
+    /// the models included in GoSam. UFO models should be preferred whenever possible.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use std::path::PathBuf;
+    /// use feyngraph::Model;
+    /// let model = Model::from_qgraf(&PathBuf::from("tests/resources/sm.qgraf")).unwrap();
+    /// ```
     pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {
         return qgraf_parser::parse_qgraf_model(path);
     }
 
-    pub fn get_anti_index(&self, particle_index: usize) -> usize {
-        return self.anti_map[particle_index];
+    /// Get the internal index of the anti-particle of the particle with the internal index `index`.
+    pub fn get_anti_index(&self, index: usize) -> usize {
+        return self.anti_map[index];
     }
 
-    pub fn get_anti(&self, particle_index: usize) -> &Particle {
-        return &self.particles[self.anti_map[particle_index]];
+    /// Get a reference to the anti-particle of the particle with the internal index `index`.
+    pub fn get_anti(&self, index: usize) -> &Particle {
+        return &self.particles[self.anti_map[index]];
     }
 
-    pub fn normalize(&self, particle_index: usize) -> usize {
-        return if self.particles[particle_index].pdg_code < 0 {
-            self.get_anti_index(particle_index)
+    /// Normalize the given internal index, i.e. return the given index if it belongs to a particle or return
+    /// the index of the corresponding particle if the index of an anti-particle was given.
+    pub fn normalize(&self, index: usize) -> usize {
+        return if self.particles[index].pdg_code < 0 {
+            self.get_anti_index(index)
         } else {
-            particle_index
+            index
         };
     }
 
+    /// Get a reference to the particle with internal index `index`.
     pub fn get_particle(&self, index: usize) -> &Particle {
         return &self.particles[index];
     }
 
-    pub fn get_particle_name(&self, name: &str) -> Option<&Particle> {
-        return self.particles.get(name);
-    }
-
-    pub fn find_particle(&self, name: &str) -> Result<&Particle, ModelError> {
-        return if let Some(particle) = self.particles.get(name) {
-            Ok(particle)
-        } else {
-            Err(ModelError::ContentError(format!(
-                "Particle '{}' not found in model",
-                name
-            )))
-        };
-    }
-
-    pub fn get_particle_index(&self, key: &str) -> Result<usize, ModelError> {
+    /// Get a reference to the particle with name `name`.
+    pub fn get_particle_by_name(&self, name: &str) -> Result<&Particle, ModelError> {
         return self
             .particles
-            .get_index_of(key)
-            .ok_or_else(|| ModelError::ContentError(format!("Particle '{}' not found in model", key)));
+            .get(name)
+            .ok_or_else(|| ModelError::ContentError(format!("Particle '{}' not found in model", name)));
     }
 
+    /// Get the internal index of the particle with name `name`
+    pub fn get_particle_index(&self, name: &str) -> Result<usize, ModelError> {
+        return self
+            .particles
+            .get_index_of(name)
+            .ok_or_else(|| ModelError::ContentError(format!("Particle '{}' not found in model", name)));
+    }
+
+    /// Get a reference to the vertex with internal index `index`.
     pub fn vertex(&self, index: usize) -> &InteractionVertex {
         return &self.vertices[index];
     }
 
+    /// Get an iterator over the interaction vertices.
     pub fn vertices_iter(&self) -> impl Iterator<Item = &InteractionVertex> {
         return self.vertices.values();
     }
 
+    /// Get an iterator over the particles.
     pub fn particles_iter(&self) -> impl Iterator<Item = &Particle> {
         return self.particles.values();
     }
 
+    /// Get the number of contained vertices.
     pub fn n_vertices(&self) -> usize {
         return self.vertices.len();
     }
 
-    pub fn coupling_orders(&self) -> &Vec<String> {
+    /// Get the names of the defined couplings.
+    pub fn couplings(&self) -> &Vec<String> {
         return &self.couplings;
     }
 
@@ -320,9 +372,29 @@ impl Model {
     }
 }
 
+/// Reduced model object only containing topological properties.
+///
+/// This object can be constructed from a given physical [`Model`] or from a list of allowed node degrees.
+///
+/// # Examples
+/// ```rust
+/// use feyngraph::topology::TopologyModel;
+/// let model = TopologyModel::from([3, 4, 5, 6]);
+/// ```
 #[derive(Clone, PartialEq, Debug)]
 pub struct TopologyModel {
     vertex_degrees: Vec<usize>,
+}
+
+impl TopologyModel {
+    pub(crate) fn get(&self, i: usize) -> usize {
+        return self.vertex_degrees[i];
+    }
+
+    /// Get an iterator over the allowed node degrees of the model.
+    pub fn degrees_iter(&self) -> impl Iterator<Item = usize> {
+        return self.vertex_degrees.clone().into_iter();
+    }
 }
 
 impl From<&Model> for TopologyModel {
@@ -349,19 +421,14 @@ impl From<Model> for TopologyModel {
     }
 }
 
-impl From<Vec<usize>> for TopologyModel {
-    fn from(vec: Vec<usize>) -> Self {
-        return Self { vertex_degrees: vec };
-    }
-}
-
-impl TopologyModel {
-    pub fn get(&self, i: usize) -> usize {
-        return self.vertex_degrees[i];
-    }
-
-    pub fn degrees_iter(&self) -> impl Iterator<Item = usize> {
-        return self.vertex_degrees.clone().into_iter();
+impl<T> From<T> for TopologyModel
+where
+    T: Into<Vec<usize>>,
+{
+    fn from(degrees: T) -> Self {
+        return Self {
+            vertex_degrees: degrees.into(),
+        };
     }
 }
 

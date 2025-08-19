@@ -5,6 +5,7 @@ use crate::{
         view::DiagramView,
     },
     model::Model,
+    topology::Topology,
 };
 use either::Either;
 use itertools::Itertools;
@@ -439,7 +440,7 @@ impl PyVertex {
                         .model
                         .as_ref()
                         .unwrap()
-                        .get_particle_name(p)
+                        .get_particle_by_name(p)
                         .unwrap()
                         .clone(),
                 )
@@ -715,15 +716,15 @@ impl PyDiagramSelector {
     }
 
     pub(crate) fn select_opi_components(&mut self, opi_count: usize) {
-        self.0.add_opi_count(opi_count);
+        self.0.select_opi_components(opi_count);
     }
 
     fn select_self_loops(&mut self, count: usize) {
-        self.0.add_self_loop_count(count);
+        self.0.select_self_loops(count);
     }
 
     fn select_on_shell(&mut self) {
-        self.0.set_on_shell();
+        self.0.select_on_shell();
     }
 
     fn add_custom_function(&mut self, py_function: Py<PyAny>) {
@@ -742,16 +743,28 @@ impl PyDiagramSelector {
         ))
     }
 
-    fn add_coupling_power(&mut self, coupling: String, power: usize) {
-        self.0.add_coupling_power(&coupling, power);
+    fn add_topology_function(&mut self, py_function: Py<PyAny>) {
+        self.0.add_topology_function(Arc::new(move |topo: &Topology| -> bool {
+            Python::with_gil(|py| -> bool {
+                py_function
+                    .call1(py, (PyTopology(topo.clone()),))
+                    .unwrap()
+                    .extract(py)
+                    .unwrap()
+            })
+        }))
     }
 
-    fn add_propagator_count(&mut self, particle: String, count: usize) {
-        self.0.add_propagator_count(&particle, count);
+    fn select_coupling_power(&mut self, coupling: String, power: usize) {
+        self.0.select_coupling_power(&coupling, power);
     }
 
-    fn add_vertex_count(&mut self, particles: Vec<String>, count: usize) {
-        self.0.add_vertex_count(particles, count);
+    fn select_propagator_count(&mut self, particle: String, count: usize) {
+        self.0.select_propagator_count(&particle, count);
+    }
+
+    fn select_vertex_count(&mut self, particles: Vec<String>, count: usize) {
+        self.0.select_vertex_count(particles, count);
     }
 
     fn __deepcopy__(&self, _memo: Py<PyDict>) -> Self {
@@ -778,6 +791,7 @@ impl PyDiagramContainer {
     fn __len__(&self) -> usize {
         return self.0.len();
     }
+
     fn __getitem__(&self, i: usize) -> PyResult<PyDiagram> {
         if i >= self.0.len() {
             return Err(PyIndexError::new_err("Index out of bounds"));
@@ -786,6 +800,11 @@ impl PyDiagramContainer {
             container: self.0.clone(),
             diagram: Arc::new(self.0.data[i].clone()),
         });
+    }
+
+    fn _repr_svg_(&self) -> String {
+        let n = self.0.len().min(100);
+        return self.0.draw_svg(&(0..n).collect_vec(), None);
     }
 }
 
@@ -804,24 +823,20 @@ impl PyDiagramGenerator {
         model: PyModel,
         selector: Option<PyDiagramSelector>,
     ) -> PyResult<PyDiagramGenerator> {
-        let incoming = incoming
-            .into_iter()
-            .map(|particle_string| model.0.get_particle_index(&particle_string))
-            .try_collect()?;
-        let outgoing = outgoing
-            .into_iter()
-            .map(|particle_string| model.0.get_particle_index(&particle_string))
-            .try_collect()?;
+        let incoming = incoming.iter().map(String::as_ref).collect_vec();
+        let outgoing = outgoing.iter().map(String::as_ref).collect_vec();
         return if let Some(selector) = selector {
             Ok(Self(DiagramGenerator::new(
-                incoming,
-                outgoing,
+                &incoming,
+                &outgoing,
                 n_loops,
                 model.0,
                 Some(selector.0),
-            )))
+            )?))
         } else {
-            Ok(Self(DiagramGenerator::new(incoming, outgoing, n_loops, model.0, None)))
+            Ok(Self(DiagramGenerator::new(
+                &incoming, &outgoing, n_loops, model.0, None,
+            )?))
         };
     }
 
@@ -842,18 +857,18 @@ impl PyDiagramGenerator {
         });
     }
 
-    fn assign_topology(&self, py: Python<'_>, topo: &PyTopology) -> PyDiagramContainer {
-        return py.allow_threads(|| -> PyDiagramContainer {
-            return PyDiagramContainer(Arc::new(self.0.assign_topology(&topo.0)));
+    fn assign_topology(&self, py: Python<'_>, topo: &PyTopology) -> PyResult<PyDiagramContainer> {
+        return py.allow_threads(|| -> PyResult<PyDiagramContainer> {
+            return Ok(PyDiagramContainer(Arc::new(self.0.assign_topology(&topo.0)?)));
         });
     }
 
-    fn assign_topologies(&self, py: Python<'_>, topos: Vec<PyTopology>) -> PyDiagramContainer {
-        return py.allow_threads(|| -> PyDiagramContainer {
-            return PyDiagramContainer(Arc::new(
+    fn assign_topologies(&self, py: Python<'_>, topos: Vec<PyTopology>) -> PyResult<PyDiagramContainer> {
+        return py.allow_threads(|| -> PyResult<PyDiagramContainer> {
+            return Ok(PyDiagramContainer(Arc::new(
                 self.0
-                    .assign_topologies(&topos.iter().map(|t| t.0.clone()).collect_vec()),
-            ));
+                    .assign_topologies(&topos.iter().map(|t| t.0.clone()).collect_vec())?,
+            )));
         });
     }
 }

@@ -163,15 +163,13 @@ impl<'a> AssignWorkspace<'a> {
                     }
                 }
                 self.vertex_candidates[v_last].candidates = candidates;
-            } else {
-                if let Some(vertex_symmetry) = self.is_representative() {
-                    let diagram = Diagram::from(self, vertex_symmetry);
-                    if self
-                        .selector
-                        .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
-                    {
-                        self.diagram_buffer.inner_ref_mut().push(diagram);
-                    }
+            } else if let Some(vertex_symmetry) = self.is_representative() {
+                let diagram = Diagram::from(self, vertex_symmetry);
+                if self
+                    .selector
+                    .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
+                {
+                    self.diagram_buffer.inner_ref_mut().push(diagram);
                 }
             }
             return;
@@ -787,7 +785,7 @@ mod tests {
     #[test]
     pub fn workspace_qcd_g_prop_4loop() {
         let mut topo_selector = TopologySelector::new();
-        topo_selector.add_opi_count(1);
+        topo_selector.select_opi_components(1);
         let topos = TopologyGenerator::new(2, 4, TopologyModel::from(vec![3, 4]), Some(topo_selector)).generate();
         let topo = topos[1004].clone();
         let model = Model::from_ufo(&PathBuf::from("tests/resources/QCD_U_UFO")).unwrap();

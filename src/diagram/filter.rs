@@ -10,6 +10,15 @@ use std::sync::Arc;
 /// A struct that decides whether a diagram is to be kept or discarded. Only diagrams for which
 /// `selector.select(&topology) == true` are kept. Multiple criteria can be added, the selector will
 /// then select diagrams which satisfy any of them.
+///
+/// # Examples
+/// ```rust
+/// use feyngraph::DiagramSelector;
+/// let mut s = DiagramSelector::new();
+/// s.select_on_shell();
+/// s.select_self_loops(0);
+/// s.select_coupling_power("NP", 1);
+/// ```
 #[derive(Clone)]
 pub struct DiagramSelector {
     /// Only keep diagrams with the specified number of one-particle-irreducible components
@@ -34,6 +43,12 @@ pub struct DiagramSelector {
 
 impl Default for DiagramSelector {
     fn default() -> Self {
+        return Self::new();
+    }
+}
+
+impl DiagramSelector {
+    pub fn new() -> Self {
         return Self {
             opi_components: Vec::new(),
             self_loops: Vec::new(),
@@ -45,29 +60,27 @@ impl Default for DiagramSelector {
             topology_functions: Vec::new(),
         };
     }
-}
 
-impl DiagramSelector {
     /// Add a criterion to keep only diagrams with `count` one-particle-irreducible components.
-    pub fn add_opi_count(&mut self, count: usize) {
+    pub fn select_opi_components(&mut self, count: usize) {
         self.opi_components.push(count);
     }
 
     /// Add a criterion to only keep diagrams with `count` self loops. A self-loop is defined as a propagator which ends
     /// on the same vertex it started on.
-    pub fn add_self_loop_count(&mut self, count: usize) {
+    pub fn select_self_loops(&mut self, count: usize) {
         self.self_loops.push(count);
     }
 
     /// Toggle the on-shell criterion. If true, only diagrams with no self-energy insertions on external legs are
     /// kept. This implementation considers internal propagators carrying a single external momentum and no loop
     /// momentum, which is equivalent to a self-energy insertion on an external edge.
-    pub fn set_on_shell(&mut self) {
+    pub fn select_on_shell(&mut self) {
         self.on_shell = !self.on_shell;
     }
 
-    /// Add a criterion to only keep diagrams which have power `power` in the given coupling `coupling`
-    pub fn add_coupling_power(&mut self, coupling: &str, power: usize) {
+    /// Add a criterion to only keep diagrams which have power `power` in the given coupling `coupling`.
+    pub fn select_coupling_power(&mut self, coupling: &str, power: usize) {
         if let Some(powers) = self.coupling_powers.get_mut(coupling) {
             if !powers.contains(&power) {
                 powers.push(power);
@@ -77,8 +90,8 @@ impl DiagramSelector {
         }
     }
 
-    /// Add a criterion to only keep diagrams which contain `count` propagators of the field `particle`
-    pub fn add_propagator_count(&mut self, particle: &str, count: usize) {
+    /// Add a criterion to only keep diagrams which contain `count` propagators of the field `particle`.
+    pub fn select_propagator_count(&mut self, particle: &str, count: usize) {
         if let Some(powers) = self.propagator_counts.get_mut(particle) {
             if !powers.contains(&count) {
                 powers.push(count);
@@ -88,8 +101,8 @@ impl DiagramSelector {
         }
     }
 
-    /// Add a criterion to only keep diagrams which contain `count` vertices of the fields `particles`
-    pub fn add_vertex_count(&mut self, particles: Vec<String>, count: usize) {
+    /// Add a criterion to only keep diagrams which contain `count` vertices of the fields `particles`.
+    pub fn select_vertex_count(&mut self, particles: Vec<String>, count: usize) {
         let particles_sorted = particles.into_iter().sorted_unstable().collect_vec();
         if let Some(powers) = self.vertex_counts.get_mut(&particles_sorted) {
             if !powers.contains(&count) {
@@ -100,8 +113,8 @@ impl DiagramSelector {
         }
     }
 
-    /// Add a criterion to only keep diagrams for which the power of the coupling `coupling` is contained in `powers`
-    pub fn add_coupling_power_list(&mut self, coupling: &str, mut powers: Vec<usize>) {
+    /// Add a criterion to only keep diagrams for which the power of the coupling `coupling` is contained in `powers`.
+    pub fn select_coupling_power_list(&mut self, coupling: &str, mut powers: Vec<usize>) {
         if let Some(existing_powers) = self.coupling_powers.get_mut(coupling) {
             existing_powers.append(&mut powers);
         } else {
@@ -109,7 +122,8 @@ impl DiagramSelector {
         }
     }
 
-    /// Custom function handed to the [TopologyGenerator] used to generate topologies for a [DiagramGenerator]
+    /// Custom function handed to the [`TopologyGenerator`](crate::topology::TopologyGenerator) used to generate topologies for a
+    /// [`DiagramGenerator`](super::DiagramGenerator).
     pub fn add_topology_function(&mut self, function: Arc<dyn Fn(&Topology) -> bool + Sync + Send>) {
         self.topology_functions.push(function);
     }
@@ -127,7 +141,7 @@ impl DiagramSelector {
         ));
     }
 
-    /// Add a custom function which takes the internal representation of a diagram as input
+    /// Add a custom function which takes the internal representation of a diagram as input.
     #[allow(clippy::type_complexity)]
     pub(crate) fn add_unwrapped_custom_function(
         &mut self,
@@ -142,14 +156,14 @@ impl DiagramSelector {
             momentum_labels: momentum_labels.as_ref(),
             diagram: diag,
         };
-        return self.select_opi_components(view.diagram)
-            && self.select_custom_criteria(model.clone(), momentum_labels.clone(), diag)
-            && self.select_coupling_powers(&view)
-            && self.select_propagator_counts(&view)
-            && self.select_vertex_counts(&view);
+        return self.query_opi_components(view.diagram)
+            && self.query_custom_criteria(model.clone(), momentum_labels.clone(), diag)
+            && self.query_coupling_powers(&view)
+            && self.query_propagator_counts(&view)
+            && self.query_vertex_counts(&view);
     }
 
-    fn select_opi_components(&self, diag: &Diagram) -> bool {
+    fn query_opi_components(&self, diag: &Diagram) -> bool {
         if self.opi_components.is_empty() {
             return true;
         }
@@ -159,7 +173,7 @@ impl DiagramSelector {
             .any(|opi_count| *opi_count == diag.count_opi_components());
     }
 
-    fn select_custom_criteria(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
+    fn query_custom_criteria(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
         if self.custom_functions.is_empty() {
             return true;
         }
@@ -171,7 +185,7 @@ impl DiagramSelector {
         return false;
     }
 
-    fn select_coupling_powers(&self, view: &DiagramView) -> bool {
+    fn query_coupling_powers(&self, view: &DiagramView) -> bool {
         if self.coupling_powers.is_empty() {
             return true;
         }
@@ -185,7 +199,7 @@ impl DiagramSelector {
         });
     }
 
-    fn select_propagator_counts(&self, view: &DiagramView) -> bool {
+    fn query_propagator_counts(&self, view: &DiagramView) -> bool {
         if self.propagator_counts.is_empty() {
             return true;
         }
@@ -199,7 +213,7 @@ impl DiagramSelector {
         });
     }
 
-    fn select_vertex_counts(&self, view: &DiagramView) -> bool {
+    fn query_vertex_counts(&self, view: &DiagramView) -> bool {
         if self.vertex_counts.is_empty() {
             return true;
         }

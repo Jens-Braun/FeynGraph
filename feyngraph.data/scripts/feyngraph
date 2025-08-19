@@ -44,6 +44,7 @@ if __name__ == "__main__":
     cli_parser.add_argument("config", help="Configuration file for the Diagram generation in TOML format")
     cli_parser.add_argument("-t", "--template", help="Jinja2 template to render the output with", default = None)
     cli_parser.add_argument("-o", "--outfile", help="Name of the generated output file", default = "diagrams.out")
+    cli_parser.add_argument("-j", "--jobs", help = "Number of worker threads to use", type=int, default = None)
     cli_parser.add_argument("--loglevel", choices = ["DEBUG", "INFO", "WARN", "ERROR"], default = "INFO")
     cli_parser.add_argument("--version", action = "version", version = VERSION)
 
@@ -94,6 +95,8 @@ if __name__ == "__main__":
             conf["drawing"]["outdir"] = "feyngraph_drawings"
         if not "filename" in conf["drawing"]:
             conf["drawing"]["filename"] = "diagram{i}"
+    if cli_args.jobs is not None:
+        fg.set_threads(cli_args.jobs)
 
     ###########################################################################
     # Load and Prepare Model

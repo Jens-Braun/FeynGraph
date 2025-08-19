@@ -13,7 +13,7 @@ pub(crate) struct Matrix {
 
 impl Matrix {
     pub(crate) fn dim(&self) -> (usize, usize) {
-        return self.dim.clone();
+        return self.dim;
     }
 
     pub(crate) fn submatrix(&self, min: usize, max: usize) -> Matrix {
@@ -37,7 +37,7 @@ impl Matrix {
             data: self
                 .data
                 .iter()
-                .map(|row| row.iter().map(|x| f(x)).collect_vec())
+                .map(|row| row.iter().map(&f).collect_vec())
                 .collect_vec(),
         };
     }
@@ -320,11 +320,11 @@ impl<'a> Sum<&'a Vec2D> for Vec2D {
     fn sum<I: Iterator<Item = &'a Self>>(mut iter: I) -> Self {
         let mut res;
         if let Some(v) = iter.next() {
-            res = v.clone();
+            res = *v;
         } else {
             return Vec2D { x: 0., y: 0. };
         }
-        while let Some(v) = iter.next() {
+        for v in iter {
             res = res + *v;
         }
         return res;

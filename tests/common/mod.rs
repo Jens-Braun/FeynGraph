@@ -30,11 +30,11 @@ pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<
         }
     }
     writeln!(out, "% Vertices")?;
-    let model_couplings = model.coupling_orders();
+    let model_couplings = model.couplings();
     for vertex in model.vertices_iter() {
         write!(out, "[ ")?;
         for (i, particle) in vertex.particles_iter().enumerate() {
-            let p = model.get_particle_name(particle).unwrap();
+            let p = model.get_particle_by_name(particle).unwrap();
             if p.pdg() > 0 {
                 write!(out, "part{}", p.pdg())?;
             } else {

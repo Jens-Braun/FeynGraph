@@ -1,27 +1,32 @@
-//! This module contains the [TopologyGenerator], which is the central object for generating
-//! topologies of arbitrary node degrees, external legs and loops.
+//! Central module for the generation of unassigned graphs, called _topologies_.
+//!
+//! The central object of this module is the [`TopologyGenerator`], which handles the generation
+//! of the topologies given a [`TopologyModel`] and optionally a [`TopologySelector`]
+//! restricting which topologies are generated.
 
-use crate::model::TopologyModel;
-use crate::topology::components::NodeClassification;
-use crate::topology::filter::TopologySelector;
-use crate::topology::matrix::SymmetricMatrix;
-use crate::topology::workspace::TopologyWorkspace;
+pub use crate::model::TopologyModel;
 use crate::util::{Error, factorial, find_partitions};
+use components::NodeClassification;
+pub use filter::TopologySelector;
 use itertools::Itertools;
+use matrix::SymmetricMatrix;
 use rayon::prelude::*;
 use std::cmp::min;
 use std::fmt::Write;
 use std::ops::{Deref, Index};
+use workspace::TopologyWorkspace;
 
 pub(crate) mod components;
-pub mod filter;
+pub(crate) mod filter;
 pub(crate) mod matrix;
 pub(crate) mod workspace;
 
-/// A struct representing a topological node
+/// A struct representing a topological node.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node {
+    /// The degree of the node, i.e. the number of legs connected.
     pub degree: usize,
+    /// List of identifiers of nodes which are adjacent to this one.
     pub adjacent_nodes: Vec<usize>,
 }
 
@@ -40,10 +45,13 @@ impl Node {
     }
 }
 
-/// A struct representing a topological edge
+/// A struct representing a topological edge.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Edge {
+    /// Identifiers of the nodes this edge is attached to. Always ordered such that `connected_nodes[0] <= connected_nodes[1]`.
     pub connected_nodes: [usize; 2],
+    /// Internal representation of the node's momentum. The `i`-th entry in the list is the coefficient of the `i`-th momentum,
+    /// where the first `n_external` momenta are the external ones and the remaining ´n_loops` momenta are the loop-momenta.
     pub momenta: Option<Vec<i8>>,
 }
 
@@ -63,6 +71,7 @@ impl Edge {
     }
 }
 
+/// An undirected graph with a given number of loops and external legs.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Topology {
     pub(crate) n_external: usize,
@@ -119,7 +128,7 @@ impl Topology {
         return topo;
     }
 
-    /// Assign momenta to the edges and find the bridges of the topology
+    /// Assign momenta to the edges and find the bridges of the topology.
     fn assign_momenta(&mut self) {
         let mut current_loop_momentum = self.n_external;
         let n_momenta = self.n_external + self.n_loops;
@@ -361,7 +370,7 @@ impl Topology {
             .count();
     }
 
-    /// Return the bridges of the topology.
+    /// Return the bridges of the topology. A bridge is an edge that would make the graph disconnected when cut.
     pub fn bridges(&self) -> Vec<(usize, usize)> {
         return self.bridges.clone();
     }
@@ -420,37 +429,37 @@ impl Topology {
         });
     }
 
-    /// Return a reference to the topology's `i`-th node
+    /// Return a reference to the topology's `i`-th node.
     pub fn get_node(&self, i: usize) -> &Node {
         return &self.nodes[i];
     }
 
-    /// Return an iterator over the topology's edges
+    /// Return an iterator over the topology's edges.
     pub fn nodes_iter(&self) -> impl Iterator<Item = &Node> {
         return self.nodes.iter();
     }
 
-    /// Return a reference to the `i`-th edge
+    /// Return a reference to the `i`-th edge.
     pub fn get_edge(&self, i: usize) -> &Edge {
         return &self.edges[i];
     }
 
-    /// Return an iterator over the topology's edges
+    /// Return an iterator over the topology's edges.
     pub fn edges_iter(&self) -> impl Iterator<Item = &Edge> {
         return self.edges.iter();
     }
 
-    /// Return the ids of the edges connected to node `i`, including `i` if it is connected to itself via a self-loop
+    /// Return the ids of the edges connected to node `i`, including `i` if it is connected to itself via a self-loop.
     pub fn adjacent_nodes(&self, i: usize) -> &Vec<usize> {
         return &self.nodes[i].adjacent_nodes;
     }
 
-    /// Return the number of nodes
+    /// Return the number of nodes.
     pub fn n_nodes(&self) -> usize {
         return self.nodes.len();
     }
 
-    /// Return the number of edges
+    /// Return the number of edges.
     pub fn n_edges(&self) -> usize {
         return self.edges.len();
     }
@@ -467,7 +476,8 @@ impl Topology {
         return self.edge_symmetry;
     }
 
-    fn momentum_string(&self, edge_index: usize) -> String {
+    /// Get the momentum of edge `edge_index` as a formatted string.
+    pub fn momentum_string(&self, edge_index: usize) -> String {
         let mut result = String::with_capacity(5 * self.momentum_labels.len());
         let mut first: bool = true;
         for (i, coefficient) in self.edges[edge_index].momenta.as_ref().unwrap().iter().enumerate() {
@@ -522,7 +532,7 @@ impl std::fmt::Display for Topology {
     }
 }
 
-/// Struct containing the topologies generated by a [TopologyGenerator].
+/// Smart container for the topologies generated by a [TopologyGenerator].
 #[derive(Debug, PartialEq)]
 pub struct TopologyContainer {
     pub(crate) data: Vec<Topology>,
@@ -551,17 +561,17 @@ impl TopologyContainer {
         return &mut self.data;
     }
 
-    /// Return the number of topologies in the container
+    /// Return the number of topologies in the container.
     pub fn len(&self) -> usize {
         return self.data.len();
     }
 
-    /// Check whether the container is empty or not
+    /// Check whether the container is empty or not.
     pub fn is_empty(&self) -> bool {
         return self.data.is_empty();
     }
 
-    /// Return a reference to the `i`-th diagram in the container
+    /// Return a reference to the `i`-th diagram in the container.
     pub fn get(&self, i: usize) -> &Topology {
         return &self.data[i];
     }
@@ -602,7 +612,9 @@ impl Deref for TopologyContainer {
     }
 }
 
-/// A generator to construct all possible topologies given by
+/// The central object of the topology module, generating all possible topologies for a given problem.
+///
+/// The problem is specified by
 ///
 /// - a [TopologyModel] defining the possible degrees of appearing nodes
 /// - `n_external` external particles
@@ -612,14 +624,14 @@ impl Deref for TopologyContainer {
 /// # Examples
 /// ```rust
 /// use feyngraph::model::TopologyModel;
-/// use feyngraph::topology::{TopologyGenerator, filter::TopologySelector};
+/// use feyngraph::topology::{TopologyGenerator, TopologySelector};
 ///
 /// // Use vertices with degree 3 and 4 for the topologies
 /// let model = TopologyModel::from(vec![3, 4]);
 ///
 /// // Construct only one-particle-irreducible (one 1PI-component) diagrams
 /// let mut selector = TopologySelector::default();
-/// selector.add_opi_count(1);
+/// selector.select_opi_components(1);
 ///
 /// // Generate all three-point topologies with three loops with the given model and selector
 /// let generator = TopologyGenerator::new(3, 3, model, Some(selector));

@@ -47,19 +47,19 @@ impl PyTopologySelector {
     }
 
     fn select_node_degree(&mut self, degree: usize, selection: usize) {
-        self.0.add_node_degree(degree, selection);
+        self.0.select_node_degree(degree, selection);
     }
 
     fn select_node_degree_range(&mut self, degree: usize, start: usize, end: usize) {
-        self.0.add_node_degree_range(degree, start..end);
+        self.0.select_node_degree_range(degree, start..end);
     }
 
     fn select_node_partition(&mut self, partition: Vec<(usize, usize)>) {
-        self.0.add_node_partition(partition);
+        self.0.select_node_partition(partition);
     }
 
     fn select_opi_components(&mut self, opi_count: usize) {
-        self.0.add_opi_count(opi_count);
+        self.0.select_opi_components(opi_count);
     }
 
     pub(crate) fn add_custom_function(&mut self, py_function: Py<PyAny>) {
@@ -75,11 +75,11 @@ impl PyTopologySelector {
     }
 
     fn select_on_shell(&mut self) {
-        self.0.set_on_shell();
+        self.0.select_on_shell();
     }
 
     fn select_self_loops(&mut self, n: usize) {
-        self.0.add_self_loop_count(n);
+        self.0.select_self_loops(n);
     }
 
     fn clear(&mut self) {
@@ -108,7 +108,7 @@ pub(crate) struct PyNode(Node);
 
 #[pymethods]
 impl PyNode {
-    pub(crate) fn nodes(&self) -> Vec<usize> {
+    pub(crate) fn adjacent(&self) -> Vec<usize> {
         return self.0.adjacent_nodes.clone();
     }
 
@@ -177,7 +177,7 @@ impl PyTopology {
     }
 
     fn _repr_svg_(&self) -> String {
-        return self.0.draw_svg();
+        return self.0.draw_svg_string();
     }
 
     fn __str__(&self) -> String {
@@ -203,11 +203,17 @@ impl PyTopologyContainer {
     pub(crate) fn __len__(&self) -> usize {
         return self.0.len();
     }
+
     fn __getitem__(&self, i: usize) -> PyResult<PyTopology> {
         if i >= self.0.len() {
             return Err(PyIndexError::new_err("Index out of bounds"));
         }
         return Ok(PyTopology((*self.0.get(i)).clone()));
+    }
+
+    fn _repr_svg_(&self) -> String {
+        let n = self.0.len().min(100);
+        return self.0.draw_svg(&(0..n).collect_vec(), None);
     }
 }
 

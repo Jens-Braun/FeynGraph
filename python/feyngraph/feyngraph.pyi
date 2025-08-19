@@ -290,17 +290,24 @@ class DiagramSelector:
         ```
         """
 
-    def add_coupling_power(self, coupling: str, power: int):
+    def add_topology_function(self, py_function: Callable[[Topology], bool]):
+        """
+        Add a custom topology selection function, which is used when the `DiagramSelector` is converted to a
+        [`TopologySelector`](topology.md#feyngraph.topology.TopologySelector), e.g. when a
+        [`DiagramGenerator`](feyngraph.md#feyngraph.DiagramGenerator) automatically generates topologies.
+        """
+
+    def select_coupling_power(self, coupling: str, power: int):
         """
         Add a constraint to only select diagrams for which the power of `coupling` sums to `power`.
         """
 
-    def add_propagator_count(self, particle: str, count: int):
+    def select_propagator_count(self, particle: str, count: int):
         """
         Add a constraint to only select diagrams which contain exactly `count` propagators of the field `particle`.
         """
 
-    def add_vertex_count(self, particles: list[str], count: int):
+    def select_vertex_count(self, particles: list[str], count: int):
         """
         Add a constraint to only select diagrams which contain exactly `count` vertices of the fields `particles`.
         """
