@@ -1,7 +1,13 @@
 [package]
-name = "feyngraph"
-version = "0.0.1"
+authors = ["Jens Braun <j.braun@kit.edu>"]
+categories = ["science"]
+description = "A modern Feynman diagram generator"
 edition = "2024"
+keywords = ["feynman", "diagrams", "physics", "hep"]
+license = "MPL-2.0"
+name = "feyngraph"
+repository = "https://github.com/jens-braun/feyngraph"
+version = "0.1.0-beta.1"
 
 [lib]
 name = "feyngraph"
@@ -16,6 +22,8 @@ indexmap = "2"
 either = "1"
 peg = "0.8"
 rustc-hash = "2"
+
+# Required for Python interface
 pyo3 = { version = "0.25", features = [
     "auto-initialize",
     "either",
@@ -45,3 +53,6 @@ harness = false
 [[bench]]
 name = "diagrams"
 harness = false
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--html-in-header", "./src/docs-header.html"]

@@ -12,3 +12,6 @@ tests/resources/python
 tests/resources/qgraf
 tests/resources/grc
 tests/resources/form
+.idea
+.ropenproject
+.zed
