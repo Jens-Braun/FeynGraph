@@ -1,11 +1,11 @@
 # FeynGraph
 
-FeynGraph is a modern Feynman diagram generation toolkit aiming to be as versatile as possible while remining pleasent to use. The library itself is written in Rust, additional language bindings are available for Python and Wolfram Mathematica.
+FeynGraph is a modern Feynman diagram generation toolkit aiming to be as versatile as possible while remaining pleasant to use. The library itself is written in Rust, additional language bindings are available for Python and Wolfram Mathematica.
 
 ## Installation
 
 === ":simple-python: Python"
-    The FeynGraph Python bindings are published to PyPI and can therefore easily istalled with e.g. `pip`
+    The FeynGraph Python bindings are published to PyPI and can therefore easily installed with e.g. `pip`
     ```
     pip install feyngraph
     ```
@@ -14,11 +14,11 @@ FeynGraph is a modern Feynman diagram generation toolkit aiming to be as versati
     pip install feyngraph[cli]
     ```
     ### Building From Source
-    The FeynGraph Python libaray can also easily be built from source, which requires a [Rust toolchain](https://www.rust-lang.org/tools/install) and [`maturin`](https://www.maturin.rs/). Then, in the cloned repository, a Python wheel can be compiled by running
+    The FeynGraph Python library can also easily be built from source, which requires a [Rust toolchain](https://www.rust-lang.org/tools/install) and [`maturin`](https://www.maturin.rs/). Then, in the cloned repository, a Python wheel can be compiled by running
     ```
     maturin build -r
     ```
-    The library can also immediatly be installed by running
+    The library can also immediately be installed by running
     ```
     pip install .
     ```
