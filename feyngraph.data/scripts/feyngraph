@@ -83,7 +83,7 @@ if __name__ == "__main__":
         n_legs = len(conf["process"]["in"]) + len(conf["process"]["out"])
         n_loops = conf["process"]["loops"]
         if len(conf["process"]["momenta"]) != n_legs + n_loops:
-            critical(f"The given process with {n_legs} legs and {n_loops} loops has {n_legs + n_loops} associated momenta, but {len(conf["process"]["momenta"])} labels were specified. Please speficy exactly {n_legs + n_loops} labels.")
+            critical(f"The given process with {n_legs} legs and {n_loops} loops has {n_legs + n_loops} associated momenta, but {len(conf["process"]["momenta"])} labels were specified. Please specify exactly {n_legs + n_loops} labels.")
             sys.exit()
     if "drawing" in conf:
         if not "format" in conf["drawing"]:
@@ -133,7 +133,7 @@ if __name__ == "__main__":
                    selector.select_opi_components(conf["filter"]["self_loops"])
                 case "coupling_orders":
                    for coupling, power in conf["filter"]["coupling_orders"].items():
-                      selector.add_coupling_power(coupling, power)
+                      selector.select_coupling_power(coupling, power)
                 case "custom_function":
                     if not "custom_code" in conf["filter"]:
                         critical(f"Custom filter function '{conf['filter']['custom_function']}' requested in config, but no code to define it was given.")
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     ###########################################################################
     # Generate Diagrams
     ###########################################################################
-    n_legs = len(conf["process"]["in"]) + len(conf["process"]["in"])
+    n_legs = len(conf["process"]["in"]) + len(conf["process"]["out"])
     info(f"Generating Feynman diagrams with {n_legs} legs and {conf['process']['loops']} loops.")
     with console.status(f"Generating diagrams...", spinner="bouncingBall"):
         diag_gen = fg.DiagramGenerator(conf["process"]["in"], conf["process"]["out"], conf["process"]["loops"], model = model, selector = selector)

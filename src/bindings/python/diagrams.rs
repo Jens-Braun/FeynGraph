@@ -767,6 +767,10 @@ impl PyDiagramSelector {
         self.0.select_vertex_count(particles, count);
     }
 
+    fn select_vertex_degree(&mut self, degree: usize, count: usize) {
+        self.0.select_vertex_degree(degree, count);
+    }
+
     fn __deepcopy__(&self, _memo: Py<PyDict>) -> Self {
         return self.clone();
     }

@@ -23,7 +23,7 @@ def generate_diagrams(
         particles_out: list[str],
         n_loops: int,
         model: Optional[Model] = None,
-        diagram_selector: Optional[DiagramSelector] = None
+        selector: Optional[DiagramSelector] = None
         ) -> DiagramContainer :
     """
     Convenience function for diagram generation. This function only requires the minimal set of input information,
@@ -41,7 +41,7 @@ def generate_diagrams(
         particles_out: list of outgoing particles, specified by name
         n_loops: number of loops in the generated diagrams [default: 0]
         model: model used in diagram generation [default: SM in Feynman gauge]
-        diagram_selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
+        selector: selector struct determining which diagrams are to be kept [default: all diagrams for zero loops, only one-particle-irreducible diagrams for loop-diagrams]
 
     """
 
@@ -231,7 +231,7 @@ class DiagramContainer:
 class DiagramSelector:
     """
     A selector class which determines whether a diagram is to be kept or to be discarded. Multiple criteria can
-    be specified. The available critera are
+    be specified. The available criteria are
 
     - opi components: select only diagrams for which the number of one-particle-irreducible components matches any of
     the given counts
@@ -311,6 +311,9 @@ class DiagramSelector:
         """
         Add a constraint to only select diagrams which contain exactly `count` vertices of the fields `particles`.
         """
+
+    def select_vertex_degree(self, degree: int, count: int):
+        """Add a criterion to only keep diagrams which contains `count` vertices of degree `degree`."""
 
 class DiagramGenerator:
     """

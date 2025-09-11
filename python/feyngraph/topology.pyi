@@ -165,3 +165,6 @@ class TopologyGenerator:
 
     def generate(self) -> TopologyContainer:
         """Generate the topologies for the given configuration."""
+
+    def count(self) -> int:
+        """Generate the topologies for the given configuration without saving them, only returning the total number."""

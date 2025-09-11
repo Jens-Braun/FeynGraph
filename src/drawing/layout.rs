@@ -219,7 +219,7 @@ impl Layout for DiagramLayout<'_> {
         let d = self.distances.as_ref().unwrap();
         let class_distances = d
             .iter()
-            .map(|row| *row.iter().take(self.diag.n_in()).min().unwrap())
+            .map(|row| *row.iter().take(self.diag.n_in()).min().unwrap_or(&0))
             .collect_vec();
         let mut class_members = vec![Vec::new(); *class_distances.iter().max().unwrap() + 1];
         for (i, d) in class_distances.iter().enumerate() {

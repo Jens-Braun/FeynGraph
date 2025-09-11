@@ -59,6 +59,7 @@ const fn feynarts_particle_map(pdg: isize) -> &'static str {
 }
 
 #[pyfunction]
+#[pyo3(name = "_diagrams_feynarts")]
 pub(crate) fn diagrams_feynarts(
     py: Python<'_>,
     particles_in: Vec<String>,
@@ -216,7 +217,7 @@ impl DiagramView<'_> {
             write!(
                 buffer,
                 "Field[{}] -> {},",
-                i,
+                i + 1,
                 feynarts_particle_map(prop.particle().pdg())
             )
             .unwrap();

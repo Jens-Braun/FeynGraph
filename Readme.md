@@ -1,5 +1,8 @@
 # FeynGraph - A Modern Feynman Diagram Generator
 
+> [!WARNING]
+> FeynGraph is currently still in the testing phase. The core algorithms are validated to operate as expected, but some small bugs may still appear. If this is the case, please file an [issue](https://github.com/Jens-Braun/FeynGraph/issues/new).
+
 FeynGraph is a modern Feynman diagram generation toolkit aiming to be as versatile as possible while remaining pleasant to use. The library itself is written in Rust, additional language bindings are available for Python and Wolfram Mathematica.
 
 A user guide is available [here](https://jens-braun.github.io/FeynGraph/).
@@ -10,7 +13,7 @@ The FeynGraph Python bindings are published to PyPI and can therefore easily ins
 ```
 pip install feyngraph
 ```
-In addition to the library interface, there is also a more classical [command line utility](usage/cli/index.md). This requires some extra dependencies, which can be installed with e.g.
+In addition to the library interface, there is also a more classical [command line utility](https://jens-braun.github.io/FeynGraph/usage/cli/). This requires some extra dependencies, which can be installed with e.g.
 ```
 pip install feyngraph[cli]
 ```

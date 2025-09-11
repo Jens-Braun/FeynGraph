@@ -33,6 +33,8 @@ pub struct DiagramSelector {
     pub(crate) propagator_counts: HashMap<String, Vec<usize>>,
     /// Only keep diagrams for which the number of vertices of the given fields is in the list of specified counts
     pub(crate) vertex_counts: HashMap<Vec<String>, Vec<usize>>,
+    /// Only keep diagrams for which the number of vertices with the given degrees is in the list of specified counts
+    pub(crate) vertex_degree_counts: Vec<(usize, Vec<usize>)>,
     /// Only keep diagrams for which the given custom function returns `true`
     #[allow(clippy::type_complexity)]
     pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>>,
@@ -56,6 +58,7 @@ impl DiagramSelector {
             coupling_powers: HashMap::default(),
             propagator_counts: HashMap::default(),
             vertex_counts: HashMap::default(),
+            vertex_degree_counts: Vec::new(),
             custom_functions: Vec::new(),
             topology_functions: Vec::new(),
         };
@@ -119,6 +122,17 @@ impl DiagramSelector {
             existing_powers.append(&mut powers);
         } else {
             self.coupling_powers.insert(coupling.to_string(), powers);
+        }
+    }
+
+    /// Add a criterion to only keep diagrams which contains `count` vertices of degree `degree`.
+    pub fn select_vertex_degree(&mut self, degree: usize, count: usize) {
+        if let Some((_, counts)) = self.vertex_degree_counts.iter_mut().find(|(d, _)| *d == degree) {
+            if !counts.contains(&count) {
+                counts.push(count);
+            }
+        } else {
+            self.vertex_degree_counts.push((degree, vec![count]));
         }
     }
 
@@ -239,7 +253,7 @@ impl DiagramSelector {
 
     pub(crate) fn as_topology_selector(&self) -> TopologySelector {
         return TopologySelector {
-            node_degrees: Vec::new(),
+            node_degrees: self.vertex_degree_counts.clone(),
             node_partition: Vec::new(),
             opi_components: self.opi_components.clone(),
             self_loops: self.self_loops.clone(),

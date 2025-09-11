@@ -248,4 +248,10 @@ impl PyTopologyGenerator {
             return PyTopologyContainer(self.0.generate());
         });
     }
+
+    pub(crate) fn count(&self, py: Python<'_>) -> usize {
+        return py.allow_threads(|| -> usize {
+            return self.0.count_topologies();
+        });
+    }
 }
