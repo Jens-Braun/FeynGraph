@@ -42,11 +42,24 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn set_threads(n_threads: usize) {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(n_threads)
-        .build_global()
-        .unwrap();
+fn set_threads(n_threads: usize) -> PyResult<()> {
+    let result = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global();
+
+    match result {
+        Ok(_) => Ok(()), // Successfully configured
+        Err(e) => {
+            if e.to_string()
+                .contains("The global thread pool has already been initialized")
+            {
+                Ok(()) // Already initialized, no action needed
+            } else {
+                Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                    "Failed to set Rayon thread pool: {}",
+                    e
+                )))
+            }
+        }
+    }
 }
 
 #[pyfunction]
