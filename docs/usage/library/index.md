@@ -49,11 +49,10 @@ FeynGraph uses the [`rayon`](https://crates.io/crates/rayon) Rust crate to paral
     import logging
     from rich.logging import RichHandler
     logging.basicConfig(
-      handlers=[
-        format="%(message)s",
-        datefmt="[%X]",
-        RichHandler(show_path=False, rich_tracebacks=True),
-      ])
+      format="%(message)s",
+      datefmt="[%X]",
+      handlers=[RichHandler(show_path=False, rich_tracebacks=True)],
+    )
     ```
 === ":simple-rust: Rust"
     FeynGraph uses the [`log`](https://crates.io/crates/log) crate for logging. If FeynGraph is used in an executable, it should include a [logger](https://docs.rs/log/0.4.27/log/#available-logging-implementations) to consume and show the logs produced by FeynGraph.
