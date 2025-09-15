@@ -6,8 +6,10 @@ use crate::{
     util,
 };
 use diagrams::{PyDiagram, PyDiagramContainer, PyDiagramGenerator, PyDiagramSelector};
+use log::warn;
 use pyo3::exceptions::{PyIOError, PySyntaxError, PyValueError};
 use pyo3::prelude::*;
+use std::error::Error;
 use std::path::PathBuf;
 use topology::{PyTopology, PyTopologyContainer, PyTopologyGenerator, PyTopologyModel, PyTopologySelector};
 
@@ -43,23 +45,21 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyfunction]
 fn set_threads(n_threads: usize) -> PyResult<()> {
-    let result = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global();
-
-    match result {
-        Ok(_) => Ok(()), // Successfully configured
-        Err(e) => {
-            if e.to_string()
-                .contains("The global thread pool has already been initialized")
-            {
-                Ok(()) // Already initialized, no action needed
-            } else {
-                Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                    "Failed to set Rayon thread pool: {}",
-                    e
-                )))
+    return match rayon::ThreadPoolBuilder::new().num_threads(n_threads).build_global() {
+        Ok(()) => Ok(()),
+        Err(e) => match e.source() {
+            None => {
+                warn!(
+                    "The Rayon thread pool has already been initialized, which is only possible once. This call will be ignored."
+                );
+                Ok(())
             }
-        }
-    }
+            Some(e) => Err(PyIOError::new_err(format!(
+                "Error while initializing the global Rayon thread pool: {}",
+                e
+            ))),
+        },
+    };
 }
 
 #[pyfunction]
