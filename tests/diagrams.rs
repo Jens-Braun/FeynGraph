@@ -1,5 +1,6 @@
 #![allow(dead_code, non_snake_case)]
 use feyngraph::{
+    DiagramSelector,
     diagram::DiagramGenerator,
     model::{Model, TopologyModel},
     topology::TopologyGenerator,
@@ -7,6 +8,7 @@ use feyngraph::{
 use itertools::Itertools;
 use paste::paste;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 mod common;
 
@@ -122,6 +124,10 @@ test_diagrams!(Standard_Model_UFO, g g => g g, 0);
 test_diagrams!(Standard_Model_UFO, g g => g g, 1);
 test_diagrams!(Standard_Model_UFO, g g => g g, 2);
 
+test_diagrams!(Standard_Model_UFO, g g => g g g g, 0);
+test_diagrams!(Standard_Model_UFO, g g => g g g g, 1);
+test_diagrams!(Standard_Model_UFO, g g => g g g g, 2);
+
 test_diagrams!(Standard_Model_UFO, u u => u u, 0);
 test_diagrams!(Standard_Model_UFO, u u => u u, 1);
 test_diagrams!(Standard_Model_UFO, u u => u u, 2);
@@ -171,4 +177,20 @@ fn diags_SM_uu_uu__loops_1() {
     let model = Model::default();
     let diag_gen = DiagramGenerator::new(&["u"; 2], &["u", "u", "g"], 1, model, None).unwrap();
     diag_gen.generate();
+}
+
+#[test]
+fn diags_SM_QCD_gauge_vacuum_diagrams_loops_4() {
+    let model = Model::default();
+    let mut s = DiagramSelector::new();
+    s.select_coupling_power("QED", 0);
+    s.add_topology_function(Arc::new(|topo| -> bool {
+        !topo
+            .edges_iter()
+            .any(|e| e.momenta.as_ref().unwrap().iter().all(|x| *x == 0))
+    }));
+    s.add_custom_function(Arc::new(|d| !d.propagators().any(|p| p.particle().pdg().abs() <= 6)));
+    let diag_gen = DiagramGenerator::new(&[], &[], 4, model, Some(s)).unwrap();
+    let diags = diag_gen.generate();
+    assert_eq!(diags.len(), 65);
 }

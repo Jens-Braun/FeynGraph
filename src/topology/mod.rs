@@ -155,8 +155,8 @@ impl Topology {
         // Traverse the topology in depth-first order. The algorithm is a modified version of Tarjan's
         // bridge-finding algorithm, which keeps track of which loops the current edge is part of.
         self.momentum_dfs(
-            self.nodes[0].adjacent_nodes[0],
             0,
+            None,
             &mut visited,
             &mut distance,
             &mut shortest_distance,
@@ -191,7 +191,7 @@ impl Topology {
     fn momentum_dfs(
         &mut self,
         node: usize,
-        parent: usize,
+        parent: Option<usize>,
         visited: &mut Vec<bool>,
         distance: &mut Vec<usize>,
         shortest_distance: &mut Vec<usize>,
@@ -227,7 +227,9 @@ impl Topology {
             }
             // Parent node -> if there are multiple connections between the current node and the parent node,
             // the current edge cannot be a bridge, ignore otherwise
-            if connected_node == parent {
+            if let Some(parent) = parent
+                && connected_node == parent
+            {
                 if self.get_multiplicity(node, connected_node) > 1 {
                     shortest_distance[node] = min(shortest_distance[node], shortest_distance[parent]);
                 }
@@ -264,7 +266,7 @@ impl Topology {
                 let mut accumulated_momenta = vec![0; momenta.len()];
                 self.momentum_dfs(
                     connected_node,
-                    node,
+                    Some(node),
                     visited,
                     distance,
                     shortest_distance,
@@ -305,7 +307,7 @@ impl Topology {
                     );
                 }
 
-                if shortest_distance[connected_node] > distance[node] {
+                if shortest_distance[connected_node] > distance[node] && node >= self.n_external {
                     self.bridges.push((node, connected_node));
                 }
             }
