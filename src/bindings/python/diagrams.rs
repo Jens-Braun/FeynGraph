@@ -25,6 +25,7 @@ pub(crate) struct PyLeg {
     leg: Arc<Leg>,
     leg_index: usize,
     invert_particle: bool,
+    invert_momentum: bool,
 }
 
 #[pymethods]
@@ -92,7 +93,11 @@ impl PyLeg {
     }
 
     pub fn momentum(&self) -> Vec<i8> {
-        return self.leg.momentum.clone();
+        return if self.invert_momentum {
+            self.leg.momentum.iter().map(|x| -*x).collect_vec()
+        } else {
+            self.leg.momentum.clone()
+        };
     }
 
     pub fn momentum_str(&self) -> String {
@@ -110,7 +115,7 @@ impl PyLeg {
             } else {
                 sign = "+";
             }
-            match *coefficient {
+            match *coefficient * if self.invert_momentum { -1 } else { 1 } {
                 1 => write!(&mut result, "{}{}", sign, momentum_labels[i]).unwrap(),
                 -1 => write!(&mut result, "-{}", momentum_labels[i]).unwrap(),
                 x if x < 0 => write!(&mut result, "-{}*{}", x.abs(), momentum_labels[i]).unwrap(),
@@ -382,6 +387,7 @@ impl PyVertex {
                         leg: Arc::new(leg.clone()),
                         leg_index: index,
                         invert_particle: false,
+                        invert_momentum: index >= self.diagram.diagram.incoming_legs.len(),
                     })
                 }
             })
@@ -565,6 +571,7 @@ impl PyDiagram {
                 leg: Arc::new(p.clone()),
                 leg_index: i,
                 invert_particle: false,
+                invert_momentum: false,
             })
             .collect_vec();
     }
@@ -581,6 +588,7 @@ impl PyDiagram {
                 leg: Arc::new(p.clone()),
                 leg_index: i + self.diagram.incoming_legs.len(),
                 invert_particle: true,
+                invert_momentum: false,
             })
             .collect_vec();
     }

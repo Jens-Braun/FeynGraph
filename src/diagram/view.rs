@@ -32,6 +32,7 @@ impl<'a> DiagramView<'a> {
             leg: p,
             leg_index: i,
             invert_particle: false,
+            invert_momentum: false,
         });
     }
 
@@ -43,6 +44,7 @@ impl<'a> DiagramView<'a> {
             leg: p,
             leg_index: i + self.diagram.incoming_legs.len(),
             invert_particle: true,
+            invert_momentum: false,
         });
     }
 
@@ -286,6 +288,7 @@ pub struct LegView<'a> {
     pub(crate) leg: &'a Leg,
     pub(crate) leg_index: usize,
     pub(crate) invert_particle: bool,
+    pub(crate) invert_momentum: bool,
 }
 
 impl LegView<'_> {
@@ -324,6 +327,15 @@ impl LegView<'_> {
             .unwrap();
     }
 
+    /// Get the internal representation of the momentum flowing through the leg.
+    pub fn momentum(&self) -> Vec<i8> {
+        return if self.invert_momentum {
+            self.leg.momentum.iter().map(|x| -*x).collect_vec()
+        } else {
+            self.leg.momentum.clone()
+        };
+    }
+
     /// Get the string-formatted momentum flowing through the leg.
     pub fn momentum_str(&self) -> String {
         let mut result = String::with_capacity(5 * self.diagram.momentum_labels.len());
@@ -332,7 +344,7 @@ impl LegView<'_> {
             if *coefficient == 0 {
                 continue;
             }
-            match *coefficient {
+            match *coefficient * if self.invert_momentum { -1 } else { 1 } {
                 1 => {
                     if !first {
                         write!(&mut result, "+").unwrap();
@@ -561,6 +573,7 @@ impl VertexView<'_> {
                     leg,
                     leg_index: index,
                     invert_particle: false,
+                    invert_momentum: index >= self.diagram.diagram.incoming_legs.len(),
                 })
             }
         });
