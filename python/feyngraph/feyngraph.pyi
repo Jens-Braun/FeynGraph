@@ -131,6 +131,9 @@ class Leg:
 class Propagator:
     """The class representing an internal propagator."""
 
+    def normalize(self) -> Self:
+        """Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle."""
+
     def vertices(self) -> list[Vertex]:
         """Get a list of vertices the propagator is connected to."""
 

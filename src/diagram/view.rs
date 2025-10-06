@@ -398,6 +398,21 @@ pub struct PropagatorView<'a> {
 }
 
 impl PropagatorView<'_> {
+    /// Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle.
+    pub fn normalize(&self) -> PropagatorView<'_> {
+        return if self.particle().is_anti() {
+            Self {
+                model: self.model,
+                diagram: self.diagram,
+                propagator: self.propagator,
+                index: self.index,
+                invert: !self.invert,
+            }
+        } else {
+            self.clone()
+        };
+    }
+
     /// Get an iterator over the vertices connected by the propagator.
     pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_>> {
         return if self.invert {

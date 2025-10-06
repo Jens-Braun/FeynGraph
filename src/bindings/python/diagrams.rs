@@ -170,6 +170,20 @@ impl PyPropagator {
         return format!("{}", self);
     }
 
+    pub fn normalize(&self) -> PyPropagator {
+        return if self.particle().is_anti() {
+            Self {
+                container: self.container.clone(),
+                diagram: self.diagram.clone(),
+                propagator: self.propagator.clone(),
+                index: self.index,
+                invert: !self.invert,
+            }
+        } else {
+            self.clone()
+        };
+    }
+
     pub fn vertices(&self) -> Vec<PyVertex> {
         return if self.invert {
             self.propagator
