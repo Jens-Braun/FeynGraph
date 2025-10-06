@@ -133,20 +133,21 @@ peg::parser!(
                                     Err("String or int")?
                                 }
                             }
-                        }
-                        match value {
-                            Value::Int(n) => {
-                                if let Some(v) =  coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
-                                    log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
+                        } else {
+                            match value {
+                                Value::Int(n) => {
+                                    if let Some(v) =  coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                        log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
+                                    }
+                                },
+                                Value::String(s) => {
+                                    let n = s.parse::<isize>().or(Err("Expected int"))?;
+                                    if let Some(v) = coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
+                                        log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
+                                    }
                                 }
-                            },
-                            Value::String(s) => {
-                                let n = s.parse::<isize>().or(Err("Expected int"))?;
-                                if let Some(v) = coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
-                                    log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
-                                }
+                                _ => (),
                             }
-                            _ => (),
                         }
                     }
                 }
@@ -370,6 +371,18 @@ mod tests {
     #[test]
     fn qgraf_sm_test() {
         let model = parse_qgraf_model(Path::new("tests/resources/sm.qgraf"));
+        match &model {
+            Ok(_) => (),
+            Err(e) => {
+                println!("{:#?}", e);
+            }
+        }
+        assert!(model.is_ok());
+    }
+
+    #[test]
+    fn qgraf_sm_gosam() {
+        let model = parse_qgraf_model(Path::new("tests/resources/sm_gosam.qgraf"));
         match &model {
             Ok(_) => (),
             Err(e) => {
