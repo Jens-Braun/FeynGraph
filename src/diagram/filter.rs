@@ -5,6 +5,7 @@ use crate::topology::Topology;
 use crate::topology::filter::TopologySelector;
 use crate::util::HashMap;
 use itertools::Itertools;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 /// A struct that decides whether a diagram is to be kept or discarded. Only diagrams for which
@@ -25,6 +26,8 @@ pub struct DiagramSelector {
     pub(crate) opi_components: Vec<usize>,
     /// Only keep diagrams with the specified number of self-loops
     pub(crate) self_loops: Vec<usize>,
+    /// Only keep diagrams with the specified number of tadpoles
+    pub(crate) tadpoles: Vec<usize>,
     /// Only keep diagrams with no self-energy insertions on external legs.
     pub(crate) on_shell: bool,
     /// Only keep diagrams for which the power of the given coupling is contained in the list of specified powers
@@ -54,6 +57,7 @@ impl DiagramSelector {
         return Self {
             opi_components: Vec::new(),
             self_loops: Vec::new(),
+            tadpoles: Vec::new(),
             on_shell: false,
             coupling_powers: HashMap::default(),
             propagator_counts: HashMap::default(),
@@ -69,10 +73,16 @@ impl DiagramSelector {
         self.opi_components.push(count);
     }
 
-    /// Add a criterion to only keep diagrams with `count` self loops. A self-loop is defined as a propagator which ends
+    /// Add a criterion to only keep diagrams with `count` self-loops. A self-loop is defined as a propagator which ends
     /// on the same vertex it started on.
     pub fn select_self_loops(&mut self, count: usize) {
         self.self_loops.push(count);
+    }
+
+    /// Add a criterion to only keep diagrams with `count` tadpoles. A tadpole is defined as a subdiagram without any
+    /// external legs connected to the remaining vertices only by a single propagator carrying no momentum.
+    pub fn select_tadpoles(&mut self, count: usize) {
+        self.tadpoles.push(count);
     }
 
     /// Toggle the on-shell criterion. If true, only diagrams with no self-energy insertions on external legs are
@@ -257,8 +267,33 @@ impl DiagramSelector {
             node_partition: Vec::new(),
             opi_components: self.opi_components.clone(),
             self_loops: self.self_loops.clone(),
+            tadpoles: self.tadpoles.clone(),
             on_shell: self.on_shell,
             custom_functions: self.topology_functions.clone(),
         };
+    }
+}
+
+impl std::fmt::Debug for DiagramSelector {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
+        return fmt
+            .debug_struct("DiagramSelector")
+            .field("vertex_degree_counts", &self.vertex_degree_counts)
+            .field("vertex_counts", &self.vertex_counts)
+            .field("opi_components", &self.opi_components)
+            .field("self_loops", &self.self_loops)
+            .field("tadpoles", &self.tadpoles)
+            .field("on_shell", &self.on_shell)
+            .field("coupling_powers", &self.coupling_powers)
+            .field("propagator_counts", &self.propagator_counts)
+            .field(
+                "custom_functions",
+                &format!("{} custom functions", self.custom_functions.len()),
+            )
+            .field(
+                "topology_functions",
+                &format!("{} custom topology functions", self.topology_functions.len()),
+            )
+            .finish();
     }
 }

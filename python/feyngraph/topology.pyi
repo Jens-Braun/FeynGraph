@@ -101,6 +101,9 @@ class TopologySelector:
     def select_self_loops(self, n: int):
         """Select only topologies containing exactly `n` self-loops."""
 
+    def select_tadpoles(self, n: int):
+        """Select only topologies containing exactly `n` tadpoles."""
+
     def clear(self):
         """Clear all criteria."""
 

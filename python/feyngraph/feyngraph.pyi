@@ -3,7 +3,7 @@ A modern Feynman diagram generation toolkit.
 """
 
 from __future__ import annotations
-from typing import Optional, Callable
+from typing import Optional, Callable, Self
 
 from feyngraph.topology import Topology, TopologyModel
 
@@ -267,6 +267,12 @@ class DiagramSelector:
         """
         Add a constraint to only select diagrams with `count` self-loops. A self-loop is defined as an edge which ends
         on the same node it started on.
+        """
+
+    def select_tadpoles(self, count: int):
+        """
+        Add a criterion to only keep diagrams with `count` tadpoles. A tadpole is defined as a subdiagram without any
+        external legs connected to the remaining vertices only by a single propagator carrying no momentum.
         """
 
     def select_on_shell(self):

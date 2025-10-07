@@ -732,17 +732,29 @@ pub(crate) struct PyDiagramSelector(DiagramSelector);
 
 #[pymethods]
 impl PyDiagramSelector {
+    pub fn __str__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
+    fn __repr__(&self) -> String {
+        return format!("{:#?}", self.0);
+    }
+
     #[new]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         return Self(DiagramSelector::default());
     }
 
-    pub(crate) fn select_opi_components(&mut self, opi_count: usize) {
+    pub fn select_opi_components(&mut self, opi_count: usize) {
         self.0.select_opi_components(opi_count);
     }
 
     fn select_self_loops(&mut self, count: usize) {
         self.0.select_self_loops(count);
+    }
+
+    fn select_tadpoles(&mut self, count: usize) {
+        self.0.select_tadpoles(count);
     }
 
     fn select_on_shell(&mut self) {

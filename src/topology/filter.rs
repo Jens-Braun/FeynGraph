@@ -27,6 +27,8 @@ pub struct TopologySelector {
     pub(crate) opi_components: Vec<usize>,
     /// Only keep topologies with the specified number of self-loops
     pub(crate) self_loops: Vec<usize>,
+    /// Only keep topologies with the specified number of tadpoles
+    pub(crate) tadpoles: Vec<usize>,
     /// Only keep topologies with no self-energy insertions on external legs.
     pub(crate) on_shell: bool,
     /// Only keep topologies for which the given custom function returns `true`
@@ -42,6 +44,7 @@ impl TopologySelector {
             node_partition: Vec::new(),
             opi_components: Vec::new(),
             self_loops: Vec::new(),
+            tadpoles: Vec::new(),
             on_shell: false,
             custom_functions: Vec::new(),
         };
@@ -111,6 +114,12 @@ impl TopologySelector {
         self.self_loops.push(count);
     }
 
+    /// Add a criterion to only keep topologies with `count` tadpoles. A tadpole is defined as a subtopology without any
+    /// external legs connected to the remaining nodes only by a single edge carrying no momentum.
+    pub fn select_tadpoles(&mut self, count: usize) {
+        self.tadpoles.push(count);
+    }
+
     /// Toggle the on-shell criterion. If true, only topologies with no self-energy insertions on external legs are
     /// kept. This implementation considers internal edges carrying a single external momentum and no loop momentum,
     /// which is equivalent to a self-energy insertion on an external edge.
@@ -129,6 +138,7 @@ impl TopologySelector {
         self.node_partition.clear();
         self.opi_components.clear();
         self.self_loops.clear();
+        self.tadpoles.clear();
         self.on_shell = false;
         self.custom_functions.clear();
     }
@@ -138,6 +148,7 @@ impl TopologySelector {
             && self.query_node_partition(topo)
             && self.query_opi_components(topo)
             && self.query_self_loops(topo)
+            && self.query_tadpoles(topo)
             && self.query_on_shell(topo)
             && self.query_custom_criteria(topo);
     }
@@ -182,6 +193,17 @@ impl TopologySelector {
             .self_loops
             .iter()
             .any(|opi_count| *opi_count == topo.count_self_loops());
+    }
+
+    fn query_tadpoles(&self, topo: &Topology) -> bool {
+        if self.tadpoles.is_empty() {
+            return true;
+        }
+        let tadpole_count = topo
+            .edges_iter()
+            .filter(|edge| edge.momenta.as_ref().unwrap().iter().all(|x| *x == 0))
+            .count();
+        return self.tadpoles.iter().any(|c| *c == tadpole_count);
     }
 
     fn query_on_shell(&self, topo: &Topology) -> bool {
@@ -244,6 +266,9 @@ impl std::fmt::Debug for TopologySelector {
             .field("node_degrees", &self.node_degrees)
             .field("node_partition", &self.node_partition)
             .field("opi_components", &self.opi_components)
+            .field("self_loops", &self.self_loops)
+            .field("tadpoles", &self.tadpoles)
+            .field("on_shell", &self.on_shell)
             .field(
                 "custom_functions",
                 &format!("{} custom functions", self.custom_functions.len()),

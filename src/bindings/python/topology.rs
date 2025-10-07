@@ -42,7 +42,7 @@ pub(crate) struct PyTopologySelector(TopologySelector);
 #[pymethods]
 impl PyTopologySelector {
     #[new]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         return Self(TopologySelector::default());
     }
 
@@ -62,7 +62,7 @@ impl PyTopologySelector {
         self.0.select_opi_components(opi_count);
     }
 
-    pub(crate) fn add_custom_function(&mut self, py_function: Py<PyAny>) {
+    pub fn add_custom_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_custom_function(Arc::new(move |topo: &Topology| -> bool {
             Python::with_gil(|py| -> bool {
                 py_function
@@ -80,6 +80,10 @@ impl PyTopologySelector {
 
     fn select_self_loops(&mut self, n: usize) {
         self.0.select_self_loops(n);
+    }
+
+    fn select_tadpoles(&mut self, n: usize) {
+        self.0.select_tadpoles(n);
     }
 
     fn clear(&mut self) {
@@ -108,7 +112,7 @@ pub(crate) struct PyNode(Node);
 
 #[pymethods]
 impl PyNode {
-    pub(crate) fn adjacent(&self) -> Vec<usize> {
+    pub fn adjacent(&self) -> Vec<usize> {
         return self.0.adjacent_nodes.clone();
     }
 
@@ -132,11 +136,11 @@ pub(crate) struct PyEdge(Edge);
 
 #[pymethods]
 impl PyEdge {
-    pub(crate) fn nodes(&self) -> [usize; 2] {
+    pub fn nodes(&self) -> [usize; 2] {
         return self.0.connected_nodes;
     }
 
-    pub(crate) fn momentum(&self) -> Vec<i8> {
+    pub fn momentum(&self) -> Vec<i8> {
         return self.0.momenta.as_ref().unwrap().clone();
     }
     fn __repr__(&self) -> String {
@@ -155,15 +159,15 @@ pub(crate) struct PyTopology(pub(crate) Topology);
 
 #[pymethods]
 impl PyTopology {
-    pub(crate) fn nodes(&self) -> Vec<PyNode> {
+    pub fn nodes(&self) -> Vec<PyNode> {
         return self.0.nodes_iter().map(|node| PyNode(node.clone())).collect_vec();
     }
 
-    pub(crate) fn edges(&self) -> Vec<PyEdge> {
+    pub fn edges(&self) -> Vec<PyEdge> {
         return self.0.edges_iter().map(|edge| PyEdge(edge.clone())).collect_vec();
     }
 
-    pub(crate) fn symmetry_factor(&self) -> usize {
+    pub fn symmetry_factor(&self) -> usize {
         return self.0.node_symmetry * self.0.edge_symmetry;
     }
 
