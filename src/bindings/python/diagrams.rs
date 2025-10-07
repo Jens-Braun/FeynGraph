@@ -38,6 +38,10 @@ impl PyLeg {
         return format!("{}", self);
     }
 
+    fn __eq__(&self, other: &PyLeg) -> bool {
+        return self.leg_index == other.leg_index;
+    }
+
     pub fn vertices(&self) -> Vec<PyVertex> {
         return vec![PyVertex {
             container: self.container.clone(),
@@ -168,6 +172,10 @@ impl PyPropagator {
 
     fn __str__(&self) -> String {
         return format!("{}", self);
+    }
+
+    fn __eq__(&self, other: &PyPropagator) -> bool {
+        return self.index == other.index;
     }
 
     pub fn normalize(&self) -> PyPropagator {
@@ -369,6 +377,10 @@ impl PyVertex {
 
     fn __str__(&self) -> String {
         return format!("{}", self);
+    }
+
+    fn __eq__(&self, other: &PyVertex) -> bool {
+        return self.index == other.index;
     }
 
     pub fn propagators(&self) -> Vec<Either<PyLeg, PyPropagator>> {
