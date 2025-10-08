@@ -624,23 +624,24 @@ impl VertexView<'_> {
     /// Get an iterator over the propagators connected to the vertex ordered like the particles in the interaction.
     pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView<'_>, PropagatorView<'_>>> {
         let views = self.propagators().collect_vec();
-        let mut perm = Vec::with_capacity(views.len());
         let mut seen = vec![false; views.len()];
-        for ref_particle in self.model.vertex(self.vertex.interaction).particles.iter() {
-            for (i, part) in views
-                .iter()
-                .map(|view| either::for_both!(view, p => p.particle()))
-                .enumerate()
-            {
-                if !seen[i] && part.name() == ref_particle {
-                    perm.push(i);
-                    seen[i] = true;
-                } else {
-                    continue;
+        return self.model.vertex(self.vertex.interaction).particles.iter().map(
+            move |ref_particle| -> Either<LegView<'_>, PropagatorView<'_>> {
+                for (i, part) in views
+                    .iter()
+                    .map(|view| either::for_both!(view, p => p.particle()))
+                    .enumerate()
+                {
+                    if !seen[i] && part.name() == ref_particle {
+                        seen[i] = true;
+                        return views[i].clone();
+                    } else {
+                        continue;
+                    }
                 }
-            }
-        }
-        return perm.into_iter().map(move |i| views[i].clone());
+                unreachable!();
+            },
+        );
     }
 
     /// Get the interaction assigned to the vertex.

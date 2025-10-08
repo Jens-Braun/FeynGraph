@@ -422,9 +422,8 @@ impl PyVertex {
 
     pub fn propagators_ordered(&self) -> Vec<Either<PyLeg, PyPropagator>> {
         let props = self.propagators();
-        let mut perm = Vec::with_capacity(self.vertex.propagators.len());
         let mut seen = vec![false; self.vertex.propagators.len()];
-        for ref_particle in self
+        return self
             .container
             .model
             .as_ref()
@@ -432,21 +431,22 @@ impl PyVertex {
             .vertex(self.vertex.interaction)
             .particles
             .iter()
-        {
-            for (i, part) in props
-                .iter()
-                .map(|prop| either::for_both!(prop, p => p.particle()))
-                .enumerate()
-            {
-                if !seen[i] && part.name() == *ref_particle {
-                    perm.push(i);
-                    seen[i] = true;
-                } else {
-                    continue;
+            .map(move |ref_particle| {
+                for (i, part) in props
+                    .iter()
+                    .map(|view| either::for_both!(view, p => p.particle()))
+                    .enumerate()
+                {
+                    if !seen[i] && part.name() == *ref_particle {
+                        seen[i] = true;
+                        return props[i].clone();
+                    } else {
+                        continue;
+                    }
                 }
-            }
-        }
-        return perm.into_iter().map(|i| props[i].clone()).collect_vec();
+                unreachable!();
+            })
+            .collect();
     }
 
     pub fn interaction(&self) -> PyInteractionVertex {
