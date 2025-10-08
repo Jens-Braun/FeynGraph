@@ -45,6 +45,7 @@ criterion = "0.7"
 default = []
 python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]
 wolfram-bindings = ["python-bindings"]
+check_momenta = []
 
 [[bench]]
 name = "topologies"

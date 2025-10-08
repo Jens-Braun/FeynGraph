@@ -5,6 +5,8 @@ use crate::{
     model::{InteractionVertex, Model, Particle},
 };
 use either::Either;
+#[cfg(any(feature = "check_momenta", test, debug_assertions))]
+use either::for_both;
 use itertools::Itertools;
 use std::fmt::Write;
 
@@ -236,6 +238,31 @@ impl<'a> DiagramView<'a> {
             fermi_loops += 1;
         }
         return if (n_ext_swap + fermi_loops) % 2 == 0 { 1 } else { -1 };
+    }
+
+    #[cfg(any(feature = "check_momenta", test, debug_assertions))]
+    pub(crate) fn check_momenta(&self) {
+        if self.diagram.vertices.is_empty() {
+            return;
+        }
+        let n_momenta = for_both!(self.vertex(0).propagators().next().unwrap(), p => p.momentum().len());
+        for v in self.vertices() {
+            let p_tot = v
+                .propagators()
+                .map(|p| for_both!(p, p => p.momentum()))
+                .fold(vec![0; n_momenta], |acc, p| {
+                    acc.iter().zip(p.iter()).map(|(x, y)| *x + *y).collect()
+                });
+            assert!(
+                p_tot.iter().all(|x| *x == 0)
+                    || (p_tot.iter().take(self.diagram.incoming_legs.len()).all(|x| *x == 1)
+                        && p_tot
+                            .iter()
+                            .skip(self.diagram.incoming_legs.len())
+                            .take(self.diagram.outgoing_legs.len())
+                            .all(|x| *x == -1))
+            );
+        }
     }
 }
 

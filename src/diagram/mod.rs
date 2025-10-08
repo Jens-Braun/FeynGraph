@@ -228,6 +228,8 @@ impl Diagram {
             sign: 1,
         };
         d.sign = DiagramView::new(workspace.model.as_ref(), &d, workspace.momentum_labels.as_ref()).calculate_sign();
+        #[cfg(any(feature = "check_momenta", test, debug_assertions))]
+        DiagramView::new(workspace.model.as_ref(), &d, workspace.momentum_labels.as_ref()).check_momenta();
         return d;
     }
 
