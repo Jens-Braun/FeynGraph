@@ -92,6 +92,23 @@ impl PyLeg {
             .unwrap();
     }
 
+    #[pyo3(signature = (_vertex = 0))]
+    pub fn ray_index_ordered(&self, _vertex: usize) -> usize {
+        return self
+            .diagram
+            .vertex(self.leg.vertex)
+            .propagators_ordered()
+            .iter()
+            .position(|p| {
+                if let either::Left(l) = p {
+                    l.id() == self.leg_index
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+    }
+
     pub fn id(&self) -> usize {
         return self.leg_index;
     }
@@ -269,16 +286,15 @@ impl PyPropagator {
     }
 
     pub fn ray_index_ordered(&self, index: usize) -> usize {
-        let i = if self.invert { 1 - index } else { index };
         return self
-            .vertex(i)
+            .vertex(index)
             .propagators_ordered()
             .iter()
             .position(|p| {
                 if let either::Right(p) = p {
                     if p.index == self.index {
                         if self.propagator.vertices[0] == self.propagator.vertices[1] {
-                            if i == 1 {
+                            if index == 1 {
                                 return p.particle().is_anti();
                             } else {
                                 return !p.particle().is_anti();

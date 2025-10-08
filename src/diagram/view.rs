@@ -495,16 +495,15 @@ impl PropagatorView<'_> {
     /// leg of the `index`-th vertex to which the propagator is connected to. The ray index is given with respect to the
     /// propagators ordered as in the interaction vertex.
     pub fn ray_index_ordered(&self, index: usize) -> usize {
-        let i = if self.invert { 1 - index } else { index };
         return self
-            .vertex(i)
+            .vertex(index)
             .propagators_ordered()
             .position(|p| {
                 if let either::Right(p) = p
                     && p.index == self.index
                 {
                     if self.propagator.vertices[0] == self.propagator.vertices[1] {
-                        if i == 1 {
+                        if index == 1 {
                             return p.particle().is_anti();
                         } else {
                             return !p.particle().is_anti();

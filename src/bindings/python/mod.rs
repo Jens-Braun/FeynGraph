@@ -173,6 +173,10 @@ impl PyParticle {
         return self.0.is_fermi();
     }
 
+    pub(crate) fn self_anti(&self) -> bool {
+        return self.0.self_anti();
+    }
+
     pub(crate) fn pdg(&self) -> isize {
         return self.0.pdg();
     }

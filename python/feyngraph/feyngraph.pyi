@@ -115,6 +115,14 @@ class Leg:
         signature identical to `Propagator.ray_index`, but the parameter is always ignored.
         """
 
+    def ray_index_ordered(self, _vertex: int = 0) -> int:
+        """
+        Get the external leg's ray index, i.e. the index of the leg of the vertex to which the external leg is
+        connected to (_from the vertex perspective_). This function accepts an addition `_vertex` parameter to make its
+        signature identical to `Propagator.ray_index`, but the parameter is always ignored. The ray index is given with
+        respect to the propagators ordered as in the interaction vertex.
+        """
+
     def id(self) -> int:
         """Get the leg's internal id"""
 
@@ -157,6 +165,13 @@ class Propagator:
         """
         Get the propagators ray index with respect to the `index`-th vertex it is connected to, i.e. the index of the
         leg of the `index`-th vertex to which the propagator is connected to.
+        """
+
+    def ray_index_ordered(self, index: int) -> int:
+        """
+        Get the propagators ray index with respect to the `index`-th vertex it is connected to, i.e. the index of the
+        leg of the `index`-th vertex to which the propagator is connected to. The ray index is given with respect to
+        the propagators ordered as in the interaction vertex.
         """
 
     def id(self) -> int:
