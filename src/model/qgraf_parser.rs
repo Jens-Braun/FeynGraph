@@ -136,12 +136,22 @@ peg::parser!(
                         } else {
                             match value {
                                 Value::Int(n) => {
+                                    if n < 0 {
+                                        log::warn!("Vertex at position '{}' has negative order in coupling '{}'\
+                                            , ignoring this coupling", pos, coupling);
+                                        continue;
+                                    }
                                     if let Some(v) =  coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
                                         log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
                                     }
                                 },
                                 Value::String(s) => {
                                     let n = s.parse::<isize>().or(Err("Expected int"))?;
+                                    if n < 0 {
+                                        log::warn!("Vertex at position '{}' has negative order in coupling '{}'\
+                                            , ignoring this coupling", pos, coupling);
+                                        continue;
+                                    }
                                     if let Some(v) = coupling_map.insert(String::from(coupling), n.try_into().or(Err("Non-negative int"))?) {
                                         log::warn!("Coupling '{}' appears more than once, overwriting previous value", coupling);
                                     }

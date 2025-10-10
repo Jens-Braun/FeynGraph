@@ -108,14 +108,15 @@ peg::parser! {
             "{" _ entries:((key:string() _ ":" _ val:value() {(key, val)}) ** (_ "," _)) _ "}" {?
                 let mut result = HashMap::default();
                 for (k, v) in entries.into_iter().map(
-                    |(key, val)| (key.str().unwrap().to_owned(), val.int().map(|i| i as usize))
+                    |(key, val)| (key.str().unwrap().to_owned(), val.int().map(|i| i.try_into()))
                 ) {
                     match v {
-                        Ok(v) => {
+                        Ok(Ok(v)) => {
                             if let Some(i) =  result.insert(k.clone(), v) {
                                 log::warn!("Value '{}' appears multiple times in dict, keeping only value {}", k, i);
                             }
                         }
+                        Ok(Err(_)) => Err("Non-negative int")?,
                         _ => Err("String-int dict")?
                     }
                 }
