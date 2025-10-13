@@ -181,7 +181,9 @@ impl<'a> DiagramView<'a> {
                         continue;
                     }
                     visited_props[prop.index] = true;
-                    if prop.propagator.vertices[0] == current.index {
+                    if (prop.propagator.vertices[0] == current.index && !prop.invert)
+                        || (prop.propagator.vertices[1] == current.index && prop.invert)
+                    {
                         in_ray = prop.ray_index_ordered(1);
                         to_visit.push(self.vertex(prop.propagator.vertices[1]));
                     } else {
