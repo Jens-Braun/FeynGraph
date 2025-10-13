@@ -402,6 +402,10 @@ class Model:
         """Construct the default mode, the Standard Model in Feynman gauge."""
 
     @staticmethod
+    def empty() -> Model:
+        """Create a new model without any particles, vertices or couplings."""
+
+    @staticmethod
     def from_ufo(path: str) -> Model:
         """
         Import a model in the UFO format. The path should specify the folder containing the model's `.py` files.
@@ -422,7 +426,31 @@ class Model:
         """Return the list of vertices contained in the model."""
 
     def as_topology_model(self) -> TopologyModel:
-        """Return the topology model dervied from the model."""
+        """Return the topology model derived from the model."""
+
+    def add_particle(
+        self,
+        name: str,
+        anti_name: str,
+        pdg_id: int,
+        texname: str,
+        antitexname: str,
+        linestyle: str,
+        fermi: bool
+    ):
+        """
+        Add a new particle with the given properties to the model or overwrite an existing one. If `name == anti_name`,
+        the particle is automatically marked as its own anti particle. Otherwise, the corresponding anti particle is
+        automatically also added to the model.
+        The available options for `linestyle` are `dashed`, `dotted`, `straight`, `wavy`, `curly`, `scurly`, `swavy`,
+        `double` and `none`.
+        """
+
+    def add_vertex(self, name: str, particles: list[str], spin_map: list[int], coupling_orders: dict[str, int]):
+        """
+        Add a new vertex with the given properties to the model or overwrite an existing one. The `i`-th entry of the
+        `spin_map` must be the leg `j` to which leg `i` is spin-connected.
+        """
 
 class Particle:
     """
@@ -452,3 +480,6 @@ class InteractionVertex:
 
     def name(self):
         """Get the name of the interaction vertex."""
+
+    def add_coupling(self, coupling: str, power: int):
+        """Add a new coupling to the interaction vertex or overwrite an existing one."""

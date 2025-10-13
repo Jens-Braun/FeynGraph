@@ -2,6 +2,7 @@
 
 use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
+use log::warn;
 use std::path::Path;
 use thiserror::Error;
 
@@ -155,6 +156,18 @@ impl InteractionVertex {
         return self.particles.len();
     }
 
+    /// Add a new coupling to the interaction vertex or overwrite an existing one.
+    pub fn add_coupling(&mut self, coupling: impl Into<String> + Clone, power: usize) {
+        match self.coupling_orders.insert(coupling.clone().into(), power) {
+            None => (),
+            Some(c) => warn!(
+                "Vertex already has power {} in coupling {}, overwriting.",
+                c,
+                coupling.into()
+            ),
+        }
+    }
+
     pub(crate) fn new(
         name: String,
         particles: Vec<String>,
@@ -254,6 +267,89 @@ impl Model {
             couplings,
             anti_map,
         };
+    }
+
+    /// Create a new model without any particles, vertices or couplings.
+    pub fn empty() -> Self {
+        return Self {
+            particles: IndexMap::default(),
+            vertices: IndexMap::default(),
+            couplings: Vec::new(),
+            anti_map: Vec::new(),
+        };
+    }
+
+    /// Add a new particle with the given properties to the model or overwrite an existing one. If `name == anti_name`,
+    /// the particle is automatically marked as its own anti particle. Otherwise, the corresponding anti particle is
+    /// automatically also added to the model.
+    pub fn add_particle<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        name: S,
+        anti_name: S,
+        pdg_code: isize,
+        texname: S,
+        antitexname: S,
+        linestyle: LineStyle,
+        statistic: Statistic,
+    ) {
+        let p = Particle {
+            name: name.clone().into(),
+            anti_name: anti_name.clone().into(),
+            pdg_code,
+            texname: texname.into(),
+            antitexname: antitexname.into(),
+            self_anti: name == anti_name,
+            linestyle,
+            statistic,
+        };
+        if p.self_anti {
+            match self.particles.insert(name.clone().into(), p) {
+                None => (),
+                Some(_) => warn!("Particle {} already present in model, replacing.", name.into()),
+            }
+            self.anti_map.push(self.anti_map.len());
+        } else {
+            match self.particles.insert(name.clone().into(), p.clone()) {
+                None => (),
+                Some(_) => warn!("Particle {} already present in model, replacing.", name.clone().into()),
+            }
+            self.particles.insert(anti_name.clone().into(), p.into_anti());
+            self.anti_map.push(self.anti_map.len() + 1);
+            self.anti_map.push(self.anti_map.len() - 1);
+        }
+    }
+
+    /// Add a new vertex with the given properties to the model or overwrite an existing one. The `i`-th entry of the
+    /// `spin_map` must be the leg `j` to which leg `i` is spin-connected.
+    pub fn add_vertex<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        name: S,
+        particles: Vec<S>,
+        spin_map: Vec<isize>,
+        coupling_orders: HashMap<S, usize>,
+    ) -> Result<(), ModelError> {
+        for coupling in coupling_orders.keys() {
+            if !self.couplings.contains(&coupling.clone().into()) {
+                self.couplings.push(coupling.clone().into());
+            }
+        }
+        let mut v = InteractionVertex::new(
+            name.clone().into(),
+            particles.into_iter().map(|s| s.into()).collect(),
+            spin_map,
+            HashMap::from_iter(coupling_orders.into_iter().map(|(k, v)| (k.into(), v))),
+        );
+        for p in v.particles_iter() {
+            if !self.particles.contains_key(p) {
+                return Err(ModelError::ContentError(format!("particle {p} not found in model")));
+            }
+        }
+        v.build_counts(&self.particles);
+        match self.vertices.insert(name.clone().into(), v) {
+            None => (),
+            Some(_) => warn!("Vertex {} already present in model, replacing.", name.into()),
+        }
+        Ok(())
     }
 
     /// Import a model in the [UFO 2.0](https://arxiv.org/abs/2304.09883) format. The specified `path` should point to

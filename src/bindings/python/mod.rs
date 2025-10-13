@@ -1,5 +1,6 @@
 #[cfg(feature = "wolfram-bindings")]
 use super::wolfram::diagrams_feynarts;
+use crate::model::{LineStyle, Statistic};
 use crate::util::HashMap;
 use crate::{
     model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
@@ -129,6 +130,56 @@ impl PyModel {
         return Ok(Self(Model::from_qgraf(&path)?));
     }
 
+    #[staticmethod]
+    fn empty() -> Self {
+        return PyModel(Model::empty());
+    }
+
+    fn add_particle(
+        &mut self,
+        name: String,
+        anti_name: String,
+        pdg_code: isize,
+        texname: String,
+        antitexname: String,
+        linestyle: String,
+        fermi: bool,
+    ) -> PyResult<()> {
+        let linestyle = match linestyle.to_lowercase().as_str() {
+            "dashed" => LineStyle::Dashed,
+            "dotted" => LineStyle::Dotted,
+            "straight" => LineStyle::Straight,
+            "wavy" => LineStyle::Wavy,
+            "curly" => LineStyle::Curly,
+            "scurly" => LineStyle::Scurly,
+            "swavy" => LineStyle::Swavy,
+            "double" => LineStyle::Double,
+            "none" => LineStyle::None,
+            _ => return Err(PySyntaxError::new_err(format!("Unknown line style '{linestyle}'"))),
+        };
+        self.0.add_particle(
+            name,
+            anti_name,
+            pdg_code,
+            texname,
+            antitexname,
+            linestyle,
+            if fermi { Statistic::Fermi } else { Statistic::Bose },
+        );
+        Ok(())
+    }
+
+    fn add_vertex(
+        &mut self,
+        name: String,
+        particles: Vec<String>,
+        spin_map: Vec<isize>,
+        coupling_orders: HashMap<String, usize>,
+    ) -> PyResult<()> {
+        self.0.add_vertex(name, particles, spin_map, coupling_orders)?;
+        Ok(())
+    }
+
     fn as_topology_model(&self) -> PyTopologyModel {
         return PyTopologyModel(TopologyModel::from(&self.0));
     }
@@ -211,6 +262,10 @@ impl PyInteractionVertex {
 
     fn name(&self) -> String {
         return self.0.name.clone();
+    }
+
+    fn add_coupling(&mut self, coupling: String, power: usize) {
+        self.0.add_coupling(coupling, power);
     }
 }
 
