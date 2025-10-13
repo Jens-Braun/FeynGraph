@@ -229,7 +229,7 @@ impl DiagramContainer {
         let n_diags = diagrams.len();
         let n_cols = if let Some(n_cols) = n_cols {
             n_cols
-        } else if n_diags < 4 {
+        } else if n_diags < 4 && n_diags > 0 {
             n_diags
         } else {
             4
@@ -273,7 +273,7 @@ impl DiagramContainer {
         let n_diags = max - min;
         let n_cols = if let Some(n_cols) = n_cols {
             n_cols
-        } else if n_diags < 4 {
+        } else if n_diags < 4 && n_diags > 0 {
             n_diags
         } else {
             4
