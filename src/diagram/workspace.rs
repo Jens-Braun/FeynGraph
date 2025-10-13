@@ -84,6 +84,9 @@ impl<'a> AssignWorkspace<'a> {
             self.propagator_candidates[edge].particle = Some(self.incoming_particles[i]);
         }
         for i in 0..n_out {
+            if self.vertex_candidates.len() == n_in + n_out {
+                continue;
+            }
             self.vertex_candidates[n_in + i].remaining_legs = 0;
             let edge = self.vertex_candidates[n_in + i].edges[0];
             if i == self.topology.edges[i].connected_nodes[0] {

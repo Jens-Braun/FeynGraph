@@ -181,6 +181,10 @@ impl DiagramLayout<'_> {
     }
 
     fn calculate_distances(&mut self) {
+        if self.diag.vertices.is_empty() {
+            self.distances = Some(vec![vec![0, 1], vec![1, 0]]);
+            return;
+        }
         let dim = self.diag.n_ext() + self.diag.vertices.len();
         let mut d = Vec::with_capacity(dim);
         for i in (-(self.diag.n_ext() as isize))..(self.diag.vertices.len() as isize) {

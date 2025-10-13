@@ -120,6 +120,8 @@ macro_rules! test_diagrams {
     };
 }
 
+test_diagrams!(Standard_Model_UFO, g => g, 0);
+
 test_diagrams!(Standard_Model_UFO, g g => g g, 0);
 test_diagrams!(Standard_Model_UFO, g g => g g, 1);
 test_diagrams!(Standard_Model_UFO, g g => g g, 2);

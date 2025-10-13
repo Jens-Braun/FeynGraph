@@ -107,6 +107,28 @@ pub struct Diagram {
 
 impl Diagram {
     fn from(workspace: &AssignWorkspace, vertex_symmetry: usize) -> Self {
+        // No internal vertices, the only valid diagram with this property is the tree-level propagator
+        if workspace.vertex_candidates.len() == workspace.topology.n_external {
+            let p = workspace.propagator_candidates[0].particle.unwrap();
+            return Diagram {
+                incoming_legs: vec![Leg {
+                    vertex: 0,
+                    particle: p,
+                    momentum: vec![1, 0],
+                }],
+                outgoing_legs: vec![Leg {
+                    vertex: 0,
+                    particle: p,
+                    momentum: vec![0, 1],
+                }],
+                propagators: vec![],
+                vertices: vec![],
+                vertex_symmetry: 1,
+                propagator_symmetry: 1,
+                bridges: vec![],
+                sign: 1,
+            };
+        }
         let incoming_legs = workspace
             .propagator_candidates
             .iter()

@@ -195,6 +195,9 @@ impl<'a> DiagramView<'a> {
     }
 
     pub(crate) fn calculate_sign(&self) -> i8 {
+        if self.diagram.vertices.is_empty() {
+            return 1;
+        }
         let mut visited_legs = vec![false; self.n_ext()];
         let mut visited_props = vec![false; self.diagram.propagators.len()];
         let mut external_fermions = Vec::new();

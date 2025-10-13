@@ -169,11 +169,20 @@ impl DiagramView<'_> {
         let layout = DiagramLayout::from(self).layout();
         b.set_scaling(&layout);
         let n_ext = self.n_ext();
-        for l in self.incoming().chain(self.outgoing()) {
-            let x1 = &layout[l.leg_index];
-            let x2 = &layout[l.leg.vertex + n_ext];
-            b.draw_label(*x1, &format!("{}({})", l.particle().name, l.leg_index));
+        if self.diagram.vertices.is_empty() {
+            let l = self.incoming().next().unwrap();
+            let x1 = &layout[0];
+            let x2 = &layout[1];
+            b.draw_label(*x1, &format!("{}({})", l.particle().name, 0));
+            b.draw_label(*x2, &format!("{}({})", l.particle().name, 1));
             b.draw(*x1, *x2, &[(l.particle().linestyle.clone(), l.particle().is_anti())]);
+        } else {
+            for l in self.incoming().chain(self.outgoing()) {
+                let x1 = &layout[l.leg_index];
+                let x2 = &layout[l.leg.vertex + n_ext];
+                b.draw_label(*x1, &format!("{}({})", l.particle().name, l.leg_index));
+                b.draw(*x1, *x2, &[(l.particle().linestyle.clone(), l.particle().is_anti())]);
+            }
         }
         for (vertices, chunk) in &self.propagators().chunk_by(|p| p.propagator.vertices) {
             let x1 = &layout[vertices[0] + n_ext];
