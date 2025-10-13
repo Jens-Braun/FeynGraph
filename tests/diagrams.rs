@@ -120,8 +120,6 @@ macro_rules! test_diagrams {
     };
 }
 
-test_diagrams!(Standard_Model_UFO, g => g, 0);
-
 test_diagrams!(Standard_Model_UFO, g g => g g, 0);
 test_diagrams!(Standard_Model_UFO, g g => g g, 1);
 test_diagrams!(Standard_Model_UFO, g g => g g, 2);
@@ -175,10 +173,17 @@ fn diags_SMEFT_epem_epem_loops_2() {
 }
 
 #[test]
-fn diags_SM_uu_uu__loops_1() {
+fn diags_SM_uu_uug_loops_1() {
     let model = Model::default();
     let diag_gen = DiagramGenerator::new(&["u"; 2], &["u", "u", "g"], 1, model, None).unwrap();
     diag_gen.generate();
+}
+
+#[test]
+fn diags_SM_g_g_loops_0() {
+    let model = Model::default();
+    let diag_gen = DiagramGenerator::new(&["g"], &["g"], 0, model, None).unwrap();
+    assert_eq!(diag_gen.generate().len(), 1);
 }
 
 #[test]
