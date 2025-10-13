@@ -192,6 +192,10 @@ impl PyModel {
         return self.0.vertices_iter().map(|v| PyInteractionVertex(v.clone())).collect();
     }
 
+    fn splitting(&self, name: String) -> Option<HashMap<String, Vec<(usize, usize)>>> {
+        return self.0.get_splitting(&name).cloned();
+    }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }

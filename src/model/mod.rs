@@ -227,6 +227,7 @@ pub struct Model {
     particles: IndexMap<String, Particle>,
     vertices: IndexMap<String, InteractionVertex>,
     couplings: Vec<String>,
+    splittings: HashMap<String, HashMap<String, Vec<(usize, usize)>>>,
     anti_map: Vec<usize>,
 }
 
@@ -241,6 +242,7 @@ impl Model {
         particles: IndexMap<String, Particle>,
         mut vertices: IndexMap<String, InteractionVertex>,
         couplings: Vec<String>,
+        splittings: HashMap<String, HashMap<String, Vec<(usize, usize)>>>,
     ) -> Self {
         let anti_map = particles
             .values()
@@ -265,6 +267,7 @@ impl Model {
             particles,
             vertices,
             couplings,
+            splittings,
             anti_map,
         };
     }
@@ -275,6 +278,7 @@ impl Model {
             particles: IndexMap::default(),
             vertices: IndexMap::default(),
             couplings: Vec::new(),
+            splittings: HashMap::default(),
             anti_map: Vec::new(),
         };
     }
@@ -443,6 +447,14 @@ impl Model {
     /// Get the names of the defined couplings.
     pub fn couplings(&self) -> &Vec<String> {
         return &self.couplings;
+    }
+
+    /// Get the splitting of the _original_ vertex `name`. Returns `None` if the requested vertex was not split up or
+    /// does not exist in the model. If it was split, a hash map containing the vertices into which it was split is
+    /// returned. For each vertex, the hash map contains a list of the `(color_index, lorentz_index)` tuples assigned
+    /// to the created vertex.
+    pub fn get_splitting(&self, name: &String) -> Option<&HashMap<String, Vec<(usize, usize)>>> {
+        return self.splittings.get(name);
     }
 
     /// Check if adding `vertex` to the diagram is allowed by the maximum power of the coupling constants

@@ -425,6 +425,14 @@ class Model:
     def vertices(self) -> list[InteractionVertex]:
         """Return the list of vertices contained in the model."""
 
+    def splitting(self, name: str) -> dict[str, tuple[int, int]]:
+        """
+        Get the splitting of the _original_ vertex `name`. Returns `None` if the requested vertex was not split up or
+        does not exist in the model. If it was split, a dict containing the vertices into which it was split is
+        returned. For each vertex, the dict contains a list of the `(color_index, lorentz_index)` tuples assigned
+        to the created vertex.
+        """
+
     def as_topology_model(self) -> TopologyModel:
         """Return the topology model derived from the model."""
 

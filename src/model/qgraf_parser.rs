@@ -211,7 +211,8 @@ peg::parser!(
                 Model::new(
                     particles,
                     vertices,
-                    couplings
+                    couplings,
+                    HashMap::default()
                 )
             }
     }
@@ -273,7 +274,7 @@ fn build_spin_maps(mut model: Model) -> Model {
 mod tests {
     use super::*;
     use crate::model::Statistic;
-    use std::path::PathBuf;
+    use std::{collections::HashMap, path::PathBuf};
     use test_log::test;
 
     #[test]
@@ -374,6 +375,7 @@ mod tests {
                 ),
             ]),
             vec!["QCD".to_string()],
+            HashMap::default(),
         );
         assert_eq!(model, model_ref);
     }
