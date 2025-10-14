@@ -180,6 +180,10 @@ impl PyModel {
         Ok(())
     }
 
+    fn merge_vertices(&mut self) -> HashMap<String, Vec<String>> {
+        return self.0.merge_vertices();
+    }
+
     fn as_topology_model(&self) -> PyTopologyModel {
         return PyTopologyModel(TopologyModel::from(&self.0));
     }

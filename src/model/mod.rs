@@ -356,6 +356,40 @@ impl Model {
         Ok(())
     }
 
+    /// Deduplicate vertices in the model, i.e. merge all vertices with identical particles, spin connection and
+    /// coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
+    pub fn merge_vertices(&mut self) -> HashMap<String, Vec<String>> {
+        let mut mergings = HashMap::default();
+        let mut merged_vertices = IndexMap::default();
+        let mut i = 1;
+        for (_, vertices) in self.vertices.values().into_group_map_by(|v| {
+            (
+                v.particles.clone(),
+                v.coupling_orders.clone().into_iter().collect_vec(),
+                v.spin_map.clone(),
+            )
+        }) {
+            if vertices.len() > 1 {
+                mergings.insert(format!("V_M_{}", i), vertices.iter().map(|v| v.name.clone()).collect());
+                merged_vertices.insert(
+                    format!("V_M_{}", i),
+                    InteractionVertex {
+                        name: format!("V_M_{}", i),
+                        particles: vertices[0].particles.clone(),
+                        spin_map: vertices[0].spin_map.clone(),
+                        coupling_orders: vertices[0].coupling_orders.clone(),
+                        particle_counts: vertices[0].particle_counts.clone(),
+                    },
+                );
+                i += 1;
+            } else {
+                merged_vertices.insert(vertices[0].name.clone(), vertices[0].clone());
+            }
+        }
+        self.vertices = merged_vertices;
+        return mergings;
+    }
+
     /// Import a model in the [UFO 2.0](https://arxiv.org/abs/2304.09883) format. The specified `path` should point to
     /// the folder containing the Python source files.
     ///

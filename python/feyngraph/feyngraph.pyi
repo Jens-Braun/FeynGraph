@@ -460,6 +460,12 @@ class Model:
         `spin_map` must be the leg `j` to which leg `i` is spin-connected.
         """
 
+    def merge_vertices(self) -> dict[str, list[str]]:
+        """
+        Deduplicate vertices in the model, i.e. merge all vertices with identical particles, spin connection and
+        coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
+        """
+
 class Particle:
     """
     Internal representation of a particle in FeynGraph.
