@@ -1,7 +1,7 @@
 #[cfg(feature = "wolfram-bindings")]
 use super::wolfram::diagrams_feynarts;
 use crate::model::{LineStyle, Statistic};
-use crate::util::HashMap;
+use crate::util::{HashMap, IndexMap};
 use crate::{
     model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
     util,
@@ -180,8 +180,12 @@ impl PyModel {
         Ok(())
     }
 
-    fn merge_vertices(&mut self) -> HashMap<String, Vec<String>> {
+    fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
         return self.0.merge_vertices();
+    }
+
+    fn add_coupling(&mut self, vertex: String, coupling: String, power: usize) {
+        self.0.add_coupling(vertex, coupling, power);
     }
 
     fn as_topology_model(&self) -> PyTopologyModel {
@@ -270,10 +274,6 @@ impl PyInteractionVertex {
 
     fn name(&self) -> String {
         return self.0.name.clone();
-    }
-
-    fn add_coupling(&mut self, coupling: String, power: usize) {
-        self.0.add_coupling(coupling, power);
     }
 }
 

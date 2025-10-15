@@ -466,6 +466,10 @@ class Model:
         coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
         """
 
+    def add_coupling(self, vertex: str, coupling: str, power: int):
+        """Add a new coupling to the interaction vertex `vertex` or overwrite an existing one."""
+
+
 class Particle:
     """
     Internal representation of a particle in FeynGraph.
@@ -494,6 +498,3 @@ class InteractionVertex:
 
     def name(self):
         """Get the name of the interaction vertex."""
-
-    def add_coupling(self, coupling: str, power: int):
-        """Add a new coupling to the interaction vertex or overwrite an existing one."""

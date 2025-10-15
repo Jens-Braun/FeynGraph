@@ -27,6 +27,7 @@ rustc-hash = "2"
 pyo3 = { version = "0.25", features = [
     "auto-initialize",
     "either",
+    "indexmap",
     "multiple-pymethods",
     "abi3-py37",
 ], optional = true }

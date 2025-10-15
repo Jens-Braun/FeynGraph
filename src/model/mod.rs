@@ -358,17 +358,23 @@ impl Model {
 
     /// Deduplicate vertices in the model, i.e. merge all vertices with identical particles, spin connection and
     /// coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
-    pub fn merge_vertices(&mut self) -> HashMap<String, Vec<String>> {
-        let mut mergings = HashMap::default();
+    pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
+        let mut mergings = IndexMap::default();
         let mut merged_vertices = IndexMap::default();
         let mut i = 1;
-        for (_, vertices) in self.vertices.values().into_group_map_by(|v| {
-            (
-                v.particles.clone(),
-                v.coupling_orders.clone().into_iter().collect_vec(),
-                v.spin_map.clone(),
-            )
-        }) {
+        for (_, vertices) in self
+            .vertices
+            .values()
+            .into_group_map_by(|v| {
+                (
+                    v.particles.clone(),
+                    v.coupling_orders.clone().into_iter().collect_vec(),
+                    v.spin_map.clone(),
+                )
+            })
+            .into_iter()
+            .sorted_by_key(|(x, _)| x.clone())
+        {
             if vertices.len() > 1 {
                 mergings.insert(format!("V_M_{}", i), vertices.iter().map(|v| v.name.clone()).collect());
                 merged_vertices.insert(
@@ -388,6 +394,25 @@ impl Model {
         }
         self.vertices = merged_vertices;
         return mergings;
+    }
+
+    /// Add a new coupling to the interaction vertex `vertex` or overwrite an existing one.
+    pub fn add_coupling<S: Into<String> + Clone>(
+        &mut self,
+        vertex: S,
+        coupling: S,
+        power: usize,
+    ) -> Result<(), ModelError> {
+        match self.vertices.get_mut(&vertex.clone().into()) {
+            Some(v) => v.add_coupling(coupling, power),
+            None => {
+                return Err(ModelError::ContentError(format!(
+                    "vertex {} not found in model",
+                    vertex.into()
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// Import a model in the [UFO 2.0](https://arxiv.org/abs/2304.09883) format. The specified `path` should point to
