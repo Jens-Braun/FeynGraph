@@ -7,6 +7,7 @@ use feyngraph::{
 };
 use itertools::Itertools;
 use paste::paste;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -187,7 +188,7 @@ fn diags_SM_g_g_loops_0() {
 }
 
 #[test]
-fn diags_SM_QCD_gauge_vacuum_diagrams_loops_4() {
+fn diags_QCD_gauge_vacuum_diagrams_loops_4() {
     let model = Model::default();
     let mut s = DiagramSelector::new();
     s.select_coupling_power("QED", 0);
@@ -200,4 +201,62 @@ fn diags_SM_QCD_gauge_vacuum_diagrams_loops_4() {
     let diag_gen = DiagramGenerator::new(&[], &[], 4, model, Some(s)).unwrap();
     let diags = diag_gen.generate();
     assert_eq!(diags.len(), 65);
+}
+
+#[test]
+fn diags_SM_bg_hb_loops_1_sign() {
+    let model = Model::default();
+    let mut s = DiagramSelector::new();
+    s.select_on_shell();
+    s.select_self_loops(0);
+    s.select_coupling_power("QCD", 3);
+    for q in ["u", "d", "s", "c", "t", "u~", "d~", "s~", "c~", "t~"] {
+        s.select_propagator_count(q, 0);
+    }
+    let diag_gen = DiagramGenerator::new(&["b", "g"], &["H", "b"], 1, model, Some(s)).unwrap();
+    let diags = diag_gen.generate();
+    assert_eq!(diags.len(), 13);
+    for (i, d) in diags.iter().enumerate() {
+        if i == 5 || i == 6 {
+            assert_eq!(d.sign(), -1);
+        } else {
+            assert_eq!(d.sign(), 1);
+        }
+    }
+}
+
+#[test]
+fn diagsQCDM_g_gg_loops_1_sign() {
+    let mut m = Model::empty();
+    m.add_particle(
+        "g",
+        "g",
+        21,
+        "g",
+        "g",
+        feyngraph::model::LineStyle::Curly,
+        feyngraph::model::Statistic::Bose,
+    );
+    m.add_particle(
+        "u",
+        "u~",
+        2,
+        "u",
+        "u~",
+        feyngraph::model::LineStyle::Straight,
+        feyngraph::model::Statistic::Fermi,
+    );
+    m.add_vertex(
+        "uug",
+        vec!["u", "u~", "g"],
+        vec![1, 0, 0],
+        FxHashMap::from_iter([("QCD", 1usize)].into_iter()),
+    )
+    .unwrap();
+    let diag_gen = DiagramGenerator::new(&["g"], &["g", "g"], 1, m, None).unwrap();
+    let diags = diag_gen.generate();
+    assert_eq!(diags.len(), 2);
+    for d in diags.iter() {
+        assert_eq!(d.sign(), -1);
+    }
 }

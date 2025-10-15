@@ -181,13 +181,11 @@ impl<'a> DiagramView<'a> {
                         continue;
                     }
                     visited_props[prop.index] = true;
-                    if (prop.propagator.vertices[0] == current.index && !prop.invert)
-                        || (prop.propagator.vertices[1] == current.index && prop.invert)
-                    {
-                        in_ray = prop.ray_index_ordered(1);
+                    if prop.propagator.vertices[0] == current.index {
+                        in_ray = prop.ray_index_ordered(if prop.invert { 0 } else { 1 });
                         to_visit.push(self.vertex(prop.propagator.vertices[1]));
                     } else {
-                        in_ray = prop.ray_index_ordered(0);
+                        in_ray = prop.ray_index_ordered(if prop.invert { 1 } else { 0 });
                         to_visit.push(self.vertex(prop.propagator.vertices[0]));
                     }
                 }
