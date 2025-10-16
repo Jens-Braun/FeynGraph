@@ -425,7 +425,7 @@ class Model:
     def vertices(self) -> list[InteractionVertex]:
         """Return the list of vertices contained in the model."""
 
-    def splitting(self, name: str) -> dict[str, tuple[int, int]]:
+    def splitting(self, name: str) -> dict[str, list[tuple[int, int]]]:
         """
         Get the splitting of the _original_ vertex `name`. Returns `None` if the requested vertex was not split up or
         does not exist in the model. If it was split, a dict containing the vertices into which it was split is

@@ -588,7 +588,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         match ufo_model::particles(&particle_content, &particle_content) {
             Ok(x) => x
                 .into_iter()
-                .map(|(py_name, p)| ((py_name, p.name.clone()), (p.name.clone(), p)))
+                .map(|(py_name, p)| ((py_name, p.anti_name.clone()), (p.name.clone(), p)))
                 .unzip(),
             Err(e) => {
                 return Err(ModelError::ParseError("particles.py".into(), e));
@@ -711,7 +711,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
                 ));
             }
         };
-        let (ct_vertices, ct_splittings) = match ufo_model::ct_vertices(
+        let (mut ct_vertices, ct_splittings) = match ufo_model::ct_vertices(
             &ct_vertices_content,
             &ct_vertices_content,
             &couplings,
@@ -723,6 +723,10 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
                 return Err(ModelError::ParseError("CT_vertices.py".into(), e));
             }
         };
+        // Mark counterterm vertices with coupling order `CT`
+        for v in ct_vertices.values_mut() {
+            v.add_coupling("CT", 1);
+        }
         vertices.extend(ct_vertices.into_iter());
         splittings.extend(ct_splittings.into_iter());
     }
@@ -735,7 +739,7 @@ pub fn sm() -> Model {
         ufo_model::particles(SM_PARTICLES, &"")
             .unwrap()
             .into_iter()
-            .map(|(py_name, p)| ((py_name, p.name.clone()), (p.name.clone(), p)))
+            .map(|(py_name, p)| ((py_name, p.anti_name.clone()), (p.name.clone(), p)))
             .unzip();
     let coupling_orders = ufo_model::coupling_orders(SM_COUPLING_ORDERS, &"").unwrap();
     let couplings = ufo_model::couplings(SM_COUPLINGS, &"").unwrap();
