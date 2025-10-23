@@ -184,8 +184,14 @@ impl PyModel {
         return self.0.merge_vertices();
     }
 
-    fn add_coupling(&mut self, vertex: String, coupling: String, power: usize) {
-        self.0.add_coupling(vertex, coupling, power);
+    fn add_coupling(&mut self, vertex: String, coupling: String, power: usize) -> PyResult<()> {
+        self.0.add_coupling(vertex, coupling, power)?;
+        Ok(())
+    }
+
+    fn split_vertex(&mut self, vertex: String, new_vertices: Vec<String>) -> PyResult<()> {
+        self.0.split_vertex(vertex, &new_vertices)?;
+        Ok(())
     }
 
     fn as_topology_model(&self) -> PyTopologyModel {

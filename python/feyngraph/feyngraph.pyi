@@ -469,6 +469,9 @@ class Model:
     def add_coupling(self, vertex: str, coupling: str, power: int):
         """Add a new coupling to the interaction vertex `vertex` or overwrite an existing one."""
 
+    def split_vertex(self, vertex: str, new_vertices: list[str]):
+        """Split the existing vertex `vertex` into new vertices with names `new_vertices`."""
+
 
 class Particle:
     """

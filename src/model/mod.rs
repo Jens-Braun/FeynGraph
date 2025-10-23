@@ -415,6 +415,34 @@ impl Model {
         Ok(())
     }
 
+    /// Split the existing vertex `vertex` into new vertices with names `new_vertices`.
+    pub fn split_vertex<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        vertex: S,
+        new_vertices: &[S],
+    ) -> Result<(), ModelError> {
+        let v = self.vertices.shift_remove(&vertex.clone().into());
+        match v {
+            None => {
+                return Err(ModelError::ContentError(format!(
+                    "vertex {} not found in model",
+                    vertex.into()
+                )));
+            }
+            Some(v) => {
+                for name in new_vertices.iter() {
+                    let mut new_vertex = v.clone();
+                    new_vertex.name = name.clone().into();
+                    match self.vertices.insert(name.clone().into(), new_vertex) {
+                        None => (),
+                        Some(_) => warn!("Vertex {} already present in model, replacing.", name.clone().into()),
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Import a model in the [UFO 2.0](https://arxiv.org/abs/2304.09883) format. The specified `path` should point to
     /// the folder containing the Python source files.
     ///
