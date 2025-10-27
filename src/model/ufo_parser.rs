@@ -143,10 +143,13 @@ peg::parser! {
         rule l_list() -> Value<'input> =
             "[" _ vals:(("L." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(vals)}
 
+        rule value_list(input: &str) -> Value<'input> =
+            "[" _ vals:(property_value(input) ** (_ "," _)) _ "]" { Value::List(vals) }
+
         rule value(input: &str) -> Value<'input> = rational() / int() / bool() / string() / p_list() / l_list() / si_dict(input) / co_dict()
         rule property_value(input: &str) -> Value<'input> =
             value(input)
-            / "[" _ vals:(value(input) ** (_ "," _)) _ "]" { Value::List(vals) }
+            / value_list(input)
             / ([^',' | ')']* {Value::None})
 
         rule property(input: &str) -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value(input) {(prop, value)}
@@ -404,7 +407,12 @@ peg::parser! {
         vertices:(ct_vertex(input, couplings, ident_map, lorentz_structures) ** _) _ {
                 let (vertices, splittings): (Vec<Vec<InteractionVertex>>, Vec<(String, HashMap<String, Vec<(usize, usize)>>)>) = vertices.into_iter().unzip();
                 return (
-                    vertices.into_iter().flatten().map(|v| (v.name.clone(), v)).collect(),
+                    vertices.into_iter().flatten().filter_map(
+                        |v| if v.particles.len() > 2 {Some((v.name.clone(), v))} else {
+                            log::warn!("Vertex {} is two-point, which is currently unsupported by FeynGraph. Ignoring.", v.name);
+                            None
+                        }
+                    ).collect(),
                     HashMap::from_iter(splittings.into_iter().filter(|(_, m)| !m.is_empty()))
                 )
             }
