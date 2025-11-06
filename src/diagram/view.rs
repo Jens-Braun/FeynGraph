@@ -3,12 +3,14 @@
 use crate::{
     diagram::{Diagram, Leg, Propagator, Vertex},
     model::{InteractionVertex, Model, Particle},
+    util::HashMap,
 };
 use either::Either;
-#[cfg(any(feature = "check_momenta", test, debug_assertions))]
 use either::for_both;
 use itertools::Itertools;
+use std::borrow::Borrow;
 use std::fmt::Write;
+use std::hash::Hash;
 
 /// Public interface object of a [`Diagram`].
 pub struct DiagramView<'a> {
@@ -101,8 +103,7 @@ impl<'a> DiagramView<'a> {
     pub fn loop_vertices(&self, index: usize) -> impl Iterator<Item = VertexView<'_>> {
         let loop_index = self.n_ext() + index;
         return self.diagram.vertices.iter().enumerate().filter_map(move |(i, v)| {
-            if self.diagram.vertices[index]
-                .propagators
+            if v.propagators
                 .iter()
                 .any(|j| *j >= 0 && self.diagram.propagators[*j as usize].momentum[loop_index] != 0)
             {
@@ -135,6 +136,17 @@ impl<'a> DiagramView<'a> {
             });
     }
 
+    /// Get the number of propagators which are part of loop `index`.
+    pub fn loopsize(&self, index: usize) -> usize {
+        let loop_index = self.n_ext() + index;
+        return self
+            .diagram
+            .propagators
+            .iter()
+            .filter(|prop| prop.momentum[loop_index] != 0)
+            .count();
+    }
+
     /// Get an iterator over the bridge propagators of the diagram.
     pub fn bridges(&self) -> impl Iterator<Item = PropagatorView<'_>> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i));
@@ -153,6 +165,64 @@ impl<'a> DiagramView<'a> {
     /// Get the diagram's relative sign.
     pub fn sign(&self) -> i8 {
         return self.diagram.sign;
+    }
+
+    /// Get the diagram's order in the given coupling.
+    pub fn order<Q>(&self, coupling: &Q) -> usize
+    where
+        Q: Hash + Eq,
+        String: Borrow<Q>,
+    {
+        return self.vertices().map(|v| v.interaction().order(coupling)).sum::<usize>();
+    }
+
+    /// Get a map of the diagram's orders in all present couplings.
+    pub fn orders(&self) -> HashMap<String, usize> {
+        let mut result = HashMap::default();
+        for v in self.vertices() {
+            for (coupling, power) in v.interaction().coupling_orders.iter() {
+                if result.contains_key(coupling) {
+                    *result.get_mut(coupling).unwrap() += power;
+                } else {
+                    result.insert(coupling.clone(), *power);
+                }
+            }
+        }
+        return result;
+    }
+
+    /// Count the number of propagators in the diagram for which the particle name is in `particles`.
+    pub fn count_particles(&self, particles: &[impl PartialEq<String>]) -> usize {
+        return self
+            .propagators()
+            .filter(|p| particles.iter().any(|ref_part| ref_part == p.particle().name()))
+            .count();
+    }
+
+    /// Count the number of vertices in the diagram for which the interaction matches `particles`. '_' can be used as
+    /// a wildcard, matching every particle.
+    pub fn count_vertices<'q, S>(&'q self, particles: &'q [S]) -> usize
+    where
+        S: PartialEq<String> + Ord,
+    {
+        return self.vertices().filter(|v| v.match_particles(particles.iter())).count();
+    }
+
+    /// Check whether loop `index` is a color tadpole, i.e. only a single colored propagator is attached to this loop.
+    pub fn color_tadpole(&self, index: usize) -> bool {
+        let momentum_index = self.n_ext() + index;
+        return self
+            .loop_vertices(index)
+            .map(|v| {
+                v.propagators()
+                    .filter(|p| {
+                        for_both!(p, p => p.momentum()[momentum_index]) == 0 // Only propagators not part of loop `index`
+                            && for_both!(p, p => p.particle().color()).abs() > 1 // Non-trivial color representation
+                    })
+                    .count()
+            })
+            .sum::<usize>()
+            == 1;
     }
 
     fn trace_fermi_line(
@@ -443,6 +513,17 @@ impl PropagatorView<'_> {
         };
     }
 
+    /// Get an inverted version of the propagator.
+    pub fn invert(&self) -> PropagatorView<'_> {
+        Self {
+            model: self.model,
+            diagram: self.diagram,
+            propagator: self.propagator,
+            index: self.index,
+            invert: !self.invert,
+        }
+    }
+
     /// Get an iterator over the vertices connected by the propagator.
     pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_>> {
         return if self.invert {
@@ -498,6 +579,7 @@ impl PropagatorView<'_> {
     /// leg of the `index`-th vertex to which the propagator is connected to. The ray index is given with respect to the
     /// propagators ordered as in the interaction vertex.
     pub fn ray_index_ordered(&self, index: usize) -> usize {
+        let mut seen = false;
         return self
             .vertex(index)
             .propagators_ordered()
@@ -507,9 +589,22 @@ impl PropagatorView<'_> {
                 {
                     if self.propagator.vertices[0] == self.propagator.vertices[1] {
                         if index == 1 {
-                            return p.particle().is_anti();
+                            if p.particle().self_anti() {
+                                if !seen {
+                                    seen = true;
+                                    return false;
+                                } else {
+                                    return true;
+                                }
+                            } else {
+                                return p.particle().is_anti();
+                            }
                         } else {
-                            return !p.particle().is_anti();
+                            if p.particle().self_anti() {
+                                return true;
+                            } else {
+                                return !p.particle().is_anti();
+                            }
                         }
                     } else {
                         return true;
@@ -651,16 +746,13 @@ impl VertexView<'_> {
         return self.model.vertex(self.vertex.interaction);
     }
 
-    /// Check whether the given particle names match the interaction of the vertex.
-    pub fn match_particles<'q>(&self, query: impl IntoIterator<Item = &'q String>) -> bool {
-        return self
-            .model
-            .vertex(self.vertex.interaction)
-            .particles
-            .iter()
-            .sorted()
-            .zip(query.into_iter().sorted())
-            .all(|(part, query)| *part == *query);
+    /// Check whether the given particle names match the interaction of the vertex. "_" can be used as a wildcard to
+    /// match all particles.
+    pub fn match_particles<'q, S>(&self, query: impl Iterator<Item = &'q S>) -> bool
+    where
+        S: 'q + PartialEq<String> + Ord,
+    {
+        return self.interaction().match_particles(query);
     }
 }
 

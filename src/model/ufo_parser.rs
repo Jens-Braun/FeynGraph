@@ -220,6 +220,8 @@ peg::parser! {
                 Ok((py_name, Value::Particle(Particle::new(
                     name.unwrap(),
                     antiname.unwrap(),
+                    twospin.unwrap(),
+                    color.unwrap(),
                     pdg_code.unwrap(),
                     texname.unwrap(),
                     antitexname.unwrap(),
@@ -305,7 +307,7 @@ peg::parser! {
                 connections.into_iter().flatten().collect_vec()
             }
 
-        rule lorentz(input: &str) -> (&'input str, Vec<isize>) =
+        pub rule lorentz(input: &str) -> (&'input str, Vec<isize>) =
             pos: position!() py_name:name() _ "=" _ "Lorentz(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
                 let mut name = None;
                 let mut spins = None;
@@ -761,6 +763,7 @@ mod tests {
     use super::*;
     use crate::model::{InteractionVertex, LineStyle, Model, Particle, Statistic};
     use crate::util::{HashMap, IndexMap};
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use test_log::test;
 
@@ -772,31 +775,91 @@ mod tests {
             IndexMap::from_iter([
                 (
                     String::from("u"),
-                    Particle::new("u", "u~", 9000001, "u", "u~", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "u",
+                        "u~",
+                        1,
+                        3,
+                        9000001,
+                        "u",
+                        "u~",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("u~"),
-                    Particle::new("u~", "u", -9000001, "u~", "u", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "u~",
+                        "u",
+                        -1,
+                        -3,
+                        -9000001,
+                        "u~",
+                        "u",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("c"),
-                    Particle::new("c", "c~", 9000002, "c", "c~", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "c",
+                        "c~",
+                        1,
+                        3,
+                        9000002,
+                        "c",
+                        "c~",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("c~"),
-                    Particle::new("c~", "c", -9000002, "c~", "c", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "c~",
+                        "c",
+                        -1,
+                        -3,
+                        -9000002,
+                        "c~",
+                        "c",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("t"),
-                    Particle::new("t", "t~", 9000003, "t", "t~", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "t",
+                        "t~",
+                        1,
+                        3,
+                        9000003,
+                        "t",
+                        "t~",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("t~"),
-                    Particle::new("t~", "t", -9000003, "t~", "t", LineStyle::Straight, Statistic::Fermi),
+                    Particle::new(
+                        "t~",
+                        "t",
+                        -1,
+                        -3,
+                        -9000003,
+                        "t~",
+                        "t",
+                        LineStyle::Straight,
+                        Statistic::Fermi,
+                    ),
                 ),
                 (
                     String::from("G"),
-                    Particle::new("G", "G", 9000004, "G", "G", LineStyle::Curly, Statistic::Bose),
+                    Particle::new("G", "G", 2, 8, 9000004, "G", "G", LineStyle::Curly, Statistic::Bose),
                 ),
             ]),
             IndexMap::from_iter([
@@ -822,7 +885,7 @@ mod tests {
                     "V_3".to_string(),
                     InteractionVertex::new(
                         "V_3".to_string(),
-                        vec!["u~".to_string(), "u".to_string(), "G".to_string()],
+                        vec!["u".to_string(), "u~".to_string(), "G".to_string()],
                         vec![1, 0],
                         HashMap::from_iter([("QCD".to_string(), 1)]),
                     ),
@@ -831,7 +894,7 @@ mod tests {
                     "V_4".to_string(),
                     InteractionVertex::new(
                         "V_4".to_string(),
-                        vec!["c~".to_string(), "c".to_string(), "G".to_string()],
+                        vec!["c".to_string(), "c~".to_string(), "G".to_string()],
                         vec![1, 0],
                         HashMap::from_iter([("QCD".to_string(), 1)]),
                     ),
@@ -840,7 +903,7 @@ mod tests {
                     "V_5".to_string(),
                     InteractionVertex::new(
                         "V_5".to_string(),
-                        vec!["t~".to_string(), "t".to_string(), "G".to_string()],
+                        vec!["t".to_string(), "t~".to_string(), "G".to_string()],
                         vec![1, 0],
                         HashMap::from_iter([("QCD".to_string(), 1)]),
                     ),
@@ -871,6 +934,15 @@ mod tests {
         let structure = "P(3,1)*Metric(1,2) - P(3,2)*Metric(1,2) - P(2,1)*Metric(1,3) + P(2,3)*Metric(1,3) + P(1,2)*Metric(2,3) - P(1,3)*Metric(2,3)";
         let res = ufo_model::lorentz_structure(structure).unwrap();
         assert_eq!(res, vec![]);
+    }
+
+    #[test]
+    fn ufo_lorentz_loop_test() {
+        let structure = r"FF = Lorentz(name = 'FF',
+                spins = [ 2, 2],
+                structure = 'Gamma(3,-2,-1)*Gamma(4,2,-2)*ProjP(-1,1) - Gamma(3,2,-1)*Gamma(4,-1,-2)*ProjP(-2,1)')";
+        let res = ufo_model::lorentz(structure, structure);
+        assert_eq!(res.unwrap(), ("FF", vec![1, 0]));
     }
 
     #[test]

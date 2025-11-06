@@ -1,0 +1,17 @@
+This UFO files were generated with FeynRules 2.0.23 [1]
+from its included Standard Model example [2] with
+LoadRestriction["Massless.rst"] and FeynmanGauge = True.
+
+It has a non-diagonal CKM matrix (LoadRestriction["DiagonalCKM.rst"] was not
+used).
+
+
+[1] FeynRules Version: 2.0.23.
+ Authors: A. Alloul, N. Christensen, C. Degrande, C. Duhr, B. Fuks
+ arXiv:1310.1921; 
+ Comput.Phys.Commun.180:1614-1641,2009 (arXiv:0806.4194).
+ http://feynrules.phys.ucl.ac.be
+
+[2] Standard Model, Model Version: 1.4.5
+ N. Christensen, C. Duhr, B. Fuks
+ http://feynrules.phys.ucl.ac.be/view/Main/StandardModel

@@ -79,6 +79,7 @@ pub(crate) fn contract_indices(mut connections: Vec<(isize, isize)>) -> Vec<isiz
 #[cfg(test)]
 mod test {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::collections::HashSet;
 
     #[test]

@@ -6,6 +6,7 @@ use crate::{
     },
     model::Model,
     topology::Topology,
+    util::HashMap,
 };
 use either::Either;
 use itertools::Itertools;
@@ -14,7 +15,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::fmt::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Clone)]
 #[pyclass]
@@ -209,6 +210,16 @@ impl PyPropagator {
         };
     }
 
+    pub fn invert(&self) -> PyPropagator {
+        Self {
+            container: self.container.clone(),
+            diagram: self.diagram.clone(),
+            propagator: self.propagator.clone(),
+            index: self.index,
+            invert: !self.invert,
+        }
+    }
+
     pub fn vertices(&self) -> Vec<PyVertex> {
         return if self.invert {
             self.propagator
@@ -286,6 +297,7 @@ impl PyPropagator {
     }
 
     pub fn ray_index_ordered(&self, index: usize) -> usize {
+        let mut seen = false;
         return self
             .vertex(index)
             .propagators_ordered()
@@ -295,9 +307,22 @@ impl PyPropagator {
                     if p.index == self.index {
                         if self.propagator.vertices[0] == self.propagator.vertices[1] {
                             if index == 1 {
-                                return p.particle().is_anti();
+                                if p.particle().self_anti() {
+                                    if !seen {
+                                        seen = true;
+                                        return false;
+                                    } else {
+                                        return true;
+                                    }
+                                } else {
+                                    return p.particle().is_anti();
+                                }
                             } else {
-                                return !p.particle().is_anti();
+                                if p.particle().self_anti() {
+                                    return true;
+                                } else {
+                                    return !p.particle().is_anti();
+                                }
                             }
                         } else {
                             return true;
@@ -496,26 +521,16 @@ impl PyVertex {
             .collect_vec();
     }
 
-    pub fn match_particles(&self, query: Vec<String>) -> bool {
-        return self
-            .container
-            .model
-            .as_ref()
-            .unwrap()
-            .vertex(self.vertex.interaction)
-            .particles
-            .iter()
-            .sorted()
-            .zip(query.into_iter().sorted())
-            .all(|(part, query)| *part == *query);
-    }
-
     pub fn id(&self) -> usize {
         return self.index;
     }
 
     pub fn degree(&self) -> usize {
         return self.vertex.propagators.len();
+    }
+
+    pub fn match_particles(&self, query: Vec<String>) -> bool {
+        return self.interaction().match_particles(query);
     }
 }
 
@@ -693,8 +708,7 @@ impl PyDiagram {
             .iter()
             .enumerate()
             .filter_map(|(i, v)| {
-                if self.diagram.vertices[index]
-                    .propagators
+                if v.propagators
                     .iter()
                     .any(|j| *j >= 0 && self.diagram.propagators[*j as usize].momentum[loop_index] != 0)
                 {
@@ -728,6 +742,16 @@ impl PyDiagram {
             .collect_vec();
     }
 
+    pub fn loopsize(&self, index: usize) -> usize {
+        let loop_index = self.n_ext() + index;
+        return self
+            .diagram
+            .propagators
+            .iter()
+            .filter(|prop| prop.momentum[loop_index] != 0)
+            .count();
+    }
+
     pub(crate) fn bridges(&self) -> Vec<PyPropagator> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i)).collect_vec();
     }
@@ -742,6 +766,54 @@ impl PyDiagram {
 
     pub(crate) fn sign(&self) -> i8 {
         return self.diagram.sign;
+    }
+
+    pub(crate) fn order(&self, coupling: String) -> usize {
+        return self
+            .vertices()
+            .into_iter()
+            .map(|v| v.interaction().0.order(&coupling))
+            .sum::<usize>();
+    }
+
+    pub fn orders(&self) -> HashMap<String, usize> {
+        let mut result = HashMap::default();
+        for v in self.vertices() {
+            for (coupling, power) in v.interaction().0.coupling_orders.iter() {
+                if result.contains_key(coupling) {
+                    *result.get_mut(coupling).unwrap() += power;
+                } else {
+                    result.insert(coupling.clone(), *power);
+                }
+            }
+        }
+        return result;
+    }
+
+    pub(crate) fn count_vertices(&self, particles: Vec<String>) -> usize {
+        return self
+            .vertices()
+            .iter()
+            .filter(|v| v.match_particles(particles.clone()))
+            .count();
+    }
+
+    pub fn color_tadpole(&self, index: usize) -> bool {
+        let momentum_index = self.n_ext() + index;
+        return self
+            .loop_vertices(index)
+            .into_iter()
+            .map(|v| {
+                v.propagators()
+                    .into_iter()
+                    .filter(|p| {
+                        either::for_both!(p, p => p.momentum()[momentum_index]) == 0 // Only propagators not part of loop `index`
+                            && either::for_both!(p, p => p.particle().color()).abs() > 1 // Non-trivial color representation
+                    })
+                    .count()
+            })
+            .sum::<usize>()
+            == 1;
     }
 
     pub(crate) fn n_in(&self) -> usize {
@@ -847,6 +919,25 @@ pub(crate) struct PyDiagramContainer(Arc<DiagramContainer>);
 impl PyDiagramContainer {
     fn query(&self, selector: &PyDiagramSelector) -> Option<usize> {
         return self.0.query(&selector.0);
+    }
+
+    fn query_function(&self, py: Python<'_>, f: Py<PyAny>) -> Option<usize> {
+        return if let Some((i, _)) = self.0.data.iter().find_position(|diagram| {
+            f.call1(
+                py,
+                (PyDiagram {
+                    diagram: Arc::new((*diagram).clone()),
+                    container: self.0.clone(),
+                },),
+            )
+            .unwrap()
+            .extract(py)
+            .unwrap()
+        }) {
+            Some(i)
+        } else {
+            None
+        };
     }
 
     #[pyo3(signature = (diagrams, n_cols = None))]

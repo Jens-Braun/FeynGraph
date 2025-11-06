@@ -3,6 +3,8 @@
 use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
 use log::warn;
+use std::borrow::Borrow;
+use std::hash::Hash;
 use std::path::Path;
 use thiserror::Error;
 
@@ -51,6 +53,8 @@ pub enum Statistic {
 pub struct Particle {
     pub(crate) name: String,
     pub(crate) anti_name: String,
+    pub(crate) spin: isize,
+    pub(crate) color: isize,
     pub(crate) pdg_code: isize,
     pub(crate) texname: String,
     pub(crate) antitexname: String,
@@ -68,6 +72,16 @@ impl Particle {
     /// Get the name of the particle's anti-particle. Corresponds the the UFO property `antiname`.
     pub fn anti_name(&self) -> &String {
         return &self.anti_name;
+    }
+
+    /// Get $2s$, where $s$ is the particle's spin.
+    pub fn spin(&self) -> isize {
+        return self.spin;
+    }
+
+    /// Get the size of the particle's color representation.
+    pub fn color(&self) -> isize {
+        return self.color;
     }
 
     /// Get the particle's PDG ID. Corresponds the the UFO property `pdg_code`.
@@ -94,6 +108,8 @@ impl Particle {
         return Self {
             name: self.anti_name,
             anti_name: self.name,
+            spin: -self.spin,
+            color: -self.color,
             pdg_code: -self.pdg_code,
             texname: self.antitexname,
             antitexname: self.texname,
@@ -106,6 +122,8 @@ impl Particle {
     pub(crate) fn new(
         name: impl Into<String>,
         anti_name: impl Into<String>,
+        spin: isize,
+        color: isize,
         pdg_code: isize,
         texname: impl Into<String>,
         antitexname: impl Into<String>,
@@ -118,6 +136,8 @@ impl Particle {
         return Self {
             name: name.into(),
             anti_name: anti_name.into(),
+            spin,
+            color,
             pdg_code,
             texname,
             antitexname,
@@ -151,6 +171,14 @@ impl InteractionVertex {
         return &self.coupling_orders;
     }
 
+    pub fn order<Q>(&self, coupling: &Q) -> usize
+    where
+        Q: Hash + Eq,
+        String: Borrow<Q>,
+    {
+        return *self.coupling_orders.get(coupling).unwrap_or(&0);
+    }
+
     /// Get the degree of the vertex, i.e. the number of particles attached to it.
     pub fn degree(&self) -> usize {
         return self.particles.len();
@@ -166,6 +194,43 @@ impl InteractionVertex {
                 coupling.into()
             ),
         }
+    }
+
+    /// Check whether the given particle names match the interaction. "_" can be used as a wildcard to
+    /// match all particles.
+    pub fn match_particles<'q, S>(&self, query: impl Iterator<Item = &'q S>) -> bool
+    where
+        S: 'q + PartialEq<String> + Ord,
+    {
+        let particles_sorted: Vec<&String> = self.particles.iter().sorted().collect();
+        let mut wildcards: usize = 0;
+        let query_sorted: Vec<&S> = query
+            .filter(|s| {
+                if **s != "_".to_owned() {
+                    true
+                } else {
+                    wildcards += 1;
+                    false
+                }
+            })
+            .sorted()
+            .collect();
+        if particles_sorted.len() != wildcards + query_sorted.len() {
+            return false;
+        }
+        let mut query_cursor: usize = 0;
+        for p in particles_sorted {
+            if query_cursor < query_sorted.len() && *query_sorted[query_cursor] == *p {
+                query_cursor += 1;
+            } else {
+                if wildcards > 0 {
+                    wildcards -= 1;
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     pub(crate) fn new(
@@ -290,6 +355,8 @@ impl Model {
         &mut self,
         name: S,
         anti_name: S,
+        spin: isize,
+        color: isize,
         pdg_code: isize,
         texname: S,
         antitexname: S,
@@ -299,6 +366,8 @@ impl Model {
         let p = Particle {
             name: name.clone().into(),
             anti_name: anti_name.clone().into(),
+            spin,
+            color,
             pdg_code,
             texname: texname.into(),
             antitexname: antitexname.into(),
@@ -630,6 +699,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::model::{Model, TopologyModel};
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use test_log::test;
 

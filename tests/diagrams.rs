@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 mod common;
+use pretty_assertions::assert_eq;
 
 macro_rules! test_diagrams {
     (
@@ -231,6 +232,8 @@ fn diagsQCDM_g_gg_loops_1_sign() {
     m.add_particle(
         "g",
         "g",
+        3,
+        8,
         21,
         "g",
         "g",
@@ -240,6 +243,8 @@ fn diagsQCDM_g_gg_loops_1_sign() {
     m.add_particle(
         "u",
         "u~",
+        2,
+        3,
         2,
         "u",
         "u~",

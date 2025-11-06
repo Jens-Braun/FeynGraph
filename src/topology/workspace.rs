@@ -404,6 +404,7 @@ mod test {
     use crate::topology::matrix::SymmetricMatrix;
     use crate::topology::{Edge, Node, Topology, TopologyContainer};
     use itertools::Itertools;
+    use pretty_assertions::assert_eq;
     use test_log::test;
 
     #[test]

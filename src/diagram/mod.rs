@@ -368,6 +368,21 @@ impl DiagramContainer {
             None
         };
     }
+
+    /// Returns the index of the first diagram for which `f` returns `true`, or `None` if all diagrams return `false`.
+    pub fn query_function(&self, f: impl Fn(&DiagramView) -> bool) -> Option<usize> {
+        return if let Some((i, _)) = self.data.iter().find_position(|diagram| {
+            f(&DiagramView::new(
+                self.model.as_ref().unwrap(),
+                diagram,
+                &self.momentum_labels,
+            ))
+        }) {
+            Some(i)
+        } else {
+            None
+        };
+    }
 }
 
 impl From<Vec<DiagramContainer>> for DiagramContainer {
@@ -605,6 +620,7 @@ impl DiagramGenerator {
 mod tests {
     use super::*;
     use crate::topology::filter::TopologySelector;
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use std::sync::Arc;
     use test_log::test;

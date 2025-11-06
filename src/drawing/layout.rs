@@ -512,6 +512,7 @@ mod tests {
     use crate::topology::TopologyGenerator;
     use crate::topology::{Edge, Node, Topology, components::NodeClassification};
     use approx::assert_relative_eq;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn linear_solve_test() {

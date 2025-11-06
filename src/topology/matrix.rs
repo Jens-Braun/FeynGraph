@@ -98,6 +98,7 @@ impl std::fmt::Debug for SymmetricMatrix {
 #[cfg(test)]
 mod test {
     use super::SymmetricMatrix;
+    use pretty_assertions::assert_eq;
     use std::cmp::Ordering;
     use test_log::test;
 

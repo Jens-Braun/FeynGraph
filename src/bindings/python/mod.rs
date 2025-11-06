@@ -6,7 +6,7 @@ use crate::{
     model::{InteractionVertex, Model, ModelError, Particle, TopologyModel},
     util,
 };
-use diagrams::{PyDiagram, PyDiagramContainer, PyDiagramGenerator, PyDiagramSelector};
+use diagrams::{PyDiagram, PyDiagramContainer, PyDiagramGenerator, PyDiagramSelector, PyLeg, PyPropagator, PyVertex};
 use log::warn;
 use pyo3::exceptions::{PyIOError, PySyntaxError, PyValueError};
 use pyo3::prelude::*;
@@ -33,6 +33,11 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDiagramGenerator>()?;
     m.add_class::<PyDiagramContainer>()?;
     m.add_class::<PyDiagramSelector>()?;
+    m.add_class::<PyPropagator>()?;
+    m.add_class::<PyLeg>()?;
+    m.add_class::<PyVertex>()?;
+    m.add_class::<PyParticle>()?;
+    m.add_class::<PyInteractionVertex>()?;
     m.add_function(wrap_pyfunction!(set_threads, m)?)?;
     m.add_function(wrap_pyfunction!(generate_diagrams, m)?)?;
     #[cfg(feature = "wolfram-bindings")]
@@ -139,6 +144,8 @@ impl PyModel {
         &mut self,
         name: String,
         anti_name: String,
+        spin: isize,
+        color: isize,
         pdg_code: isize,
         texname: String,
         antitexname: String,
@@ -161,6 +168,8 @@ impl PyModel {
             name,
             anti_name,
             pdg_code,
+            spin,
+            color,
             texname,
             antitexname,
             linestyle,
@@ -250,6 +259,14 @@ impl PyParticle {
         return self.0.pdg();
     }
 
+    pub(crate) fn spin(&self) -> isize {
+        return self.0.spin();
+    }
+
+    pub(crate) fn color(&self) -> isize {
+        return self.0.color();
+    }
+
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }
@@ -281,6 +298,14 @@ impl PyInteractionVertex {
     fn name(&self) -> String {
         return self.0.name.clone();
     }
+
+    fn order(&self, coupling: String) -> usize {
+        return self.0.order(&coupling);
+    }
+
+    fn match_particles(&self, query: Vec<String>) -> bool {
+        return self.0.match_particles(query.iter());
+    }
 }
 
 impl From<PyModel> for Model {
@@ -292,6 +317,7 @@ impl From<PyModel> for Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use pyo3_ffi::c_str;
     use test_log::test;
 

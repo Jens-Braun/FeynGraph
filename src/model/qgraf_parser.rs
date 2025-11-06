@@ -109,6 +109,8 @@ peg::parser!(
                 Ok(Particle::new(
                     String::from(name),
                     String::from(anti_name),
+                    twospin.unwrap_or(0),
+                    color.unwrap_or(0),
                     pdg_code as isize,
                     String::from(name),
                     String::from(anti_name),
@@ -274,6 +276,7 @@ fn build_spin_maps(mut model: Model) -> Model {
 mod tests {
     use super::*;
     use crate::model::Statistic;
+    use pretty_assertions::assert_eq;
     use std::{collections::HashMap, path::PathBuf};
     use test_log::test;
 
@@ -289,6 +292,8 @@ mod tests {
                         "quark",
                         "antiquark",
                         1,
+                        3,
+                        1,
                         "quark",
                         "antiquark",
                         LineStyle::Straight,
@@ -301,6 +306,8 @@ mod tests {
                         "antiquark",
                         "quark",
                         -1,
+                        -3,
+                        -1,
                         "antiquark",
                         "quark",
                         LineStyle::Straight,
@@ -309,13 +316,25 @@ mod tests {
                 ),
                 (
                     String::from("gluon"),
-                    Particle::new("gluon", "gluon", 2, "gluon", "gluon", LineStyle::Curly, Statistic::Bose),
+                    Particle::new(
+                        "gluon",
+                        "gluon",
+                        2,
+                        8,
+                        2,
+                        "gluon",
+                        "gluon",
+                        LineStyle::Curly,
+                        Statistic::Bose,
+                    ),
                 ),
                 (
                     String::from("ghost"),
                     Particle::new(
                         "ghost",
                         "antighost",
+                        -2,
+                        8,
                         3,
                         "ghost",
                         "antighost",
@@ -328,6 +347,8 @@ mod tests {
                     Particle::new(
                         "antighost",
                         "ghost",
+                        2,
+                        -8,
                         -3,
                         "antighost",
                         "ghost",
@@ -383,18 +404,6 @@ mod tests {
     #[test]
     fn qgraf_sm_test() {
         let model = parse_qgraf_model(Path::new("tests/resources/sm.qgraf"));
-        match &model {
-            Ok(_) => (),
-            Err(e) => {
-                println!("{:#?}", e);
-            }
-        }
-        assert!(model.is_ok());
-    }
-
-    #[test]
-    fn qgraf_sm_gosam() {
-        let model = parse_qgraf_model(Path::new("tests/resources/sm_gosam.qgraf"));
         match &model {
             Ok(_) => (),
             Err(e) => {

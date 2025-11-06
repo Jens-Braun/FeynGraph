@@ -114,7 +114,8 @@ impl DiagramSelector {
         }
     }
 
-    /// Add a criterion to only keep diagrams which contain `count` vertices of the fields `particles`.
+    /// Add a criterion to only keep diagrams which contain `count` vertices of the fields `particles`. "_" can be used
+    /// as a wildcard matching all fields.
     pub fn select_vertex_count(&mut self, particles: Vec<String>, count: usize) {
         let particles_sorted = particles.into_iter().sorted_unstable().collect_vec();
         if let Some(powers) = self.vertex_counts.get_mut(&particles_sorted) {
@@ -201,12 +202,10 @@ impl DiagramSelector {
         if self.custom_functions.is_empty() {
             return true;
         }
-        for custom_function in &self.custom_functions {
-            if custom_function(model.clone(), momentum_labels.clone(), diag) {
-                return true;
-            }
-        }
-        return false;
+        return self
+            .custom_functions
+            .iter()
+            .all(|f| f(model.clone(), momentum_labels.clone(), diag));
     }
 
     fn query_coupling_powers(&self, view: &DiagramView) -> bool {
@@ -244,7 +243,7 @@ impl DiagramSelector {
         return self.vertex_counts.iter().all(|(particles, counts)| {
             counts
                 .iter()
-                .any(|count| view.vertices().filter(|v| v.match_particles(particles)).count() == *count)
+                .any(|count| view.vertices().filter(|v| v.match_particles(particles.iter())).count() == *count)
         });
     }
 

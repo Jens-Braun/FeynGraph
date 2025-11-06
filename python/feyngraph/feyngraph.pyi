@@ -3,14 +3,14 @@ A modern Feynman diagram generation toolkit.
 """
 
 from __future__ import annotations
-from typing import Optional, Callable, Self
+from typing import Self, Optional
+from collections.abc import Callable
 
 from feyngraph.topology import Topology, TopologyModel
 
 _WOLFRAM_ENABLED: bool
 
-
-def set_threads(n_threads: int):
+def set_threads(n_threads: int) -> None:
     """
     Set the number of threads FeynGraph will use. The default is the maximum number of available threads.
 
@@ -19,12 +19,12 @@ def set_threads(n_threads: int):
     """
 
 def generate_diagrams(
-        particles_in: list[str],
-        particles_out: list[str],
-        n_loops: int,
-        model: Optional[Model] = None,
-        selector: Optional[DiagramSelector] = None
-        ) -> DiagramContainer :
+    particles_in: list[str],
+    particles_out: list[str],
+    n_loops: int,
+    model: Optional[Model] = None,
+    selector: Optional[DiagramSelector] = None,
+) -> DiagramContainer:
     """
     Convenience function for diagram generation. This function only requires the minimal set of input information,
     the incoming particles and the outgoing particles. Sensible defaults are provided for all other variables.
@@ -72,6 +72,9 @@ class Diagram:
     def chord(self, index: int) -> list[Propagator]:
         """Get a list of the propagators belonging to the `index`-th loop."""
 
+    def loopsize(self, index: int) -> int:
+        """Get the number of propagators belonging to the `index`-th loop."""
+
     def bridges(self) -> list[Propagator]:
         """Get a list of the bridge propagators."""
 
@@ -90,10 +93,30 @@ class Diagram:
     def sign(self) -> int:
         """Get the diagram's relative sign."""
 
-    def draw_tikz(self, file: str):
+    def order(self, coupling: str) -> int:
+        """Get the order of the diagram in the given coupling."""
+
+    def orders(self) -> dict[str, int]:
+        """Returns the index of the first diagram for which `f` returns `true`, or `None` if all diagrams return `false`."""
+
+    def count_particles(self, particles: list[str]) -> int:
+        """Count the number of propagators in the diagram for which the particle name is in `particles`."""
+
+    def count_vertices(self, particles: list[str]) -> int:
+        """
+        Count the number of vertices in the diagram for which the interaction matches `particles`. '_' can be used as
+        a wildcard, matching every particle.
+        """
+
+    def color_tadpole(self, index: int) -> bool:
+        """
+        Check whether loop `index` is a color tadpole, i.e. only a single colored propagator is attached to this loop.
+        """
+
+    def draw_tikz(self, file: str) -> None:
         """Draw the diagram in TikZ (TikZiT) format and write the result to `file`"""
 
-    def draw_svg(self, file: str):
+    def draw_svg(self, file: str) -> None:
         """Draw the diagram in SVG format and write the result to `file`"""
 
 class Leg:
@@ -141,6 +164,9 @@ class Propagator:
 
     def normalize(self) -> Self:
         """Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle."""
+
+    def invert(self) -> Self:
+        """Get an inverted version of the propagator."""
 
     def vertices(self) -> list[Vertex]:
         """Get a list of vertices the propagator is connected to."""
@@ -203,7 +229,10 @@ class Vertex:
         """
 
     def match_particles(self) -> bool:
-        """Check whether the given particle names match the interaction of the vertex."""
+        """
+        Check whether the given particle names match the interaction of the vertex. "_" can be used as a wildcard to
+        match all particles.
+        """
 
     def id(self) -> int:
         """Get the vertex' internal id"""
@@ -214,6 +243,8 @@ class Vertex:
 class DiagramContainer:
     """A container of Feynman diagrams and accompanying information"""
 
+    def __iter__(self) -> DiagramContainer: ...
+    def __next__(self) -> Diagram: ...
     def query(self, selector: DiagramSelector) -> None | int:
         """
         Query whether there is a diagram in the container, which would be selected by `selector`.
@@ -222,7 +253,15 @@ class DiagramContainer:
             None if no diagram is selected, the position of the first selected diagram otherwise
         """
 
-    def draw(self, diagrams: list[int], n_cols: Optional[int] = 4):
+    def query_function(self, f: Callable[[Diagram], bool]) -> None | int:
+        """
+        Query whether there is a diagram in the container, for which `f` returns `True`.
+
+        Returns:
+            None if no diagram is selected, the position of the first selected diagram otherwise
+        """
+
+    def draw(self, diagrams: list[int], n_cols: Optional[int] = 4) -> None:
         """
         Draw the specified diagrams into a large canvas. Returns an SVG string, which can be displayed e.g. in a
         Jupyter notebook.
@@ -273,31 +312,31 @@ class DiagramSelector:
     ```
     """
 
-    def select_opi_components(self, opi_count: int) :
+    def select_opi_components(self, opi_count: int) -> None:
         """
         Add a constraint to only select diagrams with `opi_count` one-particle-irreducible components.
         """
 
-    def select_self_loops(self, count: int):
+    def select_self_loops(self, count: int) -> None:
         """
         Add a constraint to only select diagrams with `count` self-loops. A self-loop is defined as an edge which ends
         on the same node it started on.
         """
 
-    def select_tadpoles(self, count: int):
+    def select_tadpoles(self, count: int) -> None:
         """
         Add a criterion to only keep diagrams with `count` tadpoles. A tadpole is defined as a subdiagram without any
         external legs connected to the remaining vertices only by a single propagator carrying no momentum.
         """
 
-    def select_on_shell(self):
+    def select_on_shell(self) -> None:
         """
         Add a constraint to only select on-shell diagrams. On-shell diagrams are defined as diagrams with no self-energy
         insertions on external legs. This implementation considers internal edges carrying a single external momentum
         and no loop momentum, which is equivalent to a self-energy insertion on an external propagator.
         """
 
-    def add_custom_function(self, py_function: Callable[[Diagram], bool]):
+    def add_custom_function(self, py_function: Callable[[Diagram], bool]) -> None:
         """
         Add a constraint to only select diagrams for which the given function returns `true`. The function receives
         a single diagrams as input and should return a boolean.
@@ -314,29 +353,29 @@ class DiagramSelector:
         ```
         """
 
-    def add_topology_function(self, py_function: Callable[[Topology], bool]):
+    def add_topology_function(self, py_function: Callable[[Topology], bool]) -> None:
         """
         Add a custom topology selection function, which is used when the `DiagramSelector` is converted to a
         [`TopologySelector`](topology.md#feyngraph.topology.TopologySelector), e.g. when a
         [`DiagramGenerator`](feyngraph.md#feyngraph.DiagramGenerator) automatically generates topologies.
         """
 
-    def select_coupling_power(self, coupling: str, power: int):
+    def select_coupling_power(self, coupling: str, power: int) -> None:
         """
         Add a constraint to only select diagrams for which the power of `coupling` sums to `power`.
         """
 
-    def select_propagator_count(self, particle: str, count: int):
+    def select_propagator_count(self, particle: str, count: int) -> None:
         """
         Add a constraint to only select diagrams which contain exactly `count` propagators of the field `particle`.
         """
 
-    def select_vertex_count(self, particles: list[str], count: int):
+    def select_vertex_count(self, particles: list[str], count: int) -> None:
         """
         Add a constraint to only select diagrams which contain exactly `count` vertices of the fields `particles`.
         """
 
-    def select_vertex_degree(self, degree: int, count: int):
+    def select_vertex_degree(self, degree: int, count: int) -> None:
         """Add a criterion to only keep diagrams which contains `count` vertices of degree `degree`."""
 
 class DiagramGenerator:
@@ -355,18 +394,18 @@ class DiagramGenerator:
     """
 
     def __new__(
-            cls,
-            incoming: list[str],
-            outgoing: list[str],
-            n_loops: int,
-            model: Model,
-            selector: DiagramSelector | None = None
-            ) -> DiagramGenerator:
+        cls,
+        incoming: list[str],
+        outgoing: list[str],
+        n_loops: int,
+        model: Model,
+        selector: DiagramSelector | None = None,
+    ) -> DiagramGenerator:
         """
         Create a new Diagram generator for the given process
         """
 
-    def set_momentum_labels(self, labels: list[str]):
+    def set_momentum_labels(self, labels: list[str]) -> None:
         """
         Set the names of the momenta. The first `n_external` ones are the external momenta, the remaining ones are
         the loop momenta. Returns an error if the number of labels does not match the diagram.
@@ -444,8 +483,8 @@ class Model:
         texname: str,
         antitexname: str,
         linestyle: str,
-        fermi: bool
-    ):
+        fermi: bool,
+    ) -> None:
         """
         Add a new particle with the given properties to the model or overwrite an existing one. If `name == anti_name`,
         the particle is automatically marked as its own anti particle. Otherwise, the corresponding anti particle is
@@ -454,7 +493,13 @@ class Model:
         `double` and `none`.
         """
 
-    def add_vertex(self, name: str, particles: list[str], spin_map: list[int], coupling_orders: dict[str, int]):
+    def add_vertex(
+        self,
+        name: str,
+        particles: list[str],
+        spin_map: list[int],
+        coupling_orders: dict[str, int],
+    ) -> None:
         """
         Add a new vertex with the given properties to the model or overwrite an existing one. The `i`-th entry of the
         `spin_map` must be the leg `j` to which leg `i` is spin-connected.
@@ -466,12 +511,11 @@ class Model:
         coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
         """
 
-    def add_coupling(self, vertex: str, coupling: str, power: int):
+    def add_coupling(self, vertex: str, coupling: str, power: int) -> None:
         """Add a new coupling to the interaction vertex `vertex` or overwrite an existing one."""
 
-    def split_vertex(self, vertex: str, new_vertices: list[str]):
+    def split_vertex(self, vertex: str, new_vertices: list[str]) -> None:
         """Split the existing vertex `vertex` into new vertices with names `new_vertices`."""
-
 
 class Particle:
     """
@@ -493,11 +537,20 @@ class Particle:
     def pdg(self) -> int:
         """Get the particle's PDG ID"""
 
-class InteractionVertex:
-    """Internal representaion of an interaction vertex."""
+    def spin(self) -> int:
+        """Get $2s$, where $s$ is the particle's spin."""
 
-    def coupling_orders(self):
+    def color(self) -> int:
+        """Get the size of the particle's color representation."""
+
+class InteractionVertex:
+    """Internal representation of an interaction vertex."""
+
+    def coupling_orders(self) -> dict[str, int]:
         """Get a list of coupling orders of the interaction."""
 
-    def name(self):
+    def order(self, coupling: str) -> int:
+        """Get the vertex' order in the coupling `coupling`."""
+
+    def name(self) -> None:
         """Get the name of the interaction vertex."""

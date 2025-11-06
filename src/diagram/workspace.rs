@@ -551,6 +551,7 @@ mod tests {
     use crate::model::{Model, TopologyModel};
     use crate::topology::filter::TopologySelector;
     use crate::topology::{Edge, Node, Topology, TopologyGenerator, components::NodeClassification};
+    use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use std::sync::Arc;
     use test_log::test;
