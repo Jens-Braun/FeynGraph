@@ -69,7 +69,7 @@ pub(crate) fn diagrams_feynarts(
     let mut buffer = String::new();
     let sm = Model::default();
     let n_in = particles_in.len();
-    py.allow_threads(|| -> PyResult<()> {
+    py.detach(|| -> PyResult<()> {
         let topos = TopologyGenerator::new(
             particles_in.len() + particles_out.len(),
             n_loops,

@@ -64,7 +64,7 @@ impl PyTopologySelector {
 
     pub fn add_custom_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_custom_function(Arc::new(move |topo: &Topology| -> bool {
-            Python::with_gil(|py| -> bool {
+            Python::attach(|py| -> bool {
                 py_function
                     .call1(py, (PyTopology(topo.clone()),))
                     .unwrap()
@@ -248,13 +248,13 @@ impl PyTopologyGenerator {
     }
 
     pub(crate) fn generate(&self, py: Python<'_>) -> PyTopologyContainer {
-        return py.allow_threads(|| -> PyTopologyContainer {
+        return py.detach(|| -> PyTopologyContainer {
             return PyTopologyContainer(self.0.generate());
         });
     }
 
     pub(crate) fn count(&self, py: Python<'_>) -> usize {
-        return py.allow_threads(|| -> usize {
+        return py.detach(|| -> usize {
             return self.0.count_topologies();
         });
     }

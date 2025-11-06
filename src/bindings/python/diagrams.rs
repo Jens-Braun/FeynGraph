@@ -872,14 +872,14 @@ impl PyDiagramSelector {
                         data: vec![],
                     }),
                 };
-                Python::with_gil(|py| -> bool { py_function.call1(py, (py_diag,)).unwrap().extract(py).unwrap() })
+                Python::attach(|py| -> bool { py_function.call1(py, (py_diag,)).unwrap().extract(py).unwrap() })
             },
         ))
     }
 
     fn add_topology_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_topology_function(Arc::new(move |topo: &Topology| -> bool {
-            Python::with_gil(|py| -> bool {
+            Python::attach(|py| -> bool {
                 py_function
                     .call1(py, (PyTopology(topo.clone()),))
                     .unwrap()
@@ -1003,25 +1003,25 @@ impl PyDiagramGenerator {
     }
 
     pub(crate) fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
-        return py.allow_threads(|| -> PyDiagramContainer {
+        return py.detach(|| -> PyDiagramContainer {
             return PyDiagramContainer(Arc::new(self.0.generate()));
         });
     }
 
     pub(crate) fn count(&self, py: Python<'_>) -> usize {
-        return py.allow_threads(|| -> usize {
+        return py.detach(|| -> usize {
             return self.0.count();
         });
     }
 
     fn assign_topology(&self, py: Python<'_>, topo: &PyTopology) -> PyResult<PyDiagramContainer> {
-        return py.allow_threads(|| -> PyResult<PyDiagramContainer> {
+        return py.detach(|| -> PyResult<PyDiagramContainer> {
             return Ok(PyDiagramContainer(Arc::new(self.0.assign_topology(&topo.0)?)));
         });
     }
 
     fn assign_topologies(&self, py: Python<'_>, topos: Vec<PyTopology>) -> PyResult<PyDiagramContainer> {
-        return py.allow_threads(|| -> PyResult<PyDiagramContainer> {
+        return py.detach(|| -> PyResult<PyDiagramContainer> {
             return Ok(PyDiagramContainer(Arc::new(
                 self.0
                     .assign_topologies(&topos.iter().map(|t| t.0.clone()).collect_vec())?,

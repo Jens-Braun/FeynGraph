@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn py_topology_generator_py_function() {
-        let filter: Py<PyAny> = Python::with_gil(|py| -> Py<PyAny> {
+        let filter: Py<PyAny> = Python::attach(|py| -> Py<PyAny> {
             PyModule::from_code(
                 py,
                 c_str!(
@@ -346,7 +346,7 @@ mod tests {
         let mut selector = PyTopologySelector::new();
         selector.add_custom_function(filter);
         let generator = PyTopologyGenerator::new(2, 1, PyTopologyModel::new(vec![3, 4]), Some(selector));
-        let topologies = Python::with_gil(|py| generator.generate(py));
+        let topologies = Python::attach(|py| generator.generate(py));
         assert_eq!(topologies.__len__(), 1);
     }
 }
