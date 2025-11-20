@@ -365,6 +365,11 @@ class DiagramSelector:
         Add a constraint to only select diagrams for which the power of `coupling` sums to `power`.
         """
 
+    def select_coupling_power_list(self, coupling: str, powers: list[int]) -> None:
+        """
+        Add a constraint to only select diagrams for which the power of `coupling` sums to any of the values given in `powers`.
+        """
+
     def select_propagator_count(self, particle: str, count: int) -> None:
         """
         Add a constraint to only select diagrams which contain exactly `count` propagators of the field `particle`.

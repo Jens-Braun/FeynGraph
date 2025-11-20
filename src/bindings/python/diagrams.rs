@@ -893,6 +893,10 @@ impl PyDiagramSelector {
         self.0.select_coupling_power(&coupling, power);
     }
 
+    fn select_coupling_power_list(&mut self, coupling: String, powers: Vec<usize>) {
+        self.0.select_coupling_power_list(&coupling, powers);
+    }
+
     fn select_propagator_count(&mut self, particle: String, count: usize) {
         self.0.select_propagator_count(&particle, count);
     }
