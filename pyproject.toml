@@ -25,6 +25,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
+[project.scripts]
+feyngraph = "feyngraph.main:main"
+
 [project.urls]
 Repository = "https://github.com/jens-braun/feyngraph"
 Documentation = "https://jens-braun.github.io/FeynGraph/"
