@@ -52,6 +52,11 @@ impl<'a> DiagramView<'a> {
         });
     }
 
+    /// Get an iterator over the incoming and outgoing legs.
+    pub fn legs(&self) -> impl Iterator<Item = LegView<'_>> {
+        return self.incoming().chain(self.outgoing());
+    }
+
     /// Get an iterator over the internal propagators.
     pub fn propagators(&self) -> impl Iterator<Item = PropagatorView<'_>> {
         return self
@@ -748,11 +753,27 @@ impl VertexView<'_> {
 
     /// Check whether the given particle names match the interaction of the vertex. "_" can be used as a wildcard to
     /// match all particles.
-    pub fn match_particles<'q, S>(&self, query: impl Iterator<Item = &'q S>) -> bool
+    pub fn match_particles<'q, S>(&self, query: impl IntoIterator<Item = &'q S>) -> bool
     where
         S: 'q + PartialEq<String> + Ord,
     {
         return self.interaction().match_particles(query);
+    }
+
+    /// Same as `match_particles`, but each entry in the query is a list of particle names. Each combination of
+    /// particle names is then tested with `match_particles`.
+    pub fn match_particle_combinations<'q, S>(&self, query: &[impl Iterator<Item = &'q S> + Clone]) -> bool
+    where
+        S: 'q + PartialEq<String> + Ord,
+    {
+        if query.len() != self.interaction().particles.len() {
+            return false;
+        }
+        return query
+            .iter()
+            .map(|it| it.clone().into_iter())
+            .multi_cartesian_product()
+            .any(|q| self.interaction().match_particles(q.iter().map(|s| *s)));
     }
 }
 

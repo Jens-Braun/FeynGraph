@@ -3,8 +3,9 @@ A modern Feynman diagram generation toolkit.
 """
 
 from __future__ import annotations
-from typing import Self, Optional
+
 from collections.abc import Callable
+from typing import Optional, Self
 
 from feyngraph.topology import Topology, TopologyModel
 
@@ -469,7 +470,7 @@ class Model:
     def vertices(self) -> list[InteractionVertex]:
         """Return the list of vertices contained in the model."""
 
-    def splitting(self, name: str) -> dict[str, list[tuple[int, int]]]:
+    def splitting(self, name: str) -> None | dict[str, list[tuple[int, int]]]:
         """
         Get the splitting of the _original_ vertex `name`. Returns `None` if the requested vertex was not split up or
         does not exist in the model. If it was split, a dict containing the vertices into which it was split is
@@ -557,5 +558,5 @@ class InteractionVertex:
     def order(self, coupling: str) -> int:
         """Get the vertex' order in the coupling `coupling`."""
 
-    def name(self) -> None:
+    def name(self) -> str:
         """Get the name of the interaction vertex."""

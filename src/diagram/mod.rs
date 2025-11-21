@@ -239,7 +239,7 @@ impl Diagram {
                         .enumerate()
                         .find_map(|(i, edge)| {
                             if edge.connected_nodes == [*v, *w] || edge.connected_nodes == [*w, *v] {
-                                Some(i)
+                                Some(i - workspace.topology.n_external)
                             } else {
                                 None
                             }

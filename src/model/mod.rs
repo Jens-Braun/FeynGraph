@@ -198,13 +198,14 @@ impl InteractionVertex {
 
     /// Check whether the given particle names match the interaction. "_" can be used as a wildcard to
     /// match all particles.
-    pub fn match_particles<'q, S>(&self, query: impl Iterator<Item = &'q S>) -> bool
+    pub fn match_particles<'q, S>(&self, query: impl IntoIterator<Item = &'q S>) -> bool
     where
         S: 'q + PartialEq<String> + Ord,
     {
         let particles_sorted: Vec<&String> = self.particles.iter().sorted().collect();
         let mut wildcards: usize = 0;
         let query_sorted: Vec<&S> = query
+            .into_iter()
             .filter(|s| {
                 if **s != "_".to_owned() {
                     true

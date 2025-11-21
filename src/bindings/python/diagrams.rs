@@ -532,6 +532,16 @@ impl PyVertex {
     pub fn match_particles(&self, query: Vec<String>) -> bool {
         return self.interaction().match_particles(query);
     }
+
+    pub fn match_particle_combinations(&self, query: Vec<Vec<String>>) -> bool {
+        if query.len() != self.interaction().0.particles.len() {
+            return false;
+        }
+        return query
+            .iter()
+            .multi_cartesian_product()
+            .any(|q| self.interaction().0.match_particles(q.iter().map(|s| *s)));
+    }
 }
 
 impl std::fmt::Display for PyVertex {
@@ -648,6 +658,13 @@ impl PyDiagram {
                 invert_momentum: false,
             })
             .collect_vec();
+    }
+
+    pub(crate) fn legs(&self) -> Vec<PyLeg> {
+        let mut tmp = Vec::with_capacity(self.n_ext());
+        tmp.extend(self.incoming());
+        tmp.extend(self.outgoing());
+        return tmp;
     }
 
     pub(crate) fn propagators(&self) -> Vec<PyPropagator> {
@@ -788,6 +805,14 @@ impl PyDiagram {
             }
         }
         return result;
+    }
+
+    pub fn count_particles(&self, particles: Vec<String>) -> usize {
+        return self
+            .propagators()
+            .into_iter()
+            .filter(|p| particles.iter().any(|ref_part| *ref_part == p.particle().name()))
+            .count();
     }
 
     pub(crate) fn count_vertices(&self, particles: Vec<String>) -> usize {
