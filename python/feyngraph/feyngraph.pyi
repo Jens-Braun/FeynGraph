@@ -229,11 +229,14 @@ class Vertex:
         definition of the interaction in the model.
         """
 
-    def match_particles(self) -> bool:
+    def match_particles(self, query: list[str]) -> bool:
         """
         Check whether the given particle names match the interaction of the vertex. "_" can be used as a wildcard to
         match all particles.
         """
+
+    def match_particle_combinations(self, query: list[list[str]]) -> bool:
+        """Same as `match_particles`, but multiple particles can be specified per query entry."""
 
     def id(self) -> int:
         """Get the vertex' internal id"""
