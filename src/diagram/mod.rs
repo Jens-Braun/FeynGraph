@@ -188,9 +188,11 @@ impl Diagram {
             })
             .collect_vec();
         let mut propagator_symmetry = 1;
-        for ((vertices, _), count) in propagators.iter().counts_by(|prop| (prop.vertices, prop.particle)) {
+        for ((vertices, particle), count) in propagators.iter().counts_by(|prop| (prop.vertices, prop.particle)) {
             if vertices[0] == vertices[1] {
-                propagator_symmetry *= 2_usize.pow(count as u32);
+                if workspace.model.get_particle(particle).self_anti() {
+                    propagator_symmetry *= 2_usize.pow(count as u32);
+                }
                 propagator_symmetry *= factorial(count);
             } else {
                 propagator_symmetry *= factorial(count);
