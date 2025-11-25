@@ -488,6 +488,8 @@ class Model:
         self,
         name: str,
         anti_name: str,
+        spin: int,
+        color: int,
         pdg_id: int,
         texname: str,
         antitexname: str,

@@ -172,7 +172,7 @@ def main():
     ###########################################################################
     if "filter" in conf:
         selector = fg.DiagramSelector()
-        for key, value in conf["filter"].items():
+        for key, _ in conf["filter"].items():
             match key:
                 case "onshell":
                     if conf["filter"]["onshell"]:
@@ -180,7 +180,7 @@ def main():
                 case "self_loops":
                     selector.select_self_loops(conf["filter"]["self_loops"])
                 case "opi_components":
-                    selector.select_opi_components(conf["filter"]["self_loops"])
+                    selector.select_opi_components(conf["filter"]["opi_components"])
                 case "coupling_orders":
                     for coupling, power in conf["filter"]["coupling_orders"].items():
                         selector.select_coupling_power(coupling, power)
@@ -260,12 +260,18 @@ def main():
             match conf["drawing"]["format"]:
                 case "svg":
                     d.draw_svg(
-                        os.path.join(conf["drawing"]["outdir"], filename + ".svg")
+                        os.path.join(
+                            cast(str, conf["drawing"]["outdir"]), filename + ".svg"
+                        )
                     )
                 case "tikz":
                     d.draw_tikz(
-                        os.path.join(conf["drawing"]["outdir"], filename + ".tizk")
+                        os.path.join(
+                            cast(str, conf["drawing"]["outdir"]), filename + ".tizk"
+                        )
                     )
+                case _:
+                    raise ValueError()
         info(
             f"Successfully wrote {len(diagrams)} diagrams in '{conf['drawing']['format']}' format to '{conf['drawing']['outdir']}'."
         )
