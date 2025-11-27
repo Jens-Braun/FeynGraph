@@ -293,7 +293,7 @@ impl TopologyWorkspace {
             self.connect_node(class, node + 1);
         } else {
             let mut advance_class = false;
-            for _ in 0..self.nodes.len() {
+            for _ in 0..=self.nodes.len() {
                 if class != current_target_class || advance_class {
                     // Find next class to connect `node` to, if there is none left, the graph is fully constructed
                     if let Some(next_target_class) = self.find_next_target_class(&current_skip_nodes) {

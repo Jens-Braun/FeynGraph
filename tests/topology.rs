@@ -1,5 +1,8 @@
 #![allow(dead_code, non_snake_case)]
-use feyngraph::{model::TopologyModel, topology::TopologyGenerator};
+use feyngraph::{
+    model::TopologyModel,
+    topology::{TopologyGenerator, TopologySelector},
+};
 use paste::paste;
 use pretty_assertions::assert_eq;
 use tempfile::NamedTempFile;
@@ -89,4 +92,13 @@ fn test_topo_3_4_legs_0_loops_3() {
     let model = TopologyModel::from(vec![3, 4]);
     let n_topos = TopologyGenerator::new(0, 3, model, None).count_topologies();
     assert_eq!(n_topos, 12);
+}
+
+#[test]
+fn test_topo_3_4_5_legs_0_loops_3() {
+    let model = TopologyModel::from(vec![3, 4, 5]);
+    let mut s = TopologySelector::new();
+    s.select_node_partition(vec![(5, 1), (3, 1)]);
+    let n_topos = TopologyGenerator::new(0, 3, model, Some(s)).count_topologies();
+    assert_eq!(n_topos, 2);
 }
