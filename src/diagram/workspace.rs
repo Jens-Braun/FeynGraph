@@ -23,6 +23,7 @@ pub(crate) struct AssignWorkspace<'a> {
     pub(crate) propagator_candidates: Vec<AssignPropagator>,
     pub(crate) vertex_classification: VertexClassification,
     pub(crate) remaining_coupling_orders: Option<HashMap<String, usize>>,
+    pub(crate) count: Option<usize>,
 }
 
 impl<'a> AssignWorkspace<'a> {
@@ -67,6 +68,7 @@ impl<'a> AssignWorkspace<'a> {
             propagator_candidates: vec![AssignPropagator::new(); n_edges],
             vertex_classification: VertexClassification::from(topology),
             remaining_coupling_orders,
+            count: None,
         };
     }
 
@@ -137,6 +139,12 @@ impl<'a> AssignWorkspace<'a> {
         return container;
     }
 
+    pub fn count(&mut self) -> usize {
+        self.count = Some(0);
+        let _ = self.assign();
+        return self.count.unwrap();
+    }
+
     fn select_vertex(&mut self) {
         let next_vertex = self
             .vertex_candidates
@@ -161,7 +169,11 @@ impl<'a> AssignWorkspace<'a> {
                             .selector
                             .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
                         {
-                            self.diagram_buffer.inner_ref_mut().push(diagram);
+                            if self.count.is_some() {
+                                *self.count.as_mut().unwrap() += 1;
+                            } else {
+                                self.diagram_buffer.inner_ref_mut().push(diagram);
+                            }
                         }
                     }
                 }
@@ -172,7 +184,11 @@ impl<'a> AssignWorkspace<'a> {
                     .selector
                     .select(self.model.clone(), self.momentum_labels.clone(), &diagram)
                 {
-                    self.diagram_buffer.inner_ref_mut().push(diagram);
+                    if self.count.is_some() {
+                        *self.count.as_mut().unwrap() += 1;
+                    } else {
+                        self.diagram_buffer.inner_ref_mut().push(diagram);
+                    }
                 }
             }
             return;

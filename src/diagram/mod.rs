@@ -538,22 +538,20 @@ impl DiagramGenerator {
             topo_generator.set_momentum_labels(labels.clone()).unwrap();
         }
         let topologies = topo_generator.generate();
-        let mut counts: Vec<usize> = Vec::new();
-        topologies
-            .inner_ref()
+        return topologies
+            .data
             .into_par_iter()
             .map(|topology| {
                 let mut assign_workspace = AssignWorkspace::new(
-                    topology,
+                    &topology,
                     self.model.clone(),
                     &self.selector,
                     &self.incoming_particles,
                     &self.outgoing_particles,
                 );
-                return assign_workspace.assign().len();
+                assign_workspace.count()
             })
-            .collect_into_vec(&mut counts);
-        return counts.into_iter().sum();
+            .sum::<usize>();
     }
 
     /// Produce Feynman diagrams by assigning particles to a given topology `topology`.
