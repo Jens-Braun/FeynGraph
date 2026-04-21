@@ -17,7 +17,6 @@ crate-type = ["lib", "cdylib"]
 itertools = "0.14"
 rayon = "1"
 log = "0.4"
-thiserror = "2"
 indexmap = "2"
 either = "1"
 peg = "0.8"

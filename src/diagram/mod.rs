@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::diagram::view::DiagramView;
 use crate::diagram::workspace::AssignWorkspace;
-use crate::util::Error;
+use crate::util::InputError;
 use crate::util::factorial;
 use rayon::prelude::*;
 
@@ -481,9 +481,9 @@ impl DiagramGenerator {
     }
 
     /// Change the momentum labels used when rendering momenta as strings.
-    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), Error> {
+    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), InputError> {
         if !labels.len() == self.n_external + self.n_loops {
-            return Err(Error::InputError(format!(
+            return Err(InputError::new(format!(
                 "Found {} momenta, but n_external + n_loops = {} are required",
                 labels.len(),
                 self.n_external + self.n_loops
@@ -555,15 +555,15 @@ impl DiagramGenerator {
     }
 
     /// Produce Feynman diagrams by assigning particles to a given topology `topology`.
-    pub fn assign_topology(&self, topology: &Topology) -> Result<DiagramContainer, Error> {
+    pub fn assign_topology(&self, topology: &Topology) -> Result<DiagramContainer, InputError> {
         if self.n_external != topology.n_external {
-            return Err(Error::InputError(format!(
+            return Err(InputError::new(format!(
                 "expected topologies with {} legs, found topology with {} legs",
                 self.n_external, topology.n_external
             )));
         }
         if self.n_loops != topology.n_loops {
-            return Err(Error::InputError(format!(
+            return Err(InputError::new(format!(
                 "expected topologies with {} loops, found topology with {} loops",
                 self.n_loops, topology.n_loops
             )));
@@ -581,16 +581,16 @@ impl DiagramGenerator {
     }
 
     /// Produce Feynman diagrams by assigning particles to a given set of topologies `topologies`.
-    pub fn assign_topologies(&self, topologies: &[Topology]) -> Result<DiagramContainer, Error> {
+    pub fn assign_topologies(&self, topologies: &[Topology]) -> Result<DiagramContainer, InputError> {
         for topology in topologies {
             if self.n_external != topology.n_external {
-                return Err(Error::InputError(format!(
+                return Err(InputError::new(format!(
                     "expected topologies with {} legs, found topology with {} legs",
                     self.n_external, topology.n_external
                 )));
             }
             if self.n_loops != topology.n_loops {
-                return Err(Error::InputError(format!(
+                return Err(InputError::new(format!(
                     "expected topologies with {} loops, found topology with {} loops",
                     self.n_loops, topology.n_loops
                 )));

@@ -5,7 +5,7 @@
 //! restricting which topologies are generated.
 
 pub use crate::model::TopologyModel;
-use crate::util::{Error, factorial, find_partitions};
+use crate::util::{InputError, factorial, find_partitions};
 use components::NodeClassification;
 pub use filter::TopologySelector;
 use itertools::Itertools;
@@ -674,9 +674,9 @@ impl TopologyGenerator {
 
     /// Set the names of the momenta. The first `n_external` ones are the external momenta, the remaining ones are
     /// the loop momenta. Returns an error if the number of labels does not match the topology.
-    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), Error> {
+    pub fn set_momentum_labels(&mut self, labels: Vec<String>) -> Result<(), InputError> {
         if !labels.len() == self.n_external + self.n_loops {
-            return Err(Error::InputError(format!(
+            return Err(InputError::new(format!(
                 "Found {} momenta, but n_external + n_loops = {} are required",
                 labels.len(),
                 self.n_external + self.n_loops
