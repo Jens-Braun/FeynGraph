@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(name = "TopologyModel")]
 pub(crate) struct PyTopologyModel(pub(crate) TopologyModel);
 
@@ -35,7 +35,7 @@ impl From<PyTopologyModel> for TopologyModel {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(name = "TopologySelector")]
 pub(crate) struct PyTopologySelector(TopologySelector);
 
@@ -106,7 +106,7 @@ impl From<PyTopologySelector> for TopologySelector {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Node")]
 pub(crate) struct PyNode(Node);
 
@@ -130,7 +130,7 @@ impl PyNode {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Edge")]
 pub(crate) struct PyEdge(Edge);
 
@@ -153,7 +153,7 @@ impl PyEdge {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(name = "Topology")]
 pub(crate) struct PyTopology(pub(crate) Topology);
 

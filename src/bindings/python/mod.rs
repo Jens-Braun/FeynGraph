@@ -114,7 +114,7 @@ impl From<util::Error> for PyErr {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(name = "Model")]
 pub(crate) struct PyModel(Model);
 
@@ -229,7 +229,7 @@ impl PyModel {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Particle")]
 pub(crate) struct PyParticle(Particle);
 
@@ -277,7 +277,7 @@ impl PyParticle {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "InteractionVertex")]
 pub(crate) struct PyInteractionVertex(InteractionVertex);
 

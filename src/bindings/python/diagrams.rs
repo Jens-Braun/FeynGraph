@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Leg")]
 pub(crate) struct PyLeg {
     container: Arc<DiagramContainer>,
@@ -172,7 +172,7 @@ impl std::fmt::Display for PyLeg {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Propagator")]
 pub(crate) struct PyPropagator {
     container: Arc<DiagramContainer>,
@@ -401,7 +401,7 @@ impl std::fmt::Display for PyPropagator {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Vertex")]
 pub(crate) struct PyVertex {
     container: Arc<DiagramContainer>,
@@ -573,7 +573,7 @@ impl std::fmt::Display for PyVertex {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "Diagram")]
 pub(crate) struct PyDiagram {
     pub(crate) diagram: Arc<Diagram>,
@@ -851,7 +851,7 @@ impl PyDiagram {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(name = "DiagramSelector")]
 pub(crate) struct PyDiagramSelector(DiagramSelector);
 
@@ -940,7 +940,7 @@ impl PyDiagramSelector {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[pyo3(name = "DiagramContainer")]
 pub(crate) struct PyDiagramContainer(Arc<DiagramContainer>);
 
