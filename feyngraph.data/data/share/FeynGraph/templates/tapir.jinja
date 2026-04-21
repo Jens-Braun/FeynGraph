@@ -1,0 +1,24 @@
+{% for diag in diagrams -%}
+{
+diagram            {{ loop.index }}
+pre_factor         ({{ diag.sign() }})*{{ diag.symmetry_factor() }}
+
+number_propagators {{ diag.propagators() | length }}
+number_loops       {{ diag.propagators() | length - diag.vertices() | length + 1 }}
+number_legs_in     {{ diag.n_in() }}
+number_legs_out    {{ diag.n_out() }}
+
+{% for inc in diag.incoming() -%}
+external_leg       q{{inc.id() + 1}}|{{inc.vertex().id() + 1}}|{{inc.particle().name()}}
+{% endfor %}
+
+{% for out in diag.incoming() -%}
+external_leg       q{{out.id() + 1}}|{{out.vertex().id() + 1}}|{{out.particle().name()}}
+{% endfor %}
+
+{% for p in diag.propagators() -%}
+momentum           p{{p.id() + 1}}|{{p.vertex(0).id() + 1}},{{p.vertex(1).id() + 1}}|{{p.particle().name()}},{{p.particle().anti_name()}}
+{% endfor %}
+}
+
+{% endfor %}

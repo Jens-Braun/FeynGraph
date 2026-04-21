@@ -775,6 +775,11 @@ impl VertexView<'_> {
             .multi_cartesian_product()
             .any(|q| self.interaction().match_particles(q.iter().map(|s| *s)));
     }
+
+    /// Get the vertex' internal ID
+    pub fn id(&self) -> usize {
+        return self.index;
+    }
 }
 
 impl std::fmt::Display for VertexView<'_> {

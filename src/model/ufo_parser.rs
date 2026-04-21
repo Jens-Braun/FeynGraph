@@ -106,7 +106,7 @@ peg::parser! {
             Value::String(&s[1..s.len()-1])
         }
         rule si_dict(input: &str) -> Value<'input> =
-            pos: position!() "{" _ entries:((key:string() _ ":" _ val:value(input) {(key, val)}) ** (_ "," _)) _ "}" {?
+            pos: position!() "{" _ entries:((key:string() _ ":" _ val:value(input) {(key, val)}) ** (_ "," _)) _ ","? _ "}" {?
                 let mut result = HashMap::default();
                 for (k, v) in entries.into_iter().map(
                     |(key, val)| (key.str().unwrap().to_owned(), val.int().map(|i| i.try_into()))
@@ -125,7 +125,7 @@ peg::parser! {
             }
 
         rule co_dict() -> Value<'input> =
-            "{" _ entries:(("(" _ i:int() _ "," _ j:int() (_ "," _ int())? _ ")" _ ":" _ c:("C." _ c:name() {c}) {((i, j), c)}) ** (_ "," _)) _ "}" {?
+            "{" _ entries:(("(" _ i:int() _ "," _ j:int() (_ "," _ int())? _ ")" _ ":" _ c:("C." _ c:name() {c}) {((i, j), c)}) ** (_ "," _)) _ ","? _ "}" {?
                 let mut result = HashMap::default();
                 for ((i, j), c) in entries.into_iter() {
                     let i = i.int()?.try_into().or(Err("non-negative int"))?;
@@ -138,24 +138,24 @@ peg::parser! {
             }
 
         rule p_list() -> Value<'input> =
-            "[" _ vals:(("P." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(vals)}
+            "[" _ vals:(("P." _ name:name() {Value::String(name)}) ** (_ "," _)) _ ","? _ "]" {Value::List(vals)}
 
         rule l_list() -> Value<'input> =
-            "[" _ vals:(("L." _ name:name() {Value::String(name)}) ** (_ "," _)) _ "]" {Value::List(vals)}
+            "[" _ vals:(("L." _ name:name() {Value::String(name)}) ** (_ "," _)) _ ","? _ "]" {Value::List(vals)}
 
         rule value_list(input: &str) -> Value<'input> =
-            "[" _ vals:(property_value(input) ** (_ "," _)) _ "]" { Value::List(vals) }
+            "[" _ vals:(property_value(input) ** (_ "," _)) _ ","? _ "]" { Value::List(vals) }
 
         rule value(input: &str) -> Value<'input> = rational() / int() / bool() / string() / p_list() / l_list() / si_dict(input) / co_dict()
         rule property_value(input: &str) -> Value<'input> =
             value(input)
             / value_list(input)
-            / ([^',' | ')']* {Value::None})
+            / ([^',' | ')' | ']' | '}']* {Value::None})
 
         rule property(input: &str) -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value(input) {(prop, value)}
 
         rule particle(input: &str) -> (&'input str, Value<'input>) =
-            pos: position!() py_name:name() _ "=" _ "Particle(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
+            pos: position!() py_name:name() _ "=" _ "Particle(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 let mut pdg_code = None;
                 let mut name = None;
                 let mut antiname = None;
@@ -234,7 +234,7 @@ peg::parser! {
             _ anti_ident:name() _ "=" _ p_ident:name() ".anti()" {(anti_ident, Value::String(p_ident))}
 
         rule coupling_order(input: &str) -> String =
-            pos: position!() py_name:name() _ "=" _ "CouplingOrder(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
+            pos: position!() py_name:name() _ "=" _ "CouplingOrder(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 let mut coupling: Option<String> = None;
                 for (prop, value) in props {
                     match prop.to_lowercase().as_str() {
@@ -251,7 +251,7 @@ peg::parser! {
             }
 
         rule coupling(input: &str) -> (String, HashMap<String, usize>) =
-            pos: position!() py_name:name() _ "=" _ "Coupling(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
+            pos: position!() py_name:name() _ "=" _ "Coupling(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 let mut orders = None;
                 for (prop, value) in props {
                     match prop.to_lowercase().as_str() {
@@ -282,7 +282,7 @@ peg::parser! {
             ident_map: &HashMap<String, String>,
             lorentz_structures: &HashMap<String, Vec<isize>>
         ) -> (Vec<InteractionVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
-            pos: position!() py_name:name() _ "=" _ "Vertex(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
+            pos: position!() py_name:name() _ "=" _ "Vertex(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 return parse_vertex(input, couplings, ident_map, lorentz_structures, py_name, props, pos);
             }
 
@@ -308,7 +308,7 @@ peg::parser! {
             }
 
         pub rule lorentz(input: &str) -> (&'input str, Vec<isize>) =
-            pos: position!() py_name:name() _ "=" _ "Lorentz(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
+            pos: position!() py_name:name() _ "=" _ "Lorentz(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 let mut name = None;
                 let mut spins = None;
                 let mut structure = None;

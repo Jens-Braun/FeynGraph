@@ -14,6 +14,8 @@ use tempfile::NamedTempFile;
 mod common;
 use pretty_assertions::assert_eq;
 
+// Note for QGRAF: 394 vertices seems to be the maximum number of vertices it accepts (with the setup I tested)
+
 macro_rules! test_diagrams {
     (
         $ufo:ident,
@@ -76,9 +78,10 @@ macro_rules! test_diagrams {
         paste!{
             #[test]
             fn [< test_diag _ $ufo _ $name _loops_ $n_loops >]() {
-                let model = Model::from_ufo(
+                let mut model = Model::from_ufo(
                     &PathBuf::from(format!("tests/resources/{}", stringify!($ufo)))
                 ).unwrap();
+                let _ = model.merge_vertices();
                 let in_particles = vec![$($particle_in),+];
                 let out_particles = vec![$($particle_out),+];
                 let n_diags = DiagramGenerator::new(

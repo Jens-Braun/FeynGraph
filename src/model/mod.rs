@@ -161,6 +161,11 @@ pub struct InteractionVertex {
 }
 
 impl InteractionVertex {
+    /// Get the interaction name
+    pub fn name(&self) -> &str {
+        return &self.name;
+    }
+
     /// Get an iterator over the names of the particles attached to this vertex.
     pub fn particles_iter(&self) -> impl Iterator<Item = &String> {
         return self.particles.iter();
