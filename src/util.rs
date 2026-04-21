@@ -1,16 +1,30 @@
+use std::fmt::Display;
+
 use indexmap::IndexMap as OriginalIndexMap;
 use itertools::{Itertools, izip};
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use thiserror::Error;
 
 pub(crate) type IndexMap<K, V> = OriginalIndexMap<K, V, FxBuildHasher>;
 pub(crate) type HashMap<K, V> = FxHashMap<K, V>;
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Invalid input: {0}")]
-    InputError(String),
+#[derive(Debug)]
+pub struct InputError {
+    msg: String,
 }
+
+impl InputError {
+    pub(crate) fn new(msg: impl Into<String>) -> Self {
+        return Self { msg: msg.into() };
+    }
+}
+
+impl Display for InputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid input: {}", self.msg)
+    }
+}
+
+impl std::error::Error for InputError {}
 
 pub(crate) fn generate_permutations(partition_sizes: &[usize]) -> impl Iterator<Item = Vec<usize>> {
     return izip!(

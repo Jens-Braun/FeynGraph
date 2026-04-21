@@ -105,11 +105,9 @@ impl From<ModelError> for PyErr {
     }
 }
 
-impl From<util::Error> for PyErr {
-    fn from(err: util::Error) -> PyErr {
-        match err {
-            util::Error::InputError(_) => PyValueError::new_err(err.to_string()),
-        }
+impl From<util::InputError> for PyErr {
+    fn from(err: util::InputError) -> PyErr {
+        PyValueError::new_err(err.to_string())
     }
 }
 

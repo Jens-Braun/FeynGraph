@@ -4,24 +4,34 @@ use crate::util::{HashMap, IndexMap};
 use itertools::Itertools;
 use log::warn;
 use std::borrow::Borrow;
+use std::error::Error;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::path::Path;
-use thiserror::Error;
 
 mod qgraf_parser;
 mod ufo_parser;
 
 /// Custom error type for errors specific to a model.
 #[allow(clippy::large_enum_variant)]
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ModelError {
-    #[error("Encountered illegal model option: {0}")]
     ContentError(String),
-    #[error("Error wile trying to access file {0}: {1}")]
-    IOError(String, #[source] std::io::Error),
-    #[error("Error while parsing file {0}: {1}")]
-    ParseError(String, #[source] peg::error::ParseError<peg::str::LineCol>),
+    IOError(String, std::io::Error),
+    ParseError(String, peg::error::ParseError<peg::str::LineCol>),
 }
+
+impl Display for ModelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ContentError(s) => write!(f, "Encountered illegal model option: {s}"),
+            Self::IOError(s, source) => write!(f, "Error while trying to access file {s}: {}", source),
+            Self::ParseError(s, source) => write!(f, "Error while parsing file {s}: {}", source),
+        }
+    }
+}
+
+impl Error for ModelError {}
 
 /// Line style of a propagator, specified by the UFO 2.0 standard.
 ///
