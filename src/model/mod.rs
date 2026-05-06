@@ -525,10 +525,10 @@ impl Model {
     /// ```rust
     /// # use std::path::PathBuf;
     /// use feyngraph::Model;
-    /// let model = Model::from_ufo(&PathBuf::from("tests/resources/Standard_Model_UFO")).unwrap();
+    /// let model = Model::from_ufo("tests/resources/Standard_Model_UFO").unwrap();
     /// ```
-    pub fn from_ufo(path: &Path) -> Result<Self, ModelError> {
-        return ufo_parser::parse_ufo_model(path);
+    pub fn from_ufo(path: impl AsRef<Path>) -> Result<Self, ModelError> {
+        return ufo_parser::parse_ufo_model(path.as_ref());
     }
 
     /// Import a model in [QGRAF's](http://cefema-gt.tecnico.ulisboa.pt/~paulo/qgraf.html) model format. The parser is
@@ -539,10 +539,10 @@ impl Model {
     /// ```rust
     /// # use std::path::PathBuf;
     /// use feyngraph::Model;
-    /// let model = Model::from_qgraf(&PathBuf::from("tests/resources/sm.qgraf")).unwrap();
+    /// let model = Model::from_qgraf("tests/resources/sm.qgraf").unwrap();
     /// ```
-    pub fn from_qgraf(path: &Path) -> Result<Self, ModelError> {
-        return qgraf_parser::parse_qgraf_model(path);
+    pub fn from_qgraf(path: impl AsRef<Path>) -> Result<Self, ModelError> {
+        return qgraf_parser::parse_qgraf_model(path.as_ref());
     }
 
     /// Get the internal index of the anti-particle of the particle with the internal index `index`.
