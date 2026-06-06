@@ -23,6 +23,7 @@ macro_rules! test_diagrams {
         $n_loops:literal
     ) => {
         paste!{
+            #[cfg(feature = "qgraf-validation")]
             #[test]
             fn [< test_diag _ $ufo _ $($particle_in)+ _ $($particle_out)+ _loops_ $n_loops >]() {
                 let model = Model::from_ufo(
@@ -76,6 +77,7 @@ macro_rules! test_diagrams {
         $n_loops:literal
     ) => {
         paste!{
+            #[cfg(feature = "qgraf-validation")]
             #[test]
             fn [< test_diag _ $ufo _ $name _loops_ $n_loops >]() {
                 let mut model = Model::from_ufo(

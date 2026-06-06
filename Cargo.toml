@@ -48,6 +48,7 @@ default = []
 python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]
 wolfram-bindings = ["python-bindings"]
 check_momenta = []
+qgraf-validation = []
 
 [[bench]]
 name = "topologies"
