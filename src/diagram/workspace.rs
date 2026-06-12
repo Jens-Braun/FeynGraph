@@ -116,14 +116,11 @@ impl<'a> AssignWorkspace<'a> {
                 })
                 .collect_vec();
             if !connected_particles.is_empty() {
+                let particle_counts = connected_particles.iter().counts();
                 candidates.retain(|candidate| {
-                    connected_particles
-                        .iter()
-                        .counts()
-                        .into_iter()
-                        .all(|(particle_index, count)| {
-                            count <= self.model.vertex(*candidate).particle_count(particle_index)
-                        })
+                    particle_counts.iter().all(|(&particle_index, &count)| {
+                        count <= self.model.vertex(*candidate).particle_count(particle_index)
+                    })
                 })
             }
             if candidates.is_empty() {
