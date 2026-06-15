@@ -381,20 +381,92 @@ impl Model {
             linestyle,
             statistic,
         };
+        let mut orphaned = None;
         if p.self_anti {
             match self.particles.insert(name.clone().into(), p) {
-                None => (),
-                Some(_) => warn!("Particle {} already present in model, replacing.", name.into()),
+                None => self.anti_map.push(self.anti_map.len()),
+                Some(p_old) => {
+                    warn!("Particle `{}` already present in model, replacing.", name.into());
+                    if !p_old.self_anti {
+                        let p_index = self.particles.get_index_of(&p_old.name).unwrap();
+                        orphaned = Some(vec![self.anti_map[p_index]]);
+                        self.anti_map[p_index] = p_index;
+                    }
+                }
             }
-            self.anti_map.push(self.anti_map.len());
         } else {
             match self.particles.insert(name.clone().into(), p.clone()) {
-                None => (),
-                Some(_) => warn!("Particle {} already present in model, replacing.", name.clone().into()),
+                None => {
+                    match self.particles.insert(anti_name.clone().into(), p.into_anti()) {
+                        None => (),
+                        Some(anti_old) => {
+                            warn!(
+                                "Particle `{}` already present in model, replacing.",
+                                anti_name.clone().into()
+                            );
+                            let anti_index = self.particles.get_index_of(&anti_old.name).unwrap();
+                            if !anti_old.self_anti {
+                                orphaned = Some(vec![self.anti_map[anti_index]]);
+                            }
+                            self.anti_map[anti_index] = self.anti_map.len();
+                            self.anti_map.push(anti_index);
+                        }
+                    }
+                    self.anti_map.push(self.anti_map.len() + 1);
+                    self.anti_map.push(self.anti_map.len() - 1);
+                }
+                Some(p_old) => {
+                    warn!(
+                        "Particle `{}` already present in model, replacing.",
+                        name.clone().into()
+                    );
+                    let p_index = self.particles.get_index_of(&p_old.name).unwrap();
+                    match self.particles.insert(anti_name.clone().into(), p.into_anti()) {
+                        None => {
+                            if !p_old.self_anti {
+                                orphaned = Some(vec![self.anti_map[p_index]]);
+                            }
+                            self.anti_map[p_index] = self.anti_map.len();
+                            self.anti_map.push(p_index);
+                        }
+                        Some(anti_old) => {
+                            warn!(
+                                "Particle `{}` already present in model, replacing.",
+                                anti_name.clone().into()
+                            );
+                            let anti_index = self.particles.get_index_of(&anti_old.name).unwrap();
+                            if self.anti_map[p_index] != anti_index {
+                                orphaned = Some(vec![self.anti_map[p_index], self.anti_map[anti_index]]);
+                            }
+                            self.anti_map[p_index] = anti_index;
+                            self.anti_map[anti_index] = p_index;
+                        }
+                    }
+                }
             }
-            self.particles.insert(anti_name.clone().into(), p.into_anti());
-            self.anti_map.push(self.anti_map.len() + 1);
-            self.anti_map.push(self.anti_map.len() - 1);
+        }
+        if let Some(orphans) = orphaned {
+            for orphan in orphans.iter().sorted().rev() {
+                warn!(
+                    "Particle `{}` orphaned due to replacement, removing.",
+                    self.particles[*orphan].name
+                );
+                self.particles.shift_remove_index(*orphan);
+                self.anti_map.remove(*orphan);
+            }
+            self.rebuild_anti_map();
+        }
+    }
+
+    fn rebuild_anti_map(&mut self) {
+        for (i, p) in self.particles.values().enumerate() {
+            if p.self_anti {
+                self.anti_map[i] = i;
+            } else {
+                let anti_index = self.particles.get_index_of(&p.anti_name).unwrap();
+                self.anti_map[i] = anti_index;
+                self.anti_map[anti_index] = i;
+            }
         }
     }
 
@@ -704,7 +776,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{Model, TopologyModel};
+    use crate::model::{LineStyle, Model, Statistic, TopologyModel};
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use test_log::test;
@@ -719,5 +791,37 @@ mod tests {
                 vertex_degrees: vec![3, 4]
             }
         );
+    }
+
+    #[test]
+    fn add_particle_test() {
+        let mut m = Model::empty();
+        m.add_particle("u", "u~", 1, 3, 1, "u", "u~", LineStyle::Straight, Statistic::Fermi);
+        m.add_particle("d", "d~", 1, 3, 2, "d", "d~", LineStyle::Straight, Statistic::Fermi);
+        m.add_particle("s", "s~", 1, 3, 3, "s", "s~", LineStyle::Straight, Statistic::Fermi);
+        m.add_particle("c", "c~", 1, 3, 4, "c", "c~", LineStyle::Straight, Statistic::Fermi);
+        m.add_particle("g", "g", 2, 8, 21, "g", "g", LineStyle::Straight, Statistic::Fermi);
+        assert_eq!(m.particles.len(), 9);
+        assert_eq!(m.anti_map, vec![1, 0, 3, 2, 5, 4, 7, 6, 8]);
+
+        m.add_particle("u", "u~", 1, 3, 2, "u2", "u~2", LineStyle::Straight, Statistic::Fermi);
+        assert_eq!(m.particles.len(), 9);
+        assert_eq!(m.anti_map, vec![1, 0, 3, 2, 5, 4, 7, 6, 8]);
+        assert_eq!(m.get_particle_by_name("u").unwrap().texname, "u2");
+
+        m.add_particle("u", "up~", 1, 3, 2, "u", "up~", LineStyle::Straight, Statistic::Fermi);
+        assert_eq!(m.particles.len(), 9);
+        assert_eq!(m.anti_map, vec![8, 2, 1, 4, 3, 6, 5, 7, 0]);
+        assert_eq!(m.get_particle_by_name("u").unwrap().antitexname, "up~");
+
+        m.add_particle("s", "s", 1, 1, 190, "s", "s2", LineStyle::Straight, Statistic::Bose);
+        assert_eq!(m.particles.len(), 8);
+        assert_eq!(m.anti_map, vec![7, 2, 1, 3, 5, 4, 6, 0]);
+        assert_eq!(m.get_particle_by_name("s").unwrap().antitexname, "s2");
+
+        m.add_particle("d", "c~", 1, 3, 2, "d2", "c~2", LineStyle::Straight, Statistic::Fermi);
+        assert_eq!(m.particles.len(), 6);
+        assert_eq!(m.anti_map, vec![5, 3, 2, 1, 4, 0]);
+        assert_eq!(m.get_particle_by_name("u").unwrap().antitexname, "up~");
     }
 }
