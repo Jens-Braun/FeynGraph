@@ -1,8 +1,8 @@
-use crate::drawing::N_SUPPORT;
 use itertools::Itertools;
 use std::{
+    f64,
     iter::Sum,
-    ops::{Add, Deref, Div, Index, IndexMut, Mul, Sub},
+    ops::{Add, Deref, Div, Index, IndexMut, Mul, Neg, Sub},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -187,9 +187,9 @@ impl Mul<&Vector> for &Matrix {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Vec2D {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
+pub struct Vec2D {
+    pub x: f64,
+    pub y: f64,
 }
 
 impl From<[f64; 2]> for Vec2D {
@@ -222,6 +222,17 @@ impl Vec2D {
     pub(crate) fn rotate(self, theta: f64) -> Self {
         let (sin, cos) = theta.sin_cos();
         return Self::from([self.x * cos - self.y * sin, self.x * sin + self.y * cos]);
+    }
+    pub(crate) fn scale(&mut self, scale_x: f64, scale_y: f64) {
+        self.x *= scale_x;
+        self.y *= scale_y;
+    }
+    pub(crate) fn perp(&self) -> Self {
+        Self { x: -self.y, y: self.x }
+    }
+    pub(crate) fn arg(&self) -> f64 {
+        let tmp = self.y.atan2(self.x);
+        if tmp < 0. { tmp + f64::consts::PI * 2. } else { tmp }
     }
 }
 
@@ -272,6 +283,14 @@ impl Sub<Vec2D> for Vec2D {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
         }
+    }
+}
+
+impl Neg for Vec2D {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self { x: -self.x, y: -self.y }
     }
 }
 
@@ -328,49 +347,5 @@ impl<'a> Sum<&'a Vec2D> for Vec2D {
             res = res + *v;
         }
         return res;
-    }
-}
-
-pub(crate) fn cubic_bezier(x1: Vec2D, c1: Vec2D, c2: Vec2D, x2: Vec2D, t: f64) -> Vec2D {
-    let tp = 1. - t;
-    return Vec2D::from([
-        tp * (tp * (tp * x1[0] + t * c1[0]) + t * (tp * c1[0] + t * c2[0]))
-            + t * (tp * (tp * c1[0] + t * c2[0]) + t * (tp * c2[0] + t * x2[0])),
-        tp * (tp * (tp * x1[1] + t * c1[1]) + t * (tp * c1[1] + t * c2[1]))
-            + t * (tp * (tp * c1[1] + t * c2[1]) + t * (tp * c2[1] + t * x2[1])),
-    ]);
-}
-
-pub(crate) fn support_points(x1: Vec2D, c1: Option<Vec2D>, c2: Option<Vec2D>, x2: Vec2D) -> Vec<Vec2D> {
-    return if let Some(c1) = c1
-        && let Some(c2) = c2
-    {
-        (0..=N_SUPPORT)
-            .map(|i| cubic_bezier(x1, c1, c2, x2, i as f64 / N_SUPPORT as f64))
-            .collect_vec()
-    } else {
-        let v = x2 - x1;
-        (0..=N_SUPPORT)
-            .map(|i| x1 + (i as f64 / N_SUPPORT as f64) * v)
-            .collect_vec()
-    };
-}
-
-#[cfg(test)]
-mod tests {
-    use approx::assert_relative_eq;
-
-    use crate::drawing::math::cubic_bezier;
-
-    #[test]
-    fn bezier_test() {
-        let x1 = [1., 1.].into();
-        let c1 = [3., -2.].into();
-        let c2 = [-2., 4.].into();
-        let x2 = [5., 2.].into();
-        let ref_val = [1.393152922296, 0.3259132884720002];
-        let val = cubic_bezier(x1, c1, c2, x2, 0.3194);
-        assert_relative_eq!(ref_val[0], val[0]);
-        assert_relative_eq!(ref_val[1], val[1]);
     }
 }

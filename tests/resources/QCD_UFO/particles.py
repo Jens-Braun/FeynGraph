@@ -17,7 +17,7 @@ u = Particle(pdg_code = 9000001,
              mass = Param.MU,
              width = Param.ZERO,
              texname = 'u',
-             antitexname = 'u~',
+             antitexname = r'\bar{u}',
              charge = 2/3)
 
 u__tilde__ = u.anti()
@@ -30,7 +30,7 @@ c = Particle(pdg_code = 9000002,
              mass = Param.MC,
              width = Param.WC,
              texname = 'c',
-             antitexname = 'c~',
+             antitexname = r'\bar{c}',
              charge = 2/3)
 
 c__tilde__ = c.anti()
@@ -43,7 +43,7 @@ t = Particle(pdg_code = 9000003,
              mass = Param.MT,
              width = Param.WT,
              texname = 't',
-             antitexname = 't~',
+             antitexname = r'\bar{t}',
              charge = 2/3)
 
 t__tilde__ = t.anti()

@@ -102,7 +102,7 @@ peg::parser! {
                 _ => unreachable!()
             }
         }
-        rule string() -> Value<'input> = s:$(("\"" [^ '"' ]* "\"") / ("\'" [^ '\'' ]* "\'")) {
+        rule string() -> Value<'input> = "r"? s:$(("\"" [^ '"' ]* "\"") / ("\'" [^ '\'' ]* "\'")) {
             Value::String(&s[1..s.len()-1])
         }
         rule si_dict(input: &str) -> Value<'input> =

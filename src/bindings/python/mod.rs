@@ -7,6 +7,7 @@ use crate::{
     util,
 };
 use diagrams::{PyDiagram, PyDiagramContainer, PyDiagramGenerator, PyDiagramSelector, PyLeg, PyPropagator, PyVertex};
+use drawing::{PyColor, PyDecoration, PyDecorationKind, PyPathStyle, PyStroke, PyTheme};
 use log::warn;
 use pyo3::exceptions::{PyIOError, PySyntaxError, PyValueError};
 use pyo3::prelude::*;
@@ -15,6 +16,7 @@ use std::path::PathBuf;
 use topology::{PyTopology, PyTopologyContainer, PyTopologyGenerator, PyTopologyModel, PyTopologySelector};
 
 pub(crate) mod diagrams;
+pub(crate) mod drawing;
 pub(crate) mod topology;
 
 #[pymodule]
@@ -27,7 +29,15 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     topology_submodule.add_class::<PyTopologyContainer>()?;
     topology_submodule.add_class::<PyTopologyGenerator>()?;
     topology_submodule.add_class::<PyTopologySelector>()?;
+    let drawing_submodule = PyModule::new(m.py(), "drawing")?;
     m.add_submodule(&topology_submodule)?;
+    drawing_submodule.add_class::<PyColor>()?;
+    drawing_submodule.add_class::<PyDecoration>()?;
+    drawing_submodule.add_class::<PyDecorationKind>()?;
+    drawing_submodule.add_class::<PyPathStyle>()?;
+    drawing_submodule.add_class::<PyStroke>()?;
+    drawing_submodule.add_class::<PyTheme>()?;
+    m.add_submodule(&drawing_submodule)?;
     m.add_class::<PyModel>()?;
     m.add_class::<PyDiagram>()?;
     m.add_class::<PyDiagramGenerator>()?;
