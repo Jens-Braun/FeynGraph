@@ -36,7 +36,7 @@ impl Error for ModelError {}
 /// Line style of a propagator, specified by the UFO 2.0 standard.
 ///
 /// This property is used for drawing propagators.
-#[derive(PartialEq, Debug, Hash, Clone, Eq)]
+#[derive(PartialEq, Debug, Hash, Clone, Eq, Copy)]
 pub enum LineStyle {
     Dashed,
     Dotted,

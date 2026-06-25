@@ -171,11 +171,6 @@ impl PyTopology {
         return self.0.node_symmetry * self.0.edge_symmetry;
     }
 
-    fn draw_tikz(&self, path: String) -> PyResult<()> {
-        self.0.draw_tikz(path)?;
-        Ok(())
-    }
-
     fn __repr__(&self) -> String {
         return format!("{:#?}", self.0);
     }
@@ -201,7 +196,7 @@ impl PyTopologyContainer {
 
     #[pyo3(signature = (topologies, n_cols = None))]
     fn draw(&self, topologies: Vec<usize>, n_cols: Option<usize>) -> String {
-        return self.0.draw_svg(&topologies, n_cols);
+        return self.0.draw_svg_string(&topologies, n_cols);
     }
 
     pub(crate) fn __len__(&self) -> usize {
@@ -217,7 +212,7 @@ impl PyTopologyContainer {
 
     fn _repr_svg_(&self) -> String {
         let n = self.0.len().min(100);
-        return self.0.draw_svg(&(0..n).collect_vec(), None);
+        return self.0.draw_svg_string(&(0..n).collect_vec(), None);
     }
 }
 

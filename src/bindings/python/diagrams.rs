@@ -603,7 +603,27 @@ impl PyDiagram {
             self.diagram.as_ref(),
             &self.container.momentum_labels,
         )
-        .draw_svg_str();
+        .draw_svg_string();
+    }
+
+    pub(crate) fn draw_svg(&self, file: PathBuf) -> PyResult<()> {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_svg(file)?;
+        Ok(())
+    }
+
+    pub(crate) fn draw_typst(&self, file: PathBuf) -> PyResult<()> {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_typst(file)?;
+        Ok(())
     }
 
     pub(crate) fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
@@ -616,14 +636,31 @@ impl PyDiagram {
         Ok(())
     }
 
-    pub(crate) fn draw_svg(&self, file: PathBuf) -> PyResult<()> {
+    pub(crate) fn draw_svg_string(&self) -> String {
         DiagramView::new(
             self.container.model.as_ref().unwrap(),
             self.diagram.as_ref(),
             &self.container.momentum_labels,
         )
-        .draw_svg(file)?;
-        Ok(())
+        .draw_svg_string()
+    }
+
+    pub(crate) fn draw_tikz_string(&self) -> String {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_tikz_string()
+    }
+
+    pub(crate) fn draw_typst_string(&self) -> String {
+        DiagramView::new(
+            self.container.model.as_ref().unwrap(),
+            self.diagram.as_ref(),
+            &self.container.momentum_labels,
+        )
+        .draw_typst_string()
     }
 
     pub(crate) fn incoming(&self) -> Vec<PyLeg> {
@@ -970,8 +1007,18 @@ impl PyDiagramContainer {
     }
 
     #[pyo3(signature = (diagrams, n_cols = None))]
-    fn draw(&self, diagrams: Vec<usize>, n_cols: Option<usize>) -> String {
-        return self.0.draw_svg(&diagrams, n_cols);
+    fn draw_svg_string(&self, diagrams: Vec<usize>, n_cols: Option<usize>) -> String {
+        return self.0.draw_svg_string(&diagrams, n_cols);
+    }
+
+    #[pyo3(signature = (diagrams, n_cols = None))]
+    fn draw_tikz_string(&self, diagrams: Vec<usize>, n_cols: Option<usize>) -> String {
+        return self.0.draw_tikz_string(&diagrams, n_cols);
+    }
+
+    #[pyo3(signature = (diagrams, n_cols = None))]
+    fn draw_typst_string(&self, diagrams: Vec<usize>, n_cols: Option<usize>) -> String {
+        return self.0.draw_typst_string(&diagrams, n_cols);
     }
 
     fn __len__(&self) -> usize {
@@ -990,7 +1037,22 @@ impl PyDiagramContainer {
 
     fn _repr_svg_(&self) -> String {
         let n = self.0.len().min(100);
-        return self.0.draw_svg(&(0..n).collect_vec(), None);
+        return self.0.draw_svg_string(&(0..n).collect_vec(), None);
+    }
+
+    pub(crate) fn draw_svg(&self, file: PathBuf) -> PyResult<()> {
+        self.0.draw_svg(file)?;
+        Ok(())
+    }
+
+    pub(crate) fn draw_typst(&self, file: PathBuf) -> PyResult<()> {
+        self.0.draw_typst(file)?;
+        Ok(())
+    }
+
+    pub(crate) fn draw_tikz(&self, file: PathBuf) -> PyResult<()> {
+        self.0.draw_tikz(file)?;
+        Ok(())
     }
 }
 

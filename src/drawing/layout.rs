@@ -374,6 +374,16 @@ pub(crate) struct NodeLayout {
     node_positions: Vec<Vec2D>,
 }
 
+impl NodeLayout {
+    pub(crate) fn bounding_box(&self) -> (Vec2D, Vec2D) {
+        let xmin = self.node_positions.iter().map(|v| v[0]).reduce(f64::min).unwrap();
+        let xmax = self.node_positions.iter().map(|v| v[0]).reduce(f64::max).unwrap();
+        let ymin = self.node_positions.iter().map(|v| v[1]).reduce(f64::min).unwrap();
+        let ymax = self.node_positions.iter().map(|v| v[1]).reduce(f64::max).unwrap();
+        return (Vec2D::from([xmin, ymin]), Vec2D::from([xmax, ymax]));
+    }
+}
+
 impl Deref for NodeLayout {
     type Target = Vec<Vec2D>;
     fn deref(&self) -> &Self::Target {
