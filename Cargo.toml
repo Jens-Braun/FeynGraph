@@ -1,60 +1,35 @@
-[package]
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
 authors = ["Jens Braun <j.braun@kit.edu>"]
 categories = ["science"]
-description = "A modern Feynman diagram generator"
+description = "A modern Feynman diagram generation toolkit"
 edition = "2024"
 keywords = ["feynman", "diagrams", "physics", "hep"]
 license = "MPL-2.0"
-name = "feyngraph"
 repository = "https://github.com/jens-braun/feyngraph"
-version = "0.1.0-beta.5"
 
-[lib]
-name = "feyngraph"
-crate-type = ["lib", "cdylib"]
-
-[dependencies]
-itertools = "0.14"
-rayon = "1"
+[workspace.dependencies]
+itertools = "0.15"
+rayon = "1.12"
 log = "0.4"
-indexmap = "2"
-either = "1"
+indexmap = "2.14"
+either = "1.16"
 peg = "0.8"
-rustc-hash = "2"
+rustc-hash = "2.1"
 
-# Required for Python interface
-pyo3 = { version = "0.28", features = [
-    "auto-initialize",
-    "either",
-    "indexmap",
-    "multiple-pymethods",
-    "abi3-py37",
-], optional = true }
-pyo3-ffi = { version = "0.28", optional = true }
-pyo3-log = { version = "0.13", optional = true }
+# Python bindings
+pyo3 = { version = "0.29" }
+pyo3-ffi = { version = "0.29" }
+pyo3-log = { version = "0.13" }
 
-[dev-dependencies]
-paste = "1"
-tempfile = "3"
-regex = "1"
+# Dev-Dependencies
+paste = "1.0"
+tempfile = "3.27"
+regex = "1.12"
 test-log = "0.2"
 approx = "0.5"
-criterion = "0.7"
-pretty_assertions = "1"
-
-[features]
-default = []
-python-bindings = ["pyo3", "pyo3-log", "pyo3-ffi"]
-wolfram-bindings = ["python-bindings"]
-check_momenta = []
-
-[[bench]]
-name = "topologies"
-harness = false
-
-[[bench]]
-name = "diagrams"
-harness = false
-
-[package.metadata.docs.rs]
-rustdoc-args = ["--html-in-header", "./src/docs-header.html"]
+criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support"] }
+pretty_assertions = "1.4"

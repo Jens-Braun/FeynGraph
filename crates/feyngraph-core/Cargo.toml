@@ -1,0 +1,33 @@
+[package]
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+name = "feyngraph-core"
+repository.workspace = true
+version = "0.0.1"
+
+[dependencies]
+itertools = { workspace = true }
+rayon = { workspace = true }
+log = { workspace = true }
+indexmap = { workspace = true }
+either = { workspace = true }
+peg = { workspace = true }
+rustc-hash = { workspace = true }
+
+[dev-dependencies]
+paste ={ workspace = true }
+tempfile ={ workspace = true }
+regex ={ workspace = true }
+test-log ={ workspace = true }
+approx ={ workspace = true }
+criterion ={ workspace = true }
+pretty_assertions ={ workspace = true }
+
+[features]
+default = []
+check_momenta = []
+_internal_api = []

@@ -1,0 +1,19 @@
+[package]
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+name = "feyngraph-drawing"
+repository.workspace = true
+version = "0.0.1"
+
+[dependencies]
+feyngraph-core = { path = "../feyngraph-core", features = ["_internal_api"]}
+itertools = { workspace = true }
+either = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+pretty_assertions = { workspace = true }
