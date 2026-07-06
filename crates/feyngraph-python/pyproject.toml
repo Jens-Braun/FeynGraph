@@ -3,14 +3,14 @@ requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
 [tool.maturin]
-features = ["python-bindings", "pyo3/extension-module", "wolfram-bindings"]
+features = ["pyo3/extension-module", ]
 python-source = "python"
 
 [project]
 name = "feyngraph"
 requires-python = ">=3.10"
 dynamic = ["authors", "description", "license", "version"]
-readme = "Readme.md"
+readme = "../../Readme.md"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

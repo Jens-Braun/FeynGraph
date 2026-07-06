@@ -1,0 +1,81 @@
+[project]
+site_name = "FeynGraph User Guide"
+site_author = "Jens Braun"
+site_description = "FeynGraph = A modern Feynman diagram generation toolkit"
+
+repo_name = "jens-braun/feyngraph"
+repo_url = "https://github.com/Jens-Braun/FeynGraph"
+
+copyright = "Copyright &copy; 2026 Jens Braun"
+
+extra_javascript = [
+    "javascript/katex.js",
+    "https://unpkg.com/katex@0/dist/katex.min.js",
+    "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"
+]
+extra_css = [
+    "https://unpkg.com/katex@0/dist/katex.min.css"
+]
+
+nav = [
+    {"Home" = "index.md"},
+    {"Library Usage" = [
+        "usage/library/index.md",
+        {"Topologies" = "usage/library/topologies.md"},
+        {"Feynman Diagrams" = "usage/library/diagrams.md"},
+        {"Drawing" = "usage/library/drawing.md"},
+    ]},
+    {"Command Line Interface" = "usage/cli/index.md"},
+    {"API Reference" = [
+        {"FeynGraph" = "reference/feyngraph.md"},
+        {"Topology" = "reference/topology.md"}
+    ]}
+]
+
+[project.theme]
+font = { text = "Fira Sans", code = "Fira Code"}
+features = [
+    "announce.dismiss",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.sections",
+    "navigation.tabs",
+    "navigation.top",
+    "search.highlight",
+    "search.share",
+    "search.suggest",
+    "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+scheme = "default"
+media = "(prefers-color-scheme: light)"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+media = "(prefers-color-scheme: dark)"
+accent = "orange"
+secondary = "indigo"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["src"]
+options = {
+    docstring_style = "google",
+    inherited_members = true,
+    show_source = false
+}
