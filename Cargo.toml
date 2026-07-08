@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/*"]
+members = [
+    "crates/feyngraph",
+    "crates/feyngraph-core",
+    "crates/feyngraph-drawing",
+    "crates/feyngraph-expression",
+    "crates/feyngraph-python"
+]
 resolver = "3"
 
 [workspace.package]

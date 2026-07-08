@@ -356,6 +356,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "feyngraph-expression"
+version = "0.0.1"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+]
+
+[[package]]
 name = "feyngraph-python"
 version = "0.0.1"
 dependencies = [
