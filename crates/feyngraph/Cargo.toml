@@ -11,11 +11,12 @@ version = "0.0.1"
 
 [lib]
 name = "feyngraph"
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib"]
 
 [dependencies]
 feyngraph-core = {path = "../feyngraph-core"}
 feyngraph-drawing = {path = "../feyngraph-drawing", optional = true}
+feyngraph-model = { path = "../feyngraph-model" }
 
 [dev-dependencies]
 itertools = { workspace = true }
@@ -42,3 +43,7 @@ harness = false
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]
+
+[[example]]
+name = "gg_gg_tree"
+required-features = ["drawing"]

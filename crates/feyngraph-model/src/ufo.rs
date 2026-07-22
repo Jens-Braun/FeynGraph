@@ -1,20 +1,425 @@
-use crate::util::{HashMap, IndexMap};
-use crate::{
-    model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic},
-    util::contract_indices,
-};
+use crate::{LineStyle, ModelBase, ModelError, ParticleBase, ParticleDraw, VertexBase};
 use itertools::Itertools;
 use log;
 use peg;
 use peg::Parse;
 use std::path::Path;
+use util::{HashMap, IndexMap, contract_indices};
 
-const SM_PARTICLES: &str = include_str!("../../Standard_Model/particles.py");
-const SM_COUPLING_ORDERS: &str = include_str!("../../Standard_Model/coupling_orders.py");
-const SM_COUPLINGS: &str = include_str!("../../Standard_Model/couplings.py");
-const SM_LORENTZ: &str = include_str!("../../Standard_Model/lorentz.py");
-const SM_VERTICES: &str = include_str!("../../Standard_Model/vertices.py");
+const SM_PARTICLES: &str = include_str!("../Standard_Model/particles.py");
+const SM_COUPLING_ORDERS: &str = include_str!("../Standard_Model/coupling_orders.py");
+const SM_COUPLINGS: &str = include_str!("../Standard_Model/couplings.py");
+const SM_LORENTZ: &str = include_str!("../Standard_Model/lorentz.py");
+const SM_VERTICES: &str = include_str!("../Standard_Model/vertices.py");
 
+#[derive(Debug, PartialEq, Hash, Clone, Eq)]
+pub struct UFOParticle {
+    pub name: String,
+    pub anti_name: String,
+    pub spin: isize,
+    pub color: isize,
+    pub pdg_code: isize,
+    pub texname: String,
+    pub antitexname: String,
+    pub linestyle: LineStyle,
+    pub self_anti: bool,
+    pub fermi: bool,
+}
+
+impl UFOParticle {
+    pub(crate) fn new(
+        name: impl Into<String>,
+        anti_name: impl Into<String>,
+        spin: isize,
+        color: isize,
+        pdg_code: isize,
+        texname: impl Into<String>,
+        antitexname: impl Into<String>,
+        linestyle: LineStyle,
+        fermi: bool,
+    ) -> Self {
+        let texname = texname.into();
+        let antitexname = antitexname.into();
+        let self_anti = texname == antitexname;
+        return Self {
+            name: name.into(),
+            anti_name: anti_name.into(),
+            spin,
+            color,
+            pdg_code,
+            texname,
+            antitexname,
+            linestyle,
+            self_anti,
+            fermi,
+        };
+    }
+    pub(crate) fn into_anti(self) -> Self {
+        return Self {
+            name: self.anti_name,
+            anti_name: self.name,
+            spin: -self.spin,
+            color: -self.color,
+            pdg_code: -self.pdg_code,
+            texname: self.antitexname,
+            antitexname: self.texname,
+            linestyle: self.linestyle,
+            self_anti: self.self_anti,
+            fermi: self.fermi,
+        };
+    }
+}
+
+impl ParticleBase for UFOParticle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn id(&self) -> isize {
+        self.pdg_code
+    }
+
+    fn is_self_anti(&self) -> bool {
+        self.self_anti
+    }
+
+    fn is_fermi(&self) -> bool {
+        self.fermi
+    }
+}
+
+impl ParticleDraw for UFOParticle {
+    fn display_name(&self) -> &str {
+        &self.texname
+    }
+
+    fn linestyle(&self) -> LineStyle {
+        self.linestyle
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct UFOVertex {
+    pub name: String,
+    pub particles: Vec<String>,
+    pub spin_map: Vec<isize>,
+    pub coupling_orders: HashMap<String, usize>,
+}
+
+impl UFOVertex {
+    pub(crate) fn new(
+        name: String,
+        particles: Vec<String>,
+        spin_map: Vec<isize>,
+        coupling_orders: HashMap<String, usize>,
+    ) -> Self {
+        return Self {
+            name,
+            particles,
+            spin_map,
+            coupling_orders,
+        };
+    }
+
+    pub fn add_coupling(&mut self, coupling: impl Into<String> + Clone, power: usize) {
+        match self.coupling_orders.insert(coupling.clone().into(), power) {
+            None => (),
+            Some(c) => log::warn!(
+                "Vertex already has power {} in coupling {}, overwriting.",
+                c,
+                coupling.into()
+            ),
+        }
+    }
+}
+
+impl VertexBase for UFOVertex {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn particles(&self) -> &[impl AsRef<str>] {
+        &self.particles
+    }
+
+    fn coupling_orders(&self) -> &HashMap<String, usize> {
+        &self.coupling_orders
+    }
+
+    fn fermi_map(&self, in_ray: usize) -> usize {
+        self.spin_map[in_ray] as usize
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct UFOModel {
+    particles: IndexMap<String, UFOParticle>,
+    vertices: IndexMap<String, UFOVertex>,
+    couplings: Vec<String>,
+    splittings: HashMap<String, HashMap<String, Vec<(usize, usize)>>>,
+    anti_map: Vec<usize>,
+}
+
+impl UFOModel {
+    pub fn parse(path: &Path) -> Result<Self, ModelError> {
+        parse_ufo_model(path)
+    }
+
+    pub fn sm() -> Self {
+        sm()
+    }
+
+    /// Create a new model without any particles, vertices or couplings.
+    pub fn empty() -> Self {
+        return Self {
+            particles: IndexMap::default(),
+            vertices: IndexMap::default(),
+            couplings: Vec::new(),
+            splittings: HashMap::default(),
+            anti_map: Vec::new(),
+        };
+    }
+
+    pub(crate) fn new(
+        particles: IndexMap<String, UFOParticle>,
+        vertices: IndexMap<String, UFOVertex>,
+        couplings: Vec<String>,
+        splittings: HashMap<String, HashMap<String, Vec<(usize, usize)>>>,
+    ) -> Self {
+        let anti_map = particles
+            .values()
+            .enumerate()
+            .map(|(i, p)| {
+                if p.self_anti {
+                    i
+                } else {
+                    particles
+                        .values()
+                        .find_position(|q| q.pdg_code == -p.pdg_code)
+                        .as_ref()
+                        .unwrap()
+                        .0
+                }
+            })
+            .collect_vec();
+        return Self {
+            particles,
+            vertices,
+            couplings,
+            splittings,
+            anti_map,
+        };
+    }
+
+    /// Add a new particle with the given properties to the model or overwrite an existing one. If `name == anti_name`,
+    /// the particle is automatically marked as its own anti particle. Otherwise, the corresponding anti particle is
+    /// automatically also added to the model.
+    pub fn add_particle<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        name: S,
+        anti_name: S,
+        spin: isize,
+        color: isize,
+        pdg_code: isize,
+        texname: S,
+        antitexname: S,
+        linestyle: LineStyle,
+        fermi: bool,
+    ) {
+        let p = UFOParticle {
+            name: name.clone().into(),
+            anti_name: anti_name.clone().into(),
+            spin,
+            color,
+            pdg_code,
+            texname: texname.into(),
+            antitexname: antitexname.into(),
+            self_anti: name == anti_name,
+            linestyle,
+            fermi,
+        };
+        if p.self_anti {
+            match self.particles.insert(name.clone().into(), p) {
+                None => (),
+                Some(_) => log::warn!("Particle {} already present in model, replacing.", name.into()),
+            }
+            self.anti_map.push(self.anti_map.len());
+        } else {
+            match self.particles.insert(name.clone().into(), p.clone()) {
+                None => (),
+                Some(_) => log::warn!("Particle {} already present in model, replacing.", name.clone().into()),
+            }
+            self.particles.insert(anti_name.clone().into(), p.into_anti());
+            self.anti_map.push(self.anti_map.len() + 1);
+            self.anti_map.push(self.anti_map.len() - 1);
+        }
+    }
+
+    /// Add a new vertex with the given properties to the model or overwrite an existing one. The `i`-th entry of the
+    /// `spin_map` must be the leg `j` to which leg `i` is spin-connected.
+    pub fn add_vertex<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        name: S,
+        particles: Vec<S>,
+        spin_map: Vec<isize>,
+        coupling_orders: HashMap<S, usize>,
+    ) -> Result<(), ModelError> {
+        for coupling in coupling_orders.keys() {
+            if !self.couplings.contains(&coupling.clone().into()) {
+                self.couplings.push(coupling.clone().into());
+            }
+        }
+        let v = UFOVertex::new(
+            name.clone().into(),
+            particles.into_iter().map(|s| s.into()).collect(),
+            spin_map,
+            HashMap::from_iter(coupling_orders.into_iter().map(|(k, v)| (k.into(), v))),
+        );
+        for p in v.particles() {
+            if !self.particles.contains_key(p.as_ref()) {
+                return Err(ModelError::particle_not_found(p.as_ref()));
+            }
+        }
+        match self.vertices.insert(name.clone().into(), v) {
+            None => (),
+            Some(_) => log::warn!("Vertex {} already present in model, replacing.", name.into()),
+        }
+        Ok(())
+    }
+
+    /// Deduplicate vertices in the model, i.e. merge all vertices with identical particles, spin connection and
+    /// coupling powers. Returns a hash map containing the new vertex and all vertices which were merged into it.
+    pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
+        let mut mergings = IndexMap::default();
+        let mut merged_vertices = IndexMap::default();
+        let mut i = 1;
+        for (_, vertices) in self
+            .vertices
+            .values()
+            .into_group_map_by(|v| {
+                (
+                    v.particles.clone(),
+                    v.coupling_orders.clone().into_iter().collect_vec(),
+                    v.spin_map.clone(),
+                )
+            })
+            .into_iter()
+            .sorted_by_key(|(x, _)| x.clone())
+        {
+            if vertices.len() > 1 {
+                mergings.insert(format!("V_M_{}", i), vertices.iter().map(|v| v.name.clone()).collect());
+                merged_vertices.insert(
+                    format!("V_M_{}", i),
+                    UFOVertex {
+                        name: format!("V_M_{}", i),
+                        particles: vertices[0].particles.clone(),
+                        spin_map: vertices[0].spin_map.clone(),
+                        coupling_orders: vertices[0].coupling_orders.clone(),
+                    },
+                );
+                i += 1;
+            } else {
+                merged_vertices.insert(vertices[0].name.clone(), vertices[0].clone());
+            }
+        }
+        self.vertices = merged_vertices;
+        return mergings;
+    }
+
+    /// Add a new coupling to the interaction vertex `vertex` or overwrite an existing one.
+    pub fn add_coupling<S: Into<String> + Clone>(
+        &mut self,
+        vertex: S,
+        coupling: S,
+        power: usize,
+    ) -> Result<(), ModelError> {
+        match self.vertices.get_mut(&vertex.clone().into()) {
+            Some(v) => v.add_coupling(coupling, power),
+            None => {
+                return Err(ModelError::vertex_not_found(vertex.into()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Split the existing vertex `vertex` into new vertices with names `new_vertices`.
+    pub fn split_vertex<S: Into<String> + PartialEq + Clone>(
+        &mut self,
+        vertex: S,
+        new_vertices: &[S],
+    ) -> Result<(), ModelError> {
+        let v = self.vertices.shift_remove(&vertex.clone().into());
+        match v {
+            None => {
+                return Err(ModelError::vertex_not_found(vertex.into()));
+            }
+            Some(v) => {
+                for name in new_vertices.iter() {
+                    let mut new_vertex = v.clone();
+                    new_vertex.name = name.clone().into();
+                    match self.vertices.insert(name.clone().into(), new_vertex) {
+                        None => (),
+                        Some(_) => log::warn!("Vertex {} already present in model, replacing.", name.clone().into()),
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ModelBase for UFOModel {
+    type Particle = UFOParticle;
+    type Vertex = UFOVertex;
+
+    fn particle(&self, index: usize) -> &Self::Particle {
+        &self.particles[index]
+    }
+
+    fn particle_by_name(&self, name: impl AsRef<str>) -> Result<&Self::Particle, ModelError> {
+        return self
+            .particles
+            .get(name.as_ref())
+            .ok_or_else(|| ModelError::particle_not_found(name.as_ref()));
+    }
+
+    fn particle_index_by_name(&self, name: impl AsRef<str>) -> Result<usize, ModelError> {
+        return self
+            .particles
+            .get_index_of(name.as_ref())
+            .ok_or_else(|| ModelError::particle_not_found(name.as_ref()));
+    }
+
+    fn anti_particle(&self, particle: usize) -> &Self::Particle {
+        &self.particles[self.anti_map[particle]]
+    }
+
+    fn anti_particle_index(&self, particle: usize) -> usize {
+        self.anti_map[particle]
+    }
+
+    fn vertex(&self, index: usize) -> &Self::Vertex {
+        &self.vertices[index]
+    }
+
+    fn particles(&self) -> impl ExactSizeIterator<Item = &Self::Particle> {
+        self.particles.values()
+    }
+
+    fn vertices(&self) -> impl ExactSizeIterator<Item = &Self::Vertex> {
+        self.vertices.values()
+    }
+
+    fn couplings(&self) -> impl ExactSizeIterator<Item = impl AsRef<str>> {
+        self.couplings.iter()
+    }
+
+    fn supports_sign(&self) -> bool {
+        true
+    }
+}
+
+#[allow(unused)]
 #[derive(Debug)]
 enum Value<'a> {
     Int(isize),
@@ -24,7 +429,7 @@ enum Value<'a> {
     List(Vec<Value<'a>>),
     SIDict(HashMap<String, usize>),
     CODict(HashMap<(usize, usize), String>),
-    Particle(Particle),
+    Particle(UFOParticle),
     None,
 }
 
@@ -213,11 +618,11 @@ peg::parser! {
                         },
                     });
                 }
-                let mut statistic = Statistic::Bose;
+                let mut fermi = false;
                 if let Some(s) = twospin && (s < 0 || s % 2 == 1) {
-                    statistic = Statistic::Fermi;
+                    fermi = true;
                 }
-                Ok((py_name, Value::Particle(Particle::new(
+                Ok((py_name, Value::Particle(UFOParticle::new(
                     name.unwrap(),
                     antiname.unwrap(),
                     twospin.unwrap(),
@@ -226,7 +631,7 @@ peg::parser! {
                     texname.unwrap(),
                     antitexname.unwrap(),
                     linestyle.unwrap(),
-                    statistic
+                    fermi
                 ))))
             }
 
@@ -281,7 +686,7 @@ peg::parser! {
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
             lorentz_structures: &HashMap<String, Vec<isize>>
-        ) -> (Vec<InteractionVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
+        ) -> (Vec<UFOVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
             pos: position!() py_name:name() _ "=" _ "Vertex(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 return parse_vertex(input, couplings, ident_map, lorentz_structures, py_name, props, pos);
             }
@@ -291,7 +696,7 @@ peg::parser! {
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
             lorentz_structures: &HashMap<String, Vec<isize>>
-        ) -> (Vec<InteractionVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
+        ) -> (Vec<UFOVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
             pos: position!() py_name:name() _ "=" _ "CTVertex(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
                 return parse_vertex(input, couplings, ident_map, lorentz_structures, py_name, props, pos);
             }
@@ -352,7 +757,7 @@ peg::parser! {
                 return Ok((py_name, contract_indices(connections)));
             }
 
-        pub rule particles(input: &str) -> Vec<(String, Particle)> =
+        pub rule particles(input: &str) -> Vec<(String, UFOParticle)> =
             _ (!particle(input) [_])* _ particles:((anti_particle() / particle(input)) ** _) _ {?
                 let mut res = Vec::with_capacity(particles.len());
                 for (py_name, v) in particles.into_iter() {
@@ -389,10 +794,10 @@ peg::parser! {
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
             lorentz_structures: &HashMap<String, Vec<isize>>
-        ) -> (IndexMap<String, InteractionVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
+        ) -> (IndexMap<String, UFOVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
         _ (!vertex(input, couplings, ident_map, lorentz_structures) [_])* _
         vertices:(vertex(input, couplings, ident_map, lorentz_structures) ** _) _ {
-                let (vertices, splittings): (Vec<Vec<InteractionVertex>>, Vec<(String, HashMap<String, Vec<(usize, usize)>>)>) = vertices.into_iter().unzip();
+                let (vertices, splittings): (Vec<Vec<UFOVertex>>, Vec<(String, HashMap<String, Vec<(usize, usize)>>)>) = vertices.into_iter().unzip();
                 return (
                     vertices.into_iter().flatten().map(|v| (v.name.clone(), v)).collect(),
                     HashMap::from_iter(splittings.into_iter().filter(|(_, m)| !m.is_empty()))
@@ -404,10 +809,10 @@ peg::parser! {
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
             lorentz_structures: &HashMap<String, Vec<isize>>
-        ) -> (IndexMap<String, InteractionVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
+        ) -> (IndexMap<String, UFOVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
         _ (!ct_vertex(input, couplings, ident_map, lorentz_structures) [_])* _
         vertices:(ct_vertex(input, couplings, ident_map, lorentz_structures) ** _) _ {
-                let (vertices, splittings): (Vec<Vec<InteractionVertex>>, Vec<(String, HashMap<String, Vec<(usize, usize)>>)>) = vertices.into_iter().unzip();
+                let (vertices, splittings): (Vec<Vec<UFOVertex>>, Vec<(String, HashMap<String, Vec<(usize, usize)>>)>) = vertices.into_iter().unzip();
                 return (
                     vertices.into_iter().flatten().filter_map(
                         |v| if v.particles.len() > 2 {Some((v.name.clone(), v))} else {
@@ -429,7 +834,7 @@ fn parse_vertex(
     py_name: &str,
     props: Vec<(&str, Value<'_>)>,
     pos: usize,
-) -> Result<(Vec<InteractionVertex>, (String, HashMap<String, Vec<(usize, usize)>>)), &'static str> {
+) -> Result<(Vec<UFOVertex>, (String, HashMap<String, Vec<(usize, usize)>>)), &'static str> {
     let mut particles = None;
     let mut name = None;
     let mut coupling_dict = None;
@@ -510,7 +915,7 @@ fn parse_vertex(
                     format!("{}_{}", &name, vertices.len()),
                     lorentz_indices.iter().map(|i| (0, *i)).collect(),
                 );
-                vertices.push(InteractionVertex::new(
+                vertices.push(UFOVertex::new(
                     format!("{}_{}", &name, vertices.len()),
                     particles.clone(),
                     spin_map.clone(),
@@ -523,7 +928,7 @@ fn parse_vertex(
                             format!("{}_{}", &name, vertices.len()),
                             l.iter().filter(|(_, i)| lorentz_indices.contains(i)).cloned().collect(),
                         );
-                        vertices.push(InteractionVertex::new(
+                        vertices.push(UFOVertex::new(
                             format!("{}_{}", &name, vertices.len()),
                             particles.clone(),
                             spin_map.clone(),
@@ -536,13 +941,13 @@ fn parse_vertex(
     }
 
     match (unique_spin_mappings.len(), unique_coupling_orders.len()) {
-        (1, 0) => vertices.push(InteractionVertex::new(
+        (1, 0) => vertices.push(UFOVertex::new(
             name.clone(),
             particles.clone(),
             unique_spin_mappings[0].0.clone(),
             HashMap::default(),
         )),
-        (1, 1) => vertices.push(InteractionVertex::new(
+        (1, 1) => vertices.push(UFOVertex::new(
             name.clone(),
             particles.clone(),
             unique_spin_mappings[0].0.clone(),
@@ -584,82 +989,67 @@ fn parse_vertex(
     Ok((vertices, (name, splitting)))
 }
 
-pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
+pub fn parse_ufo_model(path: &Path) -> Result<UFOModel, ModelError> {
     let particle_content = match std::fs::read_to_string(path.join("particles.py")) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::IOError(
-                path.join("particles.py").to_str().unwrap().to_owned(),
-                e,
-            ));
+            return Err(ModelError::io(path.join("particles.py").display(), e));
         }
     };
-    let (ident_map, particles): (HashMap<String, String>, IndexMap<String, Particle>) =
+    let (ident_map, particles): (HashMap<String, String>, IndexMap<String, UFOParticle>) =
         match ufo_model::particles(&particle_content, &particle_content) {
             Ok(x) => x
                 .into_iter()
                 .map(|(py_name, p)| ((py_name, p.anti_name.clone()), (p.name.clone(), p)))
                 .unzip(),
             Err(e) => {
-                return Err(ModelError::ParseError("particles.py".into(), e));
+                return Err(ModelError::parse_error("particles.py", Box::new(e)));
             }
         };
 
     let coupling_order_content = match std::fs::read_to_string(path.join("coupling_orders.py")) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::IOError(
-                path.join("coupling_orders.py").to_str().unwrap().to_owned(),
-                e,
-            ));
+            return Err(ModelError::io(path.join("coupling_orders.py").display(), e));
         }
     };
     let mut coupling_orders = match ufo_model::coupling_orders(&coupling_order_content, &coupling_order_content) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::ParseError("coupling_orders.py".into(), e));
+            return Err(ModelError::parse_error("coupling_orders.py", Box::new(e)));
         }
     };
 
     let coupling_content = match std::fs::read_to_string(path.join("couplings.py")) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::IOError(
-                path.join("couplings.py").to_str().unwrap().to_owned(),
-                e,
-            ));
+            return Err(ModelError::io(path.join("couplings.py").display(), e));
         }
     };
     let mut couplings = match ufo_model::couplings(&coupling_content, &coupling_content) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::ParseError("couplings.py".into(), e));
+            return Err(ModelError::parse_error("couplings.py", Box::new(e)));
         }
     };
 
     let lorentz_content = match std::fs::read_to_string(path.join("lorentz.py")) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::IOError(
-                path.join("lorentz.py").to_str().unwrap().to_owned(),
-                e,
-            ));
+            return Err(ModelError::io(path.join("lorentz.py").display(), e));
         }
     };
     let lorentz_structures = match ufo_model::lorentz_structures(&lorentz_content, &lorentz_content) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::ParseError("lorentz.py".into(), e));
+            return Err(ModelError::parse_error("lorentz.py", Box::new(e)));
         }
     };
 
     let vertices_content = match std::fs::read_to_string(path.join("vertices.py")) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::IOError(
-                path.join("vertices.py").to_str().unwrap().to_owned(),
-                e,
-            ));
+            return Err(ModelError::io(path.join("vertices.py").display(), e));
         }
     };
     let (mut vertices, mut splittings) = match ufo_model::vertices(
@@ -671,7 +1061,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
     ) {
         Ok(x) => x,
         Err(e) => {
-            return Err(ModelError::ParseError("vertices.py".into(), e));
+            return Err(ModelError::parse_error("vertices.py", Box::new(e)));
         }
     };
 
@@ -694,16 +1084,13 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         let ct_coupling_content = match std::fs::read_to_string(path.join("CT_couplings.py")) {
             Ok(x) => x,
             Err(e) => {
-                return Err(ModelError::IOError(
-                    path.join("CT_couplings.py").to_str().unwrap().to_owned(),
-                    e,
-                ));
+                return Err(ModelError::io(path.join("CT_couplings.py").display(), e));
             }
         };
         let ct_couplings = match ufo_model::couplings(&ct_coupling_content, &ct_coupling_content) {
             Ok(x) => x,
             Err(e) => {
-                return Err(ModelError::ParseError("CT_couplings.py".into(), e));
+                return Err(ModelError::parse_error("CT_couplings.py", Box::new(e)));
             }
         };
         couplings.extend(ct_couplings.into_iter());
@@ -715,10 +1102,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         let ct_vertices_content = match std::fs::read_to_string(path.join("CT_vertices.py")) {
             Ok(x) => x,
             Err(e) => {
-                return Err(ModelError::IOError(
-                    path.join("CT_vertices.py").to_str().unwrap().to_owned(),
-                    e,
-                ));
+                return Err(ModelError::io(path.join("CT_vertices.py").display(), e));
             }
         };
         let (mut ct_vertices, ct_splittings) = match ufo_model::ct_vertices(
@@ -730,7 +1114,7 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         ) {
             Ok(x) => x,
             Err(e) => {
-                return Err(ModelError::ParseError("CT_vertices.py".into(), e));
+                return Err(ModelError::parse_error("CT_vertices.py", Box::new(e)));
             }
         };
         // Mark counterterm vertices with coupling order `CT`
@@ -741,11 +1125,11 @@ pub fn parse_ufo_model(path: &Path) -> Result<Model, ModelError> {
         splittings.extend(ct_splittings.into_iter());
     }
 
-    Ok(Model::new(particles, vertices, coupling_orders, splittings))
+    Ok(UFOModel::new(particles, vertices, coupling_orders, splittings))
 }
 
-pub fn sm() -> Model {
-    let (ident_map, particles): (HashMap<String, String>, IndexMap<String, Particle>) =
+pub fn sm() -> UFOModel {
+    let (ident_map, particles): (HashMap<String, String>, IndexMap<String, UFOParticle>) =
         ufo_model::particles(SM_PARTICLES, &"")
             .unwrap()
             .into_iter()
@@ -755,117 +1139,56 @@ pub fn sm() -> Model {
     let couplings = ufo_model::couplings(SM_COUPLINGS, &"").unwrap();
     let lorentz_structures = ufo_model::lorentz_structures(SM_LORENTZ, &"").unwrap();
     let (vertices, _) = ufo_model::vertices(SM_VERTICES, &"", &couplings, &ident_map, &lorentz_structures).unwrap();
-    Model::new(particles, vertices, coupling_orders, HashMap::default())
+    UFOModel::new(particles, vertices, coupling_orders, HashMap::default())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{InteractionVertex, LineStyle, Model, Particle, Statistic};
-    use crate::util::{HashMap, IndexMap};
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use test_log::test;
+    use util::{HashMap, IndexMap};
 
     #[test]
     fn peg_ufo_parse_test() {
         let path = PathBuf::from("../../tests/models/QCD_UFO");
         let model = parse_ufo_model(&path).unwrap();
-        let model_ref = Model::new(
+        let model_ref = UFOModel::new(
             IndexMap::from_iter([
                 (
                     String::from("u"),
-                    Particle::new(
-                        "u",
-                        "u~",
-                        1,
-                        3,
-                        9000001,
-                        "u",
-                        "\\bar{u}",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("u", "u~", 1, 3, 9000001, "u", "\\bar{u}", LineStyle::Straight, true),
                 ),
                 (
                     String::from("u~"),
-                    Particle::new(
-                        "u~",
-                        "u",
-                        -1,
-                        -3,
-                        -9000001,
-                        "\\bar{u}",
-                        "u",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("u~", "u", -1, -3, -9000001, "\\bar{u}", "u", LineStyle::Straight, true),
                 ),
                 (
                     String::from("c"),
-                    Particle::new(
-                        "c",
-                        "c~",
-                        1,
-                        3,
-                        9000002,
-                        "c",
-                        "\\bar{c}",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("c", "c~", 1, 3, 9000002, "c", "\\bar{c}", LineStyle::Straight, true),
                 ),
                 (
                     String::from("c~"),
-                    Particle::new(
-                        "c~",
-                        "c",
-                        -1,
-                        -3,
-                        -9000002,
-                        "\\bar{c}",
-                        "c",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("c~", "c", -1, -3, -9000002, "\\bar{c}", "c", LineStyle::Straight, true),
                 ),
                 (
                     String::from("t"),
-                    Particle::new(
-                        "t",
-                        "t~",
-                        1,
-                        3,
-                        9000003,
-                        "t",
-                        "\\bar{t}",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("t", "t~", 1, 3, 9000003, "t", "\\bar{t}", LineStyle::Straight, true),
                 ),
                 (
                     String::from("t~"),
-                    Particle::new(
-                        "t~",
-                        "t",
-                        -1,
-                        -3,
-                        -9000003,
-                        "\\bar{t}",
-                        "t",
-                        LineStyle::Straight,
-                        Statistic::Fermi,
-                    ),
+                    UFOParticle::new("t~", "t", -1, -3, -9000003, "\\bar{t}", "t", LineStyle::Straight, true),
                 ),
                 (
                     String::from("G"),
-                    Particle::new("G", "G", 2, 8, 9000004, "G", "G", LineStyle::Curly, Statistic::Bose),
+                    UFOParticle::new("G", "G", 2, 8, 9000004, "G", "G", LineStyle::Curly, false),
                 ),
             ]),
             IndexMap::from_iter([
                 (
                     "V_1".to_string(),
-                    InteractionVertex::new(
+                    UFOVertex::new(
                         "V_1".to_string(),
                         vec!["G".to_string(); 3],
                         vec![],
@@ -874,7 +1197,7 @@ mod tests {
                 ),
                 (
                     "V_2".to_string(),
-                    InteractionVertex::new(
+                    UFOVertex::new(
                         "V_2".to_string(),
                         vec!["G".to_string(); 4],
                         vec![],
@@ -883,7 +1206,7 @@ mod tests {
                 ),
                 (
                     "V_3".to_string(),
-                    InteractionVertex::new(
+                    UFOVertex::new(
                         "V_3".to_string(),
                         vec!["u".to_string(), "u~".to_string(), "G".to_string()],
                         vec![1, 0],
@@ -892,7 +1215,7 @@ mod tests {
                 ),
                 (
                     "V_4".to_string(),
-                    InteractionVertex::new(
+                    UFOVertex::new(
                         "V_4".to_string(),
                         vec!["c".to_string(), "c~".to_string(), "G".to_string()],
                         vec![1, 0],
@@ -901,7 +1224,7 @@ mod tests {
                 ),
                 (
                     "V_5".to_string(),
-                    InteractionVertex::new(
+                    UFOVertex::new(
                         "V_5".to_string(),
                         vec!["t".to_string(), "t~".to_string(), "G".to_string()],
                         vec![1, 0],

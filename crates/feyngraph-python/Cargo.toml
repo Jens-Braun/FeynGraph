@@ -28,7 +28,7 @@ pyo3 = { workspace = true, features = [
     "either",
     "indexmap",
     "multiple-pymethods",
-    "abi3-py38",
+    "abi3-py310",
 ]}
 pyo3-ffi = { workspace = true }
 pyo3-log = { workspace = true }

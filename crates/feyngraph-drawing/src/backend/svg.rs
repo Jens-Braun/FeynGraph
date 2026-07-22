@@ -1,3 +1,5 @@
+use model::{ParticleBase, ParticleDraw};
+
 use super::super::style::{Color, DecorationKind};
 use super::{Anchor, Backend, Decoration, Label, PathStyle, Segment, Stroke, Theme, Vec2D};
 
@@ -51,7 +53,7 @@ impl Backend for SVGBackend {
 
     type Output = String;
 
-    fn particle_name(p: &feyngraph_core::model::Particle) -> &str {
+    fn particle_name<P: ParticleBase + ParticleDraw>(p: &P) -> &str {
         p.name()
     }
 

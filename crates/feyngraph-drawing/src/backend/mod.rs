@@ -3,7 +3,7 @@ use super::{
     components::{Label, Segment},
     style::{Anchor, Decoration, PathStyle, Stroke, Theme},
 };
-use feyngraph_core::model::Particle;
+use model::{ParticleBase, ParticleDraw};
 
 pub(crate) mod svg;
 pub(crate) mod tikz;
@@ -15,7 +15,7 @@ pub trait Backend {
     const BASE_SIZE_Y: f64;
     type Output;
 
-    fn particle_name(p: &Particle) -> &str;
+    fn particle_name<P: ParticleBase + ParticleDraw>(p: &P) -> &str;
 
     fn init(size_x: f64, size_y: f64) -> Self;
     fn finish(self) -> Self::Output;

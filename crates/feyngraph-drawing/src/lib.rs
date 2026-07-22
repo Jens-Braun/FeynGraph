@@ -8,10 +8,10 @@ use canvas::{Canvas, CanvasGrid};
 use components::Segment;
 use feyngraph_core::{
     diagram::{DiagramContainer, view::DiagramView},
-    model::LineStyle,
     topology::{Topology, TopologyContainer},
 };
 use layout::{DiagramLayout, TopologyLayout};
+use model::{LineStyle, ModelBase, ParticleBase, ParticleDraw, VertexBase};
 
 mod backend;
 mod canvas;
@@ -243,7 +243,10 @@ impl DrawGrid for TopologyContainer {
     }
 }
 
-impl Draw for DiagramView<'_> {
+impl<M: ModelBase> Draw for DiagramView<'_, M>
+where
+    M::Particle: ParticleDraw,
+{
     fn draw<'a, B: Backend>(&self, mut canvas: Canvas<'a, B>) {
         let theme = Theme::get_global();
         let layout = DiagramLayout::from(self).layout();
@@ -413,7 +416,10 @@ impl Draw for DiagramView<'_> {
     }
 }
 
-impl DrawGrid for DiagramContainer {
+impl<M: ModelBase> DrawGrid for DiagramContainer<M>
+where
+    M::Particle: ParticleDraw,
+{
     /// Draw the diagrams with indices `diagrams` in the given format in a grid on a single canvas. If specified, the
     /// grid will have `n_cols` diagrams per row, otherwise four.
     fn draw<B: Backend>(&self, diagrams: &[usize], n_cols: Option<usize>) -> B::Output {

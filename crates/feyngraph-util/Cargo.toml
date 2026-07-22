@@ -5,15 +5,10 @@ description.workspace = true
 edition.workspace = true
 keywords.workspace = true
 license.workspace = true
-name = "feyngraph-expression"
+name = "feyngraph-util"
 repository.workspace = true
 version = "0.0.1"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"], optional = true }
-
-[features]
-serde = ["dep:serde"]
-
-[dev-dependencies]
-pretty_assertions ={ workspace = true }
+indexmap = { workspace = true }
+rustc-hash = { workspace = true }

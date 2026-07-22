@@ -1,9 +1,9 @@
-pub use crate::model::TopologyModel;
 use crate::util::{InputError, factorial, find_partitions};
 use components::NodeClassification;
 pub use filter::TopologySelector;
 use itertools::Itertools;
 use matrix::SymmetricMatrix;
+use model::TopologyModel;
 use rayon::prelude::*;
 use std::cmp::min;
 use std::fmt::Write;
@@ -628,7 +628,7 @@ impl Deref for TopologyContainer {
 ///
 /// # Examples
 /// ```rust
-/// # use feyngraph_core::model::TopologyModel;
+/// # use model::TopologyModel;
 /// # use feyngraph_core::topology::{TopologyGenerator, TopologySelector};
 ///
 /// // Use vertices with degree 3 and 4 for the topologies

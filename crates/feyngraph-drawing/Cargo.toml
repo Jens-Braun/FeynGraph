@@ -11,6 +11,7 @@ version = "0.0.1"
 
 [dependencies]
 feyngraph-core = { path = "../feyngraph-core", features = ["_internal_api"]}
+model = { package = "feyngraph-model", path = "../feyngraph-model"}
 itertools = { workspace = true }
 either = { workspace = true }
 

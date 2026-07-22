@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use feyngraph::{model::TopologyModel, topology::TopologyGenerator};
+use feyngraph::topology::{TopologyGenerator, TopologyModel};
 
 fn topo_generator_3loop_bench(c: &mut Criterion) {
     let topo_gen = TopologyGenerator::new(4, 3, TopologyModel::from(vec![3, 4]), None);

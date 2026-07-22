@@ -1,8 +1,11 @@
 #![allow(dead_code, non_snake_case)]
 use feyngraph::{
     diagram::{DiagramGenerator, DiagramSelector},
-    model::{Model, TopologyModel},
-    topology::TopologyGenerator,
+    model::{
+        Model, ModelBase, ParticleBase,
+        ufo::{UFOModel, UFOParticle},
+    },
+    topology::{TopologyGenerator, TopologyModel},
 };
 use itertools::Itertools;
 use paste::paste;
@@ -24,8 +27,28 @@ macro_rules! test_diagrams {
         paste!{
             #[test]
             fn [< test_diag _ $ufo _ $($particle_in)+ _ $($particle_out)+ _loops_ $n_loops >]() {
-                let model = Model::from_ufo(
+                let model = Model::ufo(
                     &PathBuf::from(format!("../../tests/models/{}", stringify!($ufo)))
+                ).unwrap();
+                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
+                common::write_qgraf_model(
+                    &qgraf_model,
+                    &model
+                ).unwrap();
+                let in_particles = vec![$(model.particle_by_name(stringify!($particle_in)).unwrap()),+];
+                let out_particles = vec![$(model.particle_by_name(stringify!($particle_out)).unwrap()),+];
+                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
+                common::write_qgraf_config(
+                    &qgraf_config,
+                    &qgraf_model.path().to_str().unwrap(),
+                    &in_particles.iter().map(
+                        |p| if p.id() > 0 {format!("part{}", p.id())} else {format!("anti{}", p.id().abs())}
+                    ).collect_vec(),
+                    &out_particles.iter().map(
+                        |p| if p.id() > 0 {format!("part{}", p.id())} else {format!("anti{}", p.id().abs())}
+                    ).collect_vec(),
+                    $n_loops,
+                    &vec![]
                 ).unwrap();
                 let in_particles = [$(stringify!($particle_in)),+];
                 let out_particles = [$(stringify!($particle_out)),+];
@@ -33,29 +56,9 @@ macro_rules! test_diagrams {
                     &in_particles,
                     &out_particles,
                     $n_loops,
-                    model.clone(),
+                    model,
                     None,
                 ).unwrap().count();
-                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
-                common::write_qgraf_model(
-                    &qgraf_model,
-                    &model
-                ).unwrap();
-                let in_particles = vec![$(model.get_particle_by_name(stringify!($particle_in)).unwrap()),+];
-                let out_particles = vec![$(model.get_particle_by_name(stringify!($particle_out)).unwrap()),+];
-                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
-                common::write_qgraf_config(
-                    &qgraf_config,
-                    &qgraf_model.path().to_str().unwrap(),
-                    &in_particles.iter().map(
-                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
-                    ).collect_vec(),
-                    &out_particles.iter().map(
-                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
-                    ).collect_vec(),
-                    $n_loops,
-                    &vec![]
-                ).unwrap();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
                     assert_eq!(n_qgraf, n_diags);
@@ -77,39 +80,40 @@ macro_rules! test_diagrams {
         paste!{
             #[test]
             fn [< test_diag _ $ufo _ $name _loops_ $n_loops >]() {
-                let mut model = Model::from_ufo(
+                let mut model = Model::ufo(
                     &PathBuf::from(format!("../../tests/models/{}", stringify!($ufo)))
                 ).unwrap();
                 let _ = model.merge_vertices();
+
+                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
+                common::write_qgraf_model(
+                    &qgraf_model,
+                    &model
+                ).unwrap();
+                let in_particles = vec![$(model.particle_by_name($particle_in).unwrap()),+];
+                let out_particles = vec![$(model.particle_by_name($particle_out).unwrap()),+];
+                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
+                common::write_qgraf_config(
+                    &qgraf_config,
+                    &qgraf_model.path().to_str().unwrap(),
+                    &in_particles.iter().map(
+                        |p| if p.id() > 0 {format!("part{}", p.id())} else {format!("anti{}", p.id().abs())}
+                    ).collect_vec(),
+                    &out_particles.iter().map(
+                        |p| if p.id() > 0 {format!("part{}", p.id())} else {format!("anti{}", p.id().abs())}
+                    ).collect_vec(),
+                    $n_loops,
+                    &vec![]
+                ).unwrap();
                 let in_particles = vec![$($particle_in),+];
                 let out_particles = vec![$($particle_out),+];
                 let n_diags = DiagramGenerator::new(
                     &in_particles,
                     &out_particles,
                     $n_loops,
-                    model.clone(),
+                    model,
                     None,
                 ).unwrap().count();
-                let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
-                common::write_qgraf_model(
-                    &qgraf_model,
-                    &model
-                ).unwrap();
-                let in_particles = vec![$(model.get_particle_by_name($particle_in).unwrap()),+];
-                let out_particles = vec![$(model.get_particle_by_name($particle_out).unwrap()),+];
-                let qgraf_config = NamedTempFile::with_prefix("qgraf_config_").unwrap();
-                common::write_qgraf_config(
-                    &qgraf_config,
-                    &qgraf_model.path().to_str().unwrap(),
-                    &in_particles.iter().map(
-                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
-                    ).collect_vec(),
-                    &out_particles.iter().map(
-                        |p| if p.pdg() > 0 {format!("part{}", p.pdg())} else {format!("anti{}", p.pdg().abs())}
-                    ).collect_vec(),
-                    $n_loops,
-                    &vec![]
-                ).unwrap();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
                     assert_eq!(n_qgraf, n_diags);
@@ -156,18 +160,18 @@ test_diagrams!(QCD_UFO, u => u, 4);
 
 #[test]
 fn diags_QCD_4F_UFO_uubar_uubar_loops_0() {
-    let model = Model::from_ufo(&PathBuf::from("../../tests/models/QCD_4F_UFO")).unwrap();
+    let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_4F_UFO")).unwrap();
     let in_particles = ["u", "u~"];
     let out_particles = ["u", "u~"];
     let topos = TopologyGenerator::new(4, 0, TopologyModel::from(&model), None).generate();
-    let generator = DiagramGenerator::new(&in_particles, &out_particles, 0, model.clone(), None).unwrap();
+    let generator = DiagramGenerator::new(&in_particles, &out_particles, 0, model, None).unwrap();
     let diags = generator.assign_topology(&topos[0]).unwrap();
     assert_eq!(2, diags.len());
 }
 
 #[test]
 fn diags_SMEFT_epem_epem_loops_2() {
-    let model = Model::from_ufo(&PathBuf::from("../../tests/models/SMEFT")).unwrap();
+    let model = Model::ufo(&PathBuf::from("../../tests/models/SMEFT")).unwrap();
     let in_particles = ["e+", "e-"];
     let out_particles = ["e+", "e-"];
     let topos = TopologyGenerator::new(4, 2, TopologyModel::from(&model), None).generate();
@@ -178,21 +182,21 @@ fn diags_SMEFT_epem_epem_loops_2() {
 
 #[test]
 fn diags_SM_uu_uug_loops_1() {
-    let model = Model::default();
+    let model = Model::sm();
     let diag_gen = DiagramGenerator::new(&["u"; 2], &["u", "u", "g"], 1, model, None).unwrap();
     diag_gen.generate();
 }
 
 #[test]
 fn diags_SM_g_g_loops_0() {
-    let model = Model::default();
+    let model = Model::sm();
     let diag_gen = DiagramGenerator::new(&["g"], &["g"], 0, model, None).unwrap();
     assert_eq!(diag_gen.generate().len(), 1);
 }
 
 #[test]
 fn diags_QCD_gauge_vacuum_diagrams_loops_4() {
-    let model = Model::default();
+    let model = Model::sm();
     let mut s = DiagramSelector::new();
     s.select_coupling_power("QED", 0);
     s.add_topology_function(Arc::new(|topo| -> bool {
@@ -200,7 +204,12 @@ fn diags_QCD_gauge_vacuum_diagrams_loops_4() {
             .edges_iter()
             .any(|e| e.momenta.as_ref().unwrap().iter().all(|x| *x == 0))
     }));
-    s.add_custom_function(Arc::new(|d| !d.propagators().any(|p| p.particle().pdg().abs() <= 6)));
+    s.add_custom_function(Arc::new(|d| {
+        !d.propagators().any(|p| {
+            let p: &UFOParticle = p.particle();
+            p.id().abs() <= 6
+        })
+    }));
     let diag_gen = DiagramGenerator::new(&[], &[], 4, model, Some(s)).unwrap();
     let diags = diag_gen.generate();
     assert_eq!(diags.len(), 65);
@@ -208,7 +217,7 @@ fn diags_QCD_gauge_vacuum_diagrams_loops_4() {
 
 #[test]
 fn diags_SM_bg_hb_loops_1_sign() {
-    let model = Model::default();
+    let model = Model::sm();
     let mut s = DiagramSelector::new();
     s.select_on_shell();
     s.select_self_loops(0);
@@ -219,7 +228,7 @@ fn diags_SM_bg_hb_loops_1_sign() {
     let diag_gen = DiagramGenerator::new(&["b", "g"], &["H", "b"], 1, model, Some(s)).unwrap();
     let diags = diag_gen.generate();
     assert_eq!(diags.len(), 13);
-    for (i, d) in diags.iter().enumerate() {
+    for (i, d) in diags.views().enumerate() {
         if i == 5 || i == 6 {
             assert_eq!(d.sign(), -1);
         } else {
@@ -230,18 +239,8 @@ fn diags_SM_bg_hb_loops_1_sign() {
 
 #[test]
 fn diags_QCD_g_gg_loops_1_sign() {
-    let mut m = Model::empty();
-    m.add_particle(
-        "g",
-        "g",
-        3,
-        8,
-        21,
-        "g",
-        "g",
-        feyngraph::model::LineStyle::Curly,
-        feyngraph::model::Statistic::Bose,
-    );
+    let mut m = Model::from_base(UFOModel::empty());
+    m.add_particle("g", "g", 3, 8, 21, "g", "g", feyngraph::model::LineStyle::Curly, false);
     m.add_particle(
         "u",
         "u~",
@@ -251,7 +250,7 @@ fn diags_QCD_g_gg_loops_1_sign() {
         "u",
         "u~",
         feyngraph::model::LineStyle::Straight,
-        feyngraph::model::Statistic::Fermi,
+        true,
     );
     m.add_vertex(
         "uug",
@@ -263,7 +262,7 @@ fn diags_QCD_g_gg_loops_1_sign() {
     let diag_gen = DiagramGenerator::new(&["g"], &["g", "g"], 1, m, None).unwrap();
     let diags = diag_gen.generate();
     assert_eq!(diags.len(), 2);
-    for d in diags.iter() {
+    for d in diags.views() {
         assert_eq!(d.sign(), -1);
     }
 }

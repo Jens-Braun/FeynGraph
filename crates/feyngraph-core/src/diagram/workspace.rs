@@ -1,24 +1,24 @@
 use crate::diagram::components::{AssignPropagator, AssignVertex, VertexClassification};
 use crate::diagram::filter::DiagramSelector;
 use crate::diagram::{Diagram, DiagramContainer};
-use crate::model::Model;
 use crate::topology::Topology;
 use crate::util::HashMap;
 use crate::util::generate_permutations;
 use itertools::{FoldWhile, Itertools};
+use model::{Model, ModelBase, ParticleBase, VertexBase};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-pub(crate) struct AssignWorkspace<'a> {
+pub(crate) struct AssignWorkspace<'a, M: ModelBase> {
     pub(crate) topology: &'a Topology,
     // The workspace carries an Arc of the model, such that the model can be handed to a Python function (which is not
     // allowed to take an object with a Rust lifetime) in the custom filter functions
-    pub(crate) model: Arc<Model>,
+    pub(crate) model: Arc<Model<M>>,
     pub(crate) momentum_labels: Arc<Vec<String>>,
-    pub(crate) selector: &'a DiagramSelector,
+    pub(crate) selector: &'a DiagramSelector<M>,
     pub(crate) incoming_particles: &'a Vec<usize>,
     pub(crate) outgoing_particles: &'a Vec<usize>,
-    pub(crate) diagram_buffer: DiagramContainer,
+    pub(crate) diagram_buffer: DiagramContainer<M>,
     pub(crate) vertex_candidates: Vec<AssignVertex>,
     pub(crate) propagator_candidates: Vec<AssignPropagator>,
     pub(crate) vertex_classification: VertexClassification,
@@ -26,11 +26,11 @@ pub(crate) struct AssignWorkspace<'a> {
     pub(crate) count: Option<usize>,
 }
 
-impl<'a> AssignWorkspace<'a> {
+impl<'a, M: ModelBase> AssignWorkspace<'a, M> {
     pub(crate) fn new(
         topology: &'a Topology,
-        model: Arc<Model>,
-        selector: &'a DiagramSelector,
+        model: Arc<Model<M>>,
+        selector: &'a DiagramSelector<M>,
         incoming_particles: &'a Vec<usize>,
         outgoing_particles: &'a Vec<usize>,
     ) -> Self {
@@ -72,7 +72,7 @@ impl<'a> AssignWorkspace<'a> {
         };
     }
 
-    pub fn assign(&mut self) -> DiagramContainer {
+    pub fn assign(&mut self) -> DiagramContainer<M> {
         let n_in = self.incoming_particles.len();
         let n_out = self.outgoing_particles.len();
         for i in 0..n_in {
@@ -105,7 +105,7 @@ impl<'a> AssignWorkspace<'a> {
             let connected_particles = self.get_connected_particles(index);
             let mut candidates = self
                 .model
-                .vertices_iter()
+                .vertices()
                 .enumerate()
                 .filter_map(|(i, interaction)| {
                     if interaction.degree() == self.vertex_candidates[index].degree {
@@ -121,9 +121,7 @@ impl<'a> AssignWorkspace<'a> {
                         .iter()
                         .counts()
                         .into_iter()
-                        .all(|(particle_index, count)| {
-                            count <= self.model.vertex(*candidate).particle_count(particle_index)
-                        })
+                        .all(|(particle_index, count)| count <= self.model.particle_count(*candidate, *particle_index))
                 })
             }
             if candidates.is_empty() {
@@ -302,17 +300,17 @@ impl<'a> AssignWorkspace<'a> {
             {
                 continue;
             }
-            for candidate_particle_str in self.model.vertex(*interaction_candidate).particles_iter() {
-                let mut particle_index = self.model.get_particle_index(candidate_particle_str).unwrap();
+            for candidate_particle_str in self.model.vertex(*interaction_candidate).particles() {
+                let mut particle_index = self.model.particle_index_by_name(candidate_particle_str).unwrap();
                 // If self-loop, only consider particles, not anti-particles (the anti-particles assigned here are
                 // always inverted at the end of this function)
-                if vertex == connected_vertex && !self.model.get_particle(particle_index).is_anti() {
-                    particle_index = self.model.get_anti_index(particle_index)
+                if vertex == connected_vertex && !self.model.particle(particle_index).is_anti() {
+                    particle_index = self.model.anti_particle_index(particle_index)
                 }
                 if !particles.contains(&particle_index)
                     // Check for remaining open connections of `particle`
                     && (connected_particles.iter().filter(|i| **i == particle_index).count()
-                        < self.model.vertex(*interaction_candidate).particle_count(&particle_index))
+                        < self.model.particle_count(*interaction_candidate, particle_index))
                     // Check if this assignment violates ordering of the edges into the connected class
                     && self.check_propagator_ordering(vertex, leg, particle_index)
                 {
@@ -324,7 +322,7 @@ impl<'a> AssignWorkspace<'a> {
         if edge.connected_nodes[0] == vertex {
             particles = particles
                 .into_iter()
-                .map(|p| self.model.get_anti_index(p))
+                .map(|p| self.model.anti_particle_index(p))
                 .collect_vec();
         }
         return particles;
@@ -340,7 +338,7 @@ impl<'a> AssignWorkspace<'a> {
         let w = self.topology.edges[edge].connected_nodes[1];
         let ref_leg = self.vertex_candidates[v].edges.iter().position(|e| *e == edge).unwrap();
         let p = if self.topology.edges[edge].connected_nodes[0] == vertex {
-            self.model.get_anti_index(particle)
+            self.model.anti_particle_index(particle)
         } else {
             particle
         };
@@ -375,15 +373,21 @@ impl<'a> AssignWorkspace<'a> {
             {
                 return false;
             }
-            let mut counts = self.model.vertex(*candidate).particle_counts().clone();
-            for particle in connected_particles.iter() {
-                if let Some(c) = counts.get_mut(particle)
-                    && *c > 0
-                {
-                    *c -= 1;
-                } else {
-                    return false;
+            let mut counts = self.model.particle_counts(*candidate).to_owned();
+            'outer: for particle in connected_particles.iter() {
+                for (p, c) in counts.iter_mut() {
+                    if *p == *particle {
+                        if *c == 0 {
+                            return false;
+                        } else {
+                            *c -= 1;
+                            continue 'outer;
+                        }
+                    }
                 }
+                // Made it through all particles of the candidate vertex without finding the already connected one
+                // -> eliminate this candidate
+                return false;
             }
             return true;
         });
@@ -426,7 +430,7 @@ impl<'a> AssignWorkspace<'a> {
                 if vertex == self.topology.get_edge(*edge).connected_nodes[0] {
                     particles.push(
                         self.model
-                            .get_anti_index(self.propagator_candidates[*edge].particle.unwrap()),
+                            .anti_particle_index(self.propagator_candidates[*edge].particle.unwrap()),
                     );
                     // Self-loop -> the respective antiparticle is also connected to the vertex
                     if vertex == self.topology.get_edge(*edge).connected_nodes[1] {
@@ -438,7 +442,7 @@ impl<'a> AssignWorkspace<'a> {
                     if vertex == self.topology.get_edge(*edge).connected_nodes[0] {
                         particles.push(
                             self.model
-                                .get_anti_index(self.propagator_candidates[*edge].particle.unwrap()),
+                                .anti_particle_index(self.propagator_candidates[*edge].particle.unwrap()),
                         );
                     }
                 }
@@ -507,7 +511,7 @@ impl<'a> AssignWorkspace<'a> {
                         .map(|edge| {
                             if invert {
                                 self.model
-                                    .get_anti_index(self.propagator_candidates[*edge].particle.unwrap())
+                                    .anti_particle_index(self.propagator_candidates[*edge].particle.unwrap())
                             } else {
                                 self.propagator_candidates[*edge].particle.unwrap()
                             }
@@ -564,9 +568,9 @@ impl<'a> AssignWorkspace<'a> {
 mod tests {
     use crate::diagram::filter::DiagramSelector;
     use crate::diagram::workspace::AssignWorkspace;
-    use crate::model::{Model, TopologyModel};
     use crate::topology::filter::TopologySelector;
     use crate::topology::{Edge, Node, Topology, TopologyGenerator, components::NodeClassification};
+    use model::{Model, ModelBase, TopologyModel};
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -574,8 +578,8 @@ mod tests {
 
     #[test]
     fn assign_qcd_gluon_4point_tree_test() {
-        let model = Model::from_ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
-        let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
+        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let incoming = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
             n_external: 4,
@@ -640,7 +644,7 @@ mod tests {
                 ],
             },
         };
-        let selector = DiagramSelector::default();
+        let selector = DiagramSelector::new();
         let mut workspace = AssignWorkspace::new(&topology, Arc::new(model), &selector, &incoming, &outgoing);
         let container = workspace.assign();
         assert_eq!(container.len(), 1);
@@ -648,8 +652,8 @@ mod tests {
 
     #[test]
     fn assign_qcd_gluon_s_channel_tree_test() {
-        let model = Model::from_ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
-        let incoming = vec![model.get_particle_index("G").unwrap().clone(); 2];
+        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let incoming = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
             n_external: 4,
@@ -723,7 +727,7 @@ mod tests {
                 ],
             },
         };
-        let selector = DiagramSelector::default();
+        let selector = DiagramSelector::new();
         let mut workspace = AssignWorkspace::new(&topology, Arc::new(model), &selector, &incoming, &outgoing);
         let container = workspace.assign();
         assert_eq!(container.len(), 1);
@@ -735,12 +739,24 @@ mod tests {
         topo_selector.select_opi_components(1);
         let topos = TopologyGenerator::new(2, 4, TopologyModel::from(vec![3, 4]), Some(topo_selector)).generate();
         let topo = topos[1004].clone();
-        let model = Model::from_ufo(&PathBuf::from("../../tests/models/QCD_U_UFO")).unwrap();
-        let selector = DiagramSelector::default();
-        let particles_in = vec![model.get_particle_index("G").unwrap().clone()];
-        let particle_out = vec![model.get_particle_index("G").unwrap().clone()];
+        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_U_UFO")).unwrap();
+        let selector = DiagramSelector::new();
+        let particles_in = vec![model.particle_index_by_name("G").unwrap().clone()];
+        let particle_out = vec![model.particle_index_by_name("G").unwrap().clone()];
         let mut workspace = AssignWorkspace::new(&topo, Arc::new(model), &selector, &particles_in, &particle_out);
         let diagrams = workspace.assign();
         assert_eq!(diagrams.len(), 13);
+    }
+
+    #[test]
+    fn workspace_gg_gg_1loop() {
+        let topos = TopologyGenerator::new(4, 1, TopologyModel::from(vec![3, 4]), None).generate();
+        let model = Model::ufo(&PathBuf::from("/home/jens/KIT/FeynGraph/tests/models/QCD_UFO")).unwrap();
+        let selector = DiagramSelector::new();
+        let particles_in = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
+        let particle_out = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
+        let mut workspace = AssignWorkspace::new(&topos[9], Arc::new(model), &selector, &particles_in, &particle_out);
+        let diagrams = workspace.assign();
+        assert_eq!(diagrams.len(), 1);
     }
 }

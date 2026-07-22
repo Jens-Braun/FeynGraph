@@ -24,9 +24,13 @@ pub mod diagram {
 
 pub mod model {
     //! A physical model used for diagram generation and drawing.
-    pub use feyngraph_core::model::{
-        InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic, TopologyModel,
+    pub use feyngraph_model::{
+        LineStyle, Model, ModelBase, ModelError, ParticleBase, ParticleColor, ParticleDraw, VertexBase,
     };
+
+    pub mod ufo {
+        pub use feyngraph_model::{UFOModel, UFOParticle, UFOVertex};
+    }
 }
 
 pub mod topology {
@@ -35,9 +39,8 @@ pub mod topology {
     //! The central object of this module is the [`TopologyGenerator`], which handles the generation
     //! of the topologies given a [`TopologyModel`] and optionally a [`TopologySelector`]
     //! restricting which topologies are generated.
-    pub use feyngraph_core::topology::{
-        Edge, Node, Topology, TopologyContainer, TopologyGenerator, TopologyModel, TopologySelector,
-    };
+    pub use feyngraph_core::topology::{Edge, Node, Topology, TopologyContainer, TopologyGenerator, TopologySelector};
+    pub use feyngraph_model::TopologyModel;
 }
 
 #[cfg(feature = "drawing")]

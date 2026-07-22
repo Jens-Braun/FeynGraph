@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use itertools::Itertools;
+use model::ModelBase;
 use std::ops::Deref;
 
 use feyngraph_core::{
@@ -117,12 +118,12 @@ impl<'a> From<&'a Topology> for TopologyLayout<'a> {
     }
 }
 
-pub(crate) struct DiagramLayout<'a> {
-    diag: &'a Diagram,
+pub(crate) struct DiagramLayout<'a, M> {
+    diag: &'a Diagram<M>,
     distances: Option<Vec<Vec<usize>>>,
 }
 
-impl DiagramLayout<'_> {
+impl<M: ModelBase> DiagramLayout<'_, M> {
     fn bfs(&self, start: isize) -> Vec<usize> {
         let dim = self.diag.n_ext() + self.diag.vertices.len();
         let n_ext = self.diag.n_ext();
@@ -196,7 +197,7 @@ impl DiagramLayout<'_> {
     }
 }
 
-impl Layout for DiagramLayout<'_> {
+impl<M: ModelBase> Layout for DiagramLayout<'_, M> {
     fn distance_matrix(&mut self) -> Matrix {
         if self.distances.is_none() {
             self.calculate_distances();
@@ -254,8 +255,8 @@ impl Layout for DiagramLayout<'_> {
     }
 }
 
-impl<'a> From<&'a DiagramView<'a>> for DiagramLayout<'a> {
-    fn from(view: &'a DiagramView) -> Self {
+impl<'a, M: ModelBase> From<&'a DiagramView<'a, M>> for DiagramLayout<'a, M> {
+    fn from(view: &'a DiagramView<M>) -> Self {
         return Self {
             diag: view.diagram(),
             distances: None,
@@ -517,14 +518,16 @@ fn linear_solve(A: &Matrix, b: &Vector, x0: Option<Vector>, eps: Option<f64>) ->
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use super::*;
     use crate::math::{Matrix, Vec2D};
     use approx::assert_relative_eq;
     use feyngraph_core::{
         diagram::{Leg, Propagator, Vertex},
-        model::TopologyModel,
         topology::TopologyGenerator,
     };
+    use model::{TopologyModel, UFOModel};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -731,6 +734,7 @@ mod tests {
             propagator_symmetry: 0,
             bridges: vec![],
             sign: 1,
+            model: PhantomData::<UFOModel>,
         };
         let mut layout = DiagramLayout {
             diag: &diag,

@@ -1,8 +1,5 @@
 #![allow(dead_code, non_snake_case)]
-use feyngraph::{
-    model::TopologyModel,
-    topology::{TopologyGenerator, TopologySelector},
-};
+use feyngraph::topology::{TopologyGenerator, TopologyModel, TopologySelector};
 use paste::paste;
 use pretty_assertions::assert_eq;
 use tempfile::NamedTempFile;

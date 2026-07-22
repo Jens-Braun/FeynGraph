@@ -1,10 +1,10 @@
 use crate::diagram::Diagram;
 use crate::diagram::view::DiagramView;
-use crate::model::Model;
 use crate::topology::Topology;
 use crate::topology::filter::TopologySelector;
 use crate::util::HashMap;
 use itertools::Itertools;
+use model::{Model, ModelBase, ParticleBase, VertexBase};
 use std::fmt::Formatter;
 use std::sync::Arc;
 
@@ -15,13 +15,16 @@ use std::sync::Arc;
 /// # Examples
 /// ```rust
 /// # use feyngraph_core::DiagramSelector;
-/// let mut s = DiagramSelector::new();
+/// # use model::UFOModel;
+/// // The `UFOModel` type annotation is inferred automatically when the selector is used and can therefore
+/// // be removed in almost all cases
+/// let mut s = DiagramSelector::<UFOModel>::new();
 /// s.select_on_shell();
 /// s.select_self_loops(0);
 /// s.select_coupling_power("NP", 1);
 /// ```
 #[derive(Clone)]
-pub struct DiagramSelector {
+pub struct DiagramSelector<M> {
     /// Only keep diagrams with the specified number of one-particle-irreducible components
     pub(crate) opi_components: Vec<usize>,
     /// Only keep diagrams with the specified number of self-loops
@@ -40,19 +43,19 @@ pub struct DiagramSelector {
     pub(crate) vertex_degree_counts: Vec<(usize, Vec<usize>)>,
     /// Only keep diagrams for which the given custom function returns `true`
     #[allow(clippy::type_complexity)]
-    pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>>,
+    pub(crate) custom_functions: Vec<Arc<dyn Fn(Arc<Model<M>>, Arc<Vec<String>>, &Diagram<M>) -> bool + Sync + Send>>,
     /// Same as [custom_functions], but used when the [DiagramSelector] is cast to a [TopologySelector]
     #[allow(clippy::type_complexity)]
     pub(crate) topology_functions: Vec<Arc<dyn Fn(&Topology) -> bool + Sync + Send>>,
 }
 
-impl Default for DiagramSelector {
+impl<M: ModelBase> Default for DiagramSelector<M> {
     fn default() -> Self {
-        return Self::new();
+        Self::new()
     }
 }
 
-impl DiagramSelector {
+impl<M: ModelBase> DiagramSelector<M> {
     pub fn new() -> Self {
         return Self {
             opi_components: Vec::new(),
@@ -67,6 +70,36 @@ impl DiagramSelector {
             topology_functions: Vec::new(),
         };
     }
+
+    // pub fn ufo() -> Self<UFOModel> {
+    //     return Self {
+    //         opi_components: Vec::new(),
+    //         self_loops: Vec::new(),
+    //         tadpoles: Vec::new(),
+    //         on_shell: false,
+    //         coupling_powers: HashMap::default(),
+    //         propagator_counts: HashMap::default(),
+    //         vertex_counts: HashMap::default(),
+    //         vertex_degree_counts: Vec::new(),
+    //         custom_functions: Vec::new(),
+    //         topology_functions: Vec::new(),
+    //     };
+    // }
+
+    // pub fn qgraf() -> Self<QGRAFModel> {
+    //     return Self {
+    //         opi_components: Vec::new(),
+    //         self_loops: Vec::new(),
+    //         tadpoles: Vec::new(),
+    //         on_shell: false,
+    //         coupling_powers: HashMap::default(),
+    //         propagator_counts: HashMap::default(),
+    //         vertex_counts: HashMap::default(),
+    //         vertex_degree_counts: Vec::new(),
+    //         custom_functions: Vec::new(),
+    //         topology_functions: Vec::new(),
+    //     };
+    // }
 
     /// Add a criterion to keep only diagrams with `count` one-particle-irreducible components.
     pub fn select_opi_components(&mut self, count: usize) {
@@ -154,9 +187,12 @@ impl DiagramSelector {
     }
 
     /// Add a criterion to keep only diagrams for which the given function returns `true`.
-    pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&DiagramView) -> bool + Sync + Send>) {
+    pub fn add_custom_function(&mut self, function: Arc<dyn Fn(&DiagramView<M>) -> bool + Sync + Send>)
+    where
+        M: 'static,
+    {
         self.custom_functions.push(Arc::new(
-            move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
+            move |model: Arc<Model<M>>, momentum_labels: Arc<Vec<String>>, diag: &Diagram<M>| -> bool {
                 function(&DiagramView {
                     model: model.as_ref(),
                     momentum_labels: momentum_labels.as_ref(),
@@ -171,7 +207,7 @@ impl DiagramSelector {
     #[allow(clippy::type_complexity)]
     pub(crate) fn add_unwrapped_custom_function(
         &mut self,
-        function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>,
+        function: Arc<dyn Fn(Arc<Model<M>>, Arc<Vec<String>>, &Diagram<M>) -> bool + Sync + Send>,
     ) {
         self.custom_functions.push(function);
     }
@@ -181,12 +217,12 @@ impl DiagramSelector {
     #[allow(clippy::type_complexity)]
     pub fn add_unwrapped_custom_function(
         &mut self,
-        function: Arc<dyn Fn(Arc<Model>, Arc<Vec<String>>, &Diagram) -> bool + Sync + Send>,
+        function: Arc<dyn Fn(Arc<Model<M>>, Arc<Vec<String>>, &Diagram<M>) -> bool + Sync + Send>,
     ) {
         self.custom_functions.push(function);
     }
 
-    pub(crate) fn select(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
+    pub(crate) fn select(&self, model: Arc<Model<M>>, momentum_labels: Arc<Vec<String>>, diag: &Diagram<M>) -> bool {
         let view = DiagramView {
             model: model.as_ref(),
             momentum_labels: momentum_labels.as_ref(),
@@ -199,7 +235,7 @@ impl DiagramSelector {
             && self.query_vertex_counts(&view);
     }
 
-    fn query_opi_components(&self, diag: &Diagram) -> bool {
+    fn query_opi_components(&self, diag: &Diagram<M>) -> bool {
         if self.opi_components.is_empty() {
             return true;
         }
@@ -209,7 +245,12 @@ impl DiagramSelector {
             .any(|opi_count| *opi_count == diag.count_opi_components());
     }
 
-    fn query_custom_criteria(&self, model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram) -> bool {
+    fn query_custom_criteria(
+        &self,
+        model: Arc<Model<M>>,
+        momentum_labels: Arc<Vec<String>>,
+        diag: &Diagram<M>,
+    ) -> bool {
         if self.custom_functions.is_empty() {
             return true;
         }
@@ -219,21 +260,21 @@ impl DiagramSelector {
             .all(|f| f(model.clone(), momentum_labels.clone(), diag));
     }
 
-    fn query_coupling_powers(&self, view: &DiagramView) -> bool {
+    fn query_coupling_powers(&self, view: &DiagramView<M>) -> bool {
         if self.coupling_powers.is_empty() {
             return true;
         }
         return self.coupling_powers.iter().all(|(coupling, powers)| {
             powers.iter().any(|power| {
                 view.vertices()
-                    .map(|v| *v.interaction().coupling_orders.get(coupling).unwrap_or(&0))
+                    .map(|v| *v.interaction().coupling_orders().get(coupling).unwrap_or(&0))
                     .sum::<usize>()
                     == *power
             })
         });
     }
 
-    fn query_propagator_counts(&self, view: &DiagramView) -> bool {
+    fn query_propagator_counts(&self, view: &DiagramView<M>) -> bool {
         if self.propagator_counts.is_empty() {
             return true;
         }
@@ -247,7 +288,7 @@ impl DiagramSelector {
         });
     }
 
-    fn query_vertex_counts(&self, view: &DiagramView) -> bool {
+    fn query_vertex_counts(&self, view: &DiagramView<M>) -> bool {
         if self.vertex_counts.is_empty() {
             return true;
         }
@@ -284,7 +325,7 @@ impl DiagramSelector {
     }
 }
 
-impl std::fmt::Debug for DiagramSelector {
+impl<M> std::fmt::Debug for DiagramSelector<M> {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
         return fmt
             .debug_struct("DiagramSelector")

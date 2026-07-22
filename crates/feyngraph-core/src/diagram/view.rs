@@ -2,26 +2,26 @@
 
 use crate::{
     diagram::{Diagram, Leg, Propagator, Vertex},
-    model::{InteractionVertex, Model, Particle},
     util::HashMap,
 };
 use either::Either;
 use either::for_both;
 use itertools::Itertools;
+use model::{Model, ModelBase, ParticleBase, ParticleColor, VertexBase};
 use std::borrow::Borrow;
 use std::fmt::Write;
 use std::hash::Hash;
 
 /// Public interface object of a [`Diagram`].
-pub struct DiagramView<'a> {
-    pub(crate) model: &'a Model,
-    pub(crate) diagram: &'a Diagram,
+pub struct DiagramView<'a, M> {
+    pub(crate) model: &'a Model<M>,
+    pub(crate) diagram: &'a Diagram<M>,
     pub(crate) momentum_labels: &'a Vec<String>,
 }
 
 #[cfg(feature = "_internal_api")]
-impl<'a> DiagramView<'a> {
-    pub fn new(model: &'a Model, diagram: &'a Diagram, momentum_labels: &'a Vec<String>) -> Self {
+impl<'a, M: ModelBase> DiagramView<'a, M> {
+    pub fn new(model: &'a Model<M>, diagram: &'a Diagram<M>, momentum_labels: &'a Vec<String>) -> Self {
         return Self {
             model,
             diagram,
@@ -29,14 +29,14 @@ impl<'a> DiagramView<'a> {
         };
     }
 
-    pub fn diagram(&self) -> &Diagram {
+    pub fn diagram(&self) -> &Diagram<M> {
         return self.diagram;
     }
 }
 
-impl<'a> DiagramView<'a> {
+impl<'a, M: ModelBase> DiagramView<'a, M> {
     #[cfg(not(feature = "_internal_api"))]
-    pub(crate) fn new(model: &'a Model, diagram: &'a Diagram, momentum_labels: &'a Vec<String>) -> Self {
+    pub(crate) fn new(model: &'a Model<M>, diagram: &'a Diagram<M>, momentum_labels: &'a Vec<String>) -> Self {
         return Self {
             model,
             diagram,
@@ -45,7 +45,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the incoming legs.
-    pub fn incoming(&self) -> impl Iterator<Item = LegView<'_>> {
+    pub fn incoming(&self) -> impl Iterator<Item = LegView<'_, M>> {
         return self.diagram.incoming_legs.iter().enumerate().map(|(i, p)| LegView {
             model: self.model,
             diagram: self,
@@ -57,7 +57,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the outgoing legs.
-    pub fn outgoing(&self) -> impl Iterator<Item = LegView<'_>> {
+    pub fn outgoing(&self) -> impl Iterator<Item = LegView<'_, M>> {
         return self.diagram.outgoing_legs.iter().enumerate().map(|(i, p)| LegView {
             model: self.model,
             diagram: self,
@@ -69,12 +69,12 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the incoming and outgoing legs.
-    pub fn legs(&self) -> impl Iterator<Item = LegView<'_>> {
+    pub fn legs(&self) -> impl Iterator<Item = LegView<'_, M>> {
         return self.incoming().chain(self.outgoing());
     }
 
     /// Get an iterator over the internal propagators.
-    pub fn propagators(&self) -> impl Iterator<Item = PropagatorView<'_>> {
+    pub fn propagators(&self) -> impl Iterator<Item = PropagatorView<'_, M>> {
         return self
             .diagram
             .propagators
@@ -90,7 +90,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get the `index`-th internal propagator.
-    pub fn propagator(&self, index: usize) -> PropagatorView<'_> {
+    pub fn propagator(&self, index: usize) -> PropagatorView<'_, M> {
         return PropagatorView {
             model: self.model,
             diagram: self,
@@ -101,7 +101,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get the `index`-th internal vertex.
-    pub fn vertex(&self, index: usize) -> VertexView<'_> {
+    pub fn vertex(&self, index: usize) -> VertexView<'_, M> {
         return VertexView {
             model: self.model,
             diagram: self,
@@ -111,7 +111,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the internal vertices.
-    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_>> {
+    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_, M>> {
         return self.diagram.vertices.iter().enumerate().map(|(i, v)| VertexView {
             model: self.model,
             diagram: self,
@@ -121,7 +121,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the vertices belonging to the `index`-th loop.
-    pub fn loop_vertices(&self, index: usize) -> impl Iterator<Item = VertexView<'_>> {
+    pub fn loop_vertices(&self, index: usize) -> impl Iterator<Item = VertexView<'_, M>> {
         let loop_index = self.n_ext() + index;
         return self.diagram.vertices.iter().enumerate().filter_map(move |(i, v)| {
             if v.propagators
@@ -141,7 +141,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the propagators belonging to the `index`-th loop.
-    pub fn chord(&self, index: usize) -> impl Iterator<Item = PropagatorView<'_>> {
+    pub fn chord(&self, index: usize) -> impl Iterator<Item = PropagatorView<'_, M>> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -169,7 +169,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Get an iterator over the bridge propagators of the diagram.
-    pub fn bridges(&self) -> impl Iterator<Item = PropagatorView<'_>> {
+    pub fn bridges(&self) -> impl Iterator<Item = PropagatorView<'_, M>> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i));
     }
 
@@ -181,11 +181,6 @@ impl<'a> DiagramView<'a> {
     /// Get the diagram's symmetry factor.
     pub fn symmetry_factor(&self) -> usize {
         return self.diagram.vertex_symmetry * self.diagram.propagator_symmetry;
-    }
-
-    /// Get the diagram's relative sign.
-    pub fn sign(&self) -> i8 {
-        return self.diagram.sign;
     }
 
     /// Get the diagram's order in the given coupling.
@@ -201,7 +196,7 @@ impl<'a> DiagramView<'a> {
     pub fn orders(&self) -> HashMap<String, usize> {
         let mut result = HashMap::default();
         for v in self.vertices() {
-            for (coupling, power) in v.interaction().coupling_orders.iter() {
+            for (coupling, power) in v.interaction().coupling_orders().iter() {
                 if result.contains_key(coupling) {
                     *result.get_mut(coupling).unwrap() += power;
                 } else {
@@ -213,7 +208,7 @@ impl<'a> DiagramView<'a> {
     }
 
     /// Count the number of propagators in the diagram for which the particle name is in `particles`.
-    pub fn count_particles(&self, particles: &[impl PartialEq<String>]) -> usize {
+    pub fn count_particles(&self, particles: &[impl PartialEq<str>]) -> usize {
         return self
             .propagators()
             .filter(|p| particles.iter().any(|ref_part| ref_part == p.particle().name()))
@@ -224,40 +219,53 @@ impl<'a> DiagramView<'a> {
     /// a wildcard, matching every particle.
     pub fn count_vertices<'q, S>(&'q self, particles: &'q [S]) -> usize
     where
-        S: PartialEq<String> + Ord,
+        S: PartialEq<str> + Ord,
     {
         return self.vertices().filter(|v| v.match_particles(particles.iter())).count();
     }
 
-    /// Check whether loop `index` is a color tadpole, i.e. only a single colored propagator is attached to this loop.
-    pub fn color_tadpole(&self, index: usize) -> bool {
-        let momentum_index = self.n_ext() + index;
-        return self
-            .loop_vertices(index)
-            .map(|v| {
-                v.propagators()
-                    .filter(|p| {
-                        for_both!(p, p => p.momentum()[momentum_index]) == 0 // Only propagators not part of loop `index`
-                            && for_both!(p, p => p.particle().color()).abs() > 1 // Non-trivial color representation
-                    })
-                    .count()
-            })
-            .sum::<usize>()
-            == 1;
+    #[cfg(any(feature = "check_momenta", test, debug_assertions))]
+    pub(crate) fn check_momenta(&self) {
+        if self.diagram.vertices.is_empty() {
+            return;
+        }
+        let n_momenta = for_both!(self.vertex(0).propagators().next().unwrap(), p => p.momentum().len());
+        for v in self.vertices() {
+            let p_tot = v
+                .propagators()
+                .map(|p| for_both!(p, p => p.momentum()))
+                .fold(vec![0; n_momenta], |acc, p| {
+                    acc.iter().zip(p.iter()).map(|(x, y)| *x + *y).collect()
+                });
+            assert!(
+                p_tot.iter().all(|x| *x == 0)
+                    || (p_tot.iter().take(self.diagram.incoming_legs.len()).all(|x| *x == 1)
+                        && p_tot
+                            .iter()
+                            .skip(self.diagram.incoming_legs.len())
+                            .take(self.diagram.outgoing_legs.len())
+                            .all(|x| *x == -1))
+            );
+        }
+    }
+
+    /// Get the diagram's relative sign.
+    pub fn sign(&self) -> i8 {
+        return self.diagram.sign;
     }
 
     fn trace_fermi_line(
         &self,
-        vertex: VertexView,
+        vertex: VertexView<M>,
         ray: usize,
         visited_props: &mut [bool],
         visited_legs: &mut [bool],
     ) -> usize {
         let initial_vertex = vertex.index;
-        let mut to_visit: Vec<VertexView> = vec![vertex];
+        let mut to_visit: Vec<VertexView<M>> = vec![vertex];
         let mut in_ray = ray;
         while let Some(current) = to_visit.pop() {
-            let out_ray = current.interaction().spin_map[in_ray] as usize;
+            let out_ray = current.interaction().fermi_map(in_ray);
             let out_prop = current.propagators_ordered().nth(out_ray).unwrap();
             match out_prop {
                 Either::Left(leg) => {
@@ -333,34 +341,31 @@ impl<'a> DiagramView<'a> {
         }
         return if (n_ext_swap + fermi_loops) % 2 == 0 { 1 } else { -1 };
     }
+}
 
-    #[cfg(any(feature = "check_momenta", test, debug_assertions))]
-    pub(crate) fn check_momenta(&self) {
-        if self.diagram.vertices.is_empty() {
-            return;
-        }
-        let n_momenta = for_both!(self.vertex(0).propagators().next().unwrap(), p => p.momentum().len());
-        for v in self.vertices() {
-            let p_tot = v
-                .propagators()
-                .map(|p| for_both!(p, p => p.momentum()))
-                .fold(vec![0; n_momenta], |acc, p| {
-                    acc.iter().zip(p.iter()).map(|(x, y)| *x + *y).collect()
-                });
-            assert!(
-                p_tot.iter().all(|x| *x == 0)
-                    || (p_tot.iter().take(self.diagram.incoming_legs.len()).all(|x| *x == 1)
-                        && p_tot
-                            .iter()
-                            .skip(self.diagram.incoming_legs.len())
-                            .take(self.diagram.outgoing_legs.len())
-                            .all(|x| *x == -1))
-            );
-        }
+impl<M: ModelBase> DiagramView<'_, M>
+where
+    M::Particle: ParticleColor,
+{
+    /// Check whether loop `index` is a color tadpole, i.e. only a single colored propagator is attached to this loop.
+    pub fn color_tadpole(&self, index: usize) -> bool {
+        let momentum_index = self.n_ext() + index;
+        return self
+            .loop_vertices(index)
+            .map(|v| {
+                v.propagators()
+                    .filter(|p| {
+                        for_both!(p, p => p.momentum()[momentum_index]) == 0 // Only propagators not part of loop `index`
+                            && for_both!(p, p => p.particle().color()).abs() > 1 // Non-trivial color representation
+                    })
+                    .count()
+            })
+            .sum::<usize>()
+            == 1;
     }
 }
 
-impl std::fmt::Display for DiagramView<'_> {
+impl<M: ModelBase> std::fmt::Display for DiagramView<'_, M> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         writeln!(f, "Diagram {{")?;
         write!(f, "    Process: ")?;
@@ -395,24 +400,39 @@ impl std::fmt::Display for DiagramView<'_> {
             "    SymmetryFactor: 1/{}",
             self.diagram.vertex_symmetry * self.diagram.propagator_symmetry
         )?;
-        writeln!(f, "    Sign: {}", if self.diagram.sign == 1 { "+" } else { "-" })?;
+        writeln!(
+            f,
+            "    Sign: {}",
+            match self.diagram.sign {
+                1 => "+",
+                -1 => "-",
+                _ => "0",
+            }
+        )?;
         writeln!(f, "}}")?;
         Ok(())
     }
 }
 
 /// Public interface of an external [`Leg`].
-#[derive(Clone)]
-pub struct LegView<'a> {
-    pub(crate) model: &'a Model,
-    pub(crate) diagram: &'a DiagramView<'a>,
+pub struct LegView<'a, M> {
+    pub(crate) model: &'a Model<M>,
+    pub(crate) diagram: &'a DiagramView<'a, M>,
     pub(crate) leg: &'a Leg,
     pub(crate) leg_index: usize,
     pub(crate) invert_particle: bool,
     pub(crate) invert_momentum: bool,
 }
 
-impl LegView<'_> {
+impl<M> Copy for LegView<'_, M> {}
+
+impl<M> Clone for LegView<'_, M> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<M: ModelBase> LegView<'_, M> {
     #[cfg(feature = "_internal_api")]
     pub fn leg(&self) -> &Leg {
         return self.leg;
@@ -424,16 +444,16 @@ impl LegView<'_> {
     }
 
     /// Get the vertex the leg is attached to.
-    pub fn vertex(&self) -> VertexView<'_> {
+    pub fn vertex(&self) -> VertexView<'_, M> {
         return self.diagram.vertex(self.leg.vertex);
     }
 
     /// Get the particle assigned to the leg
-    pub fn particle(&self) -> &Particle {
+    pub fn particle(&self) -> &M::Particle {
         return if self.invert_particle {
-            self.model.get_anti(self.leg.particle)
+            self.model.anti_particle(self.leg.particle)
         } else {
-            self.model.get_particle(self.leg.particle)
+            self.model.particle(self.leg.particle)
         };
     }
 
@@ -495,7 +515,7 @@ impl LegView<'_> {
     }
 }
 
-impl std::fmt::Display for LegView<'_> {
+impl<M: ModelBase> std::fmt::Display for LegView<'_, M> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.leg_index >= self.diagram.diagram.incoming_legs.len() {
             write!(
@@ -519,23 +539,30 @@ impl std::fmt::Display for LegView<'_> {
 }
 
 /// Public interface of an internal [`Propagator`].
-#[derive(Clone)]
-pub struct PropagatorView<'a> {
-    pub(crate) model: &'a Model,
-    pub(crate) diagram: &'a DiagramView<'a>,
+pub struct PropagatorView<'a, M> {
+    pub(crate) model: &'a Model<M>,
+    pub(crate) diagram: &'a DiagramView<'a, M>,
     pub(crate) propagator: &'a Propagator,
     pub(crate) index: usize,
     pub(crate) invert: bool,
 }
 
-impl PropagatorView<'_> {
+impl<M> Copy for PropagatorView<'_, M> {}
+
+impl<M> Clone for PropagatorView<'_, M> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<M: ModelBase> PropagatorView<'_, M> {
     #[cfg(feature = "_internal_api")]
     pub fn propagator(&self) -> &Propagator {
         return self.propagator;
     }
 
     /// Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle.
-    pub fn normalize(&self) -> PropagatorView<'_> {
+    pub fn normalize(&self) -> PropagatorView<'_, M> {
         return if self.particle().is_anti() {
             Self {
                 model: self.model,
@@ -550,7 +577,7 @@ impl PropagatorView<'_> {
     }
 
     /// Get an inverted version of the propagator.
-    pub fn invert(&self) -> PropagatorView<'_> {
+    pub fn invert(&self) -> PropagatorView<'_, M> {
         Self {
             model: self.model,
             diagram: self.diagram,
@@ -561,7 +588,7 @@ impl PropagatorView<'_> {
     }
 
     /// Get an iterator over the vertices connected by the propagator.
-    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_>> {
+    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_, M>> {
         return if self.invert {
             [
                 self.diagram.vertex(self.propagator.vertices[1]),
@@ -578,17 +605,17 @@ impl PropagatorView<'_> {
     }
 
     /// Get the `index`-th vertex connected to the propagator.
-    pub fn vertex(&self, index: usize) -> VertexView<'_> {
+    pub fn vertex(&self, index: usize) -> VertexView<'_, M> {
         let i = if self.invert { 1 - index } else { index };
         return self.diagram.vertex(self.propagator.vertices[i]);
     }
 
     /// Get the particle assigned to the propagator.
-    pub fn particle(&self) -> &Particle {
+    pub fn particle(&self) -> &M::Particle {
         return if self.invert {
-            self.model.get_anti(self.propagator.particle)
+            self.model.anti_particle(self.propagator.particle)
         } else {
-            self.model.get_particle(self.propagator.particle)
+            self.model.particle(self.propagator.particle)
         };
     }
 
@@ -625,7 +652,7 @@ impl PropagatorView<'_> {
                 {
                     if self.propagator.vertices[0] == self.propagator.vertices[1] {
                         if index == 1 {
-                            if p.particle().self_anti() {
+                            if p.particle().is_self_anti() {
                                 if !seen {
                                     seen = true;
                                     return false;
@@ -636,7 +663,7 @@ impl PropagatorView<'_> {
                                 return p.particle().is_anti();
                             }
                         } else {
-                            if p.particle().self_anti() {
+                            if p.particle().is_self_anti() {
                                 return true;
                             } else {
                                 return !p.particle().is_anti();
@@ -688,7 +715,7 @@ impl PropagatorView<'_> {
     }
 }
 
-impl std::fmt::Display for PropagatorView<'_> {
+impl<M: ModelBase> std::fmt::Display for PropagatorView<'_, M> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.invert {
             write!(
@@ -714,21 +741,29 @@ impl std::fmt::Display for PropagatorView<'_> {
 }
 
 /// Public interface of an internal [`Vertex`].
-pub struct VertexView<'a> {
-    pub(crate) model: &'a Model,
-    pub(crate) diagram: &'a DiagramView<'a>,
+pub struct VertexView<'a, M> {
+    pub(crate) model: &'a Model<M>,
+    pub(crate) diagram: &'a DiagramView<'a, M>,
     pub(crate) vertex: &'a Vertex,
     pub(crate) index: usize,
 }
 
-impl VertexView<'_> {
+impl<M> Copy for VertexView<'_, M> {}
+
+impl<M> Clone for VertexView<'_, M> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<M: ModelBase> VertexView<'_, M> {
     #[cfg(feature = "_internal_api")]
     pub fn vertex(&self) -> &Vertex {
         return self.vertex;
     }
 
     /// Get an iterator over the propagators connected to the vertex.
-    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView<'_>, PropagatorView<'_>>> {
+    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView<'_, M>, PropagatorView<'_, M>>> {
         return self.vertex.propagators.iter().enumerate().map(|(i, prop)| {
             if *prop >= 0 {
                 Either::Right(PropagatorView {
@@ -760,17 +795,17 @@ impl VertexView<'_> {
     }
 
     /// Get an iterator over the propagators connected to the vertex ordered like the particles in the interaction.
-    pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView<'_>, PropagatorView<'_>>> {
+    pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView<'_, M>, PropagatorView<'_, M>>> {
         let views = self.propagators().collect_vec();
         let mut seen = vec![false; views.len()];
-        return self.model.vertex(self.vertex.interaction).particles.iter().map(
-            move |ref_particle| -> Either<LegView<'_>, PropagatorView<'_>> {
+        return self.model.vertex(self.vertex.interaction).particles().iter().map(
+            move |ref_particle| -> Either<LegView<'_, M>, PropagatorView<'_, M>> {
                 for (i, part) in views
                     .iter()
                     .map(|view| either::for_both!(view, p => p.particle()))
                     .enumerate()
                 {
-                    if !seen[i] && part.name() == ref_particle {
+                    if !seen[i] && part.name() == ref_particle.as_ref() {
                         seen[i] = true;
                         return views[i].clone();
                     } else {
@@ -783,7 +818,7 @@ impl VertexView<'_> {
     }
 
     /// Get the interaction assigned to the vertex.
-    pub fn interaction(&self) -> &InteractionVertex {
+    pub fn interaction(&self) -> &M::Vertex {
         return self.model.vertex(self.vertex.interaction);
     }
 
@@ -791,7 +826,7 @@ impl VertexView<'_> {
     /// match all particles.
     pub fn match_particles<'q, S>(&self, query: impl IntoIterator<Item = &'q S>) -> bool
     where
-        S: 'q + PartialEq<String> + Ord,
+        S: 'q + PartialEq<str> + Ord,
     {
         return self.interaction().match_particles(query);
     }
@@ -800,9 +835,9 @@ impl VertexView<'_> {
     /// particle names is then tested with `match_particles`.
     pub fn match_particle_combinations<'q, S>(&self, query: &[impl Iterator<Item = &'q S> + Clone]) -> bool
     where
-        S: 'q + PartialEq<String> + Ord,
+        S: 'q + PartialEq<str> + Ord,
     {
-        if query.len() != self.interaction().particles.len() {
+        if query.len() != self.interaction().particles().len() {
             return false;
         }
         return query
@@ -818,16 +853,16 @@ impl VertexView<'_> {
     }
 }
 
-impl std::fmt::Display for VertexView<'_> {
+impl<M: ModelBase> std::fmt::Display for VertexView<'_, M> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "{}[ {}: ",
             self.index,
-            self.model.vertex(self.vertex.interaction).name
+            self.model.vertex(self.vertex.interaction).name()
         )?;
-        for p in self.model.vertex(self.vertex.interaction).particles.iter() {
-            write!(f, "{} ", p)?;
+        for p in self.model.vertex(self.vertex.interaction).particles().iter() {
+            write!(f, "{} ", p.as_ref())?;
         }
         write!(f, "]")?;
         Ok(())

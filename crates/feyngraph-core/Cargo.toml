@@ -15,8 +15,8 @@ rayon = { workspace = true }
 log = { workspace = true }
 indexmap = { workspace = true }
 either = { workspace = true }
-peg = { workspace = true }
 rustc-hash = { workspace = true }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
 
 [dev-dependencies]
 paste ={ workspace = true }

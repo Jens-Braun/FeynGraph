@@ -1,44 +1,47 @@
 #![allow(dead_code, non_snake_case)]
-use feyngraph::model::{Model, TopologyModel};
+use feyngraph::{
+    model::{Model, ModelBase, ParticleBase, VertexBase},
+    topology::TopologyModel,
+};
 use regex::Regex;
 use std::error::Error;
 use std::io::{Error as IOError, ErrorKind};
 use std::process::Command;
 
-pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<(), Box<dyn Error>> {
+pub fn write_qgraf_model<M: ModelBase>(mut out: impl std::io::Write, model: &Model<M>) -> Result<(), Box<dyn Error>> {
     writeln!(out, "% Particles")?;
-    for particle in model.particles_iter() {
-        if particle.pdg() < 0 {
+    for particle in model.particles() {
+        if particle.id() < 0 {
             continue;
         }
-        if particle.self_anti() {
+        if particle.is_self_anti() {
             writeln!(
                 out,
                 "[ part{}, part{}, {}]",
-                particle.pdg(),
-                particle.pdg(),
+                particle.id(),
+                particle.id(),
                 if particle.is_fermi() { "-" } else { "+" }
             )?;
         } else {
             writeln!(
                 out,
                 "[ part{}, anti{}, {}]",
-                particle.pdg(),
-                particle.pdg(),
+                particle.id(),
+                particle.id(),
                 if particle.is_fermi() { "-" } else { "+" }
             )?;
         }
     }
     writeln!(out, "% Vertices")?;
-    let model_couplings = model.couplings();
-    for vertex in model.vertices_iter() {
+    let n = model.couplings().len() - 1;
+    for vertex in model.vertices() {
         write!(out, "[ ")?;
-        for (i, particle) in vertex.particles_iter().enumerate() {
-            let p = model.get_particle_by_name(particle).unwrap();
-            if p.pdg() > 0 {
-                write!(out, "part{}", p.pdg())?;
+        for (i, particle) in vertex.particles().iter().enumerate() {
+            let p = model.particle_by_name(particle).unwrap();
+            if p.id() > 0 {
+                write!(out, "part{}", p.id())?;
             } else {
-                write!(out, "anti{}", p.pdg().abs())?;
+                write!(out, "anti{}", p.id().abs())?;
             }
             if i != vertex.degree() - 1 {
                 write!(out, ", ")?;
@@ -46,13 +49,13 @@ pub fn write_qgraf_model(mut out: impl std::io::Write, model: &Model) -> Result<
         }
         write!(out, "; ")?;
         let coupling_orders = vertex.coupling_orders();
-        for (i, coupling) in model_couplings.iter().enumerate() {
-            if let Some(order) = coupling_orders.get(coupling) {
-                write!(out, "{}='{}'", coupling, order)?;
+        for (i, coupling) in model.couplings().enumerate() {
+            if let Some(order) = coupling_orders.get(coupling.as_ref()) {
+                write!(out, "{}='{}'", coupling.as_ref(), order)?;
             } else {
-                write!(out, "{}='0'", coupling)?;
+                write!(out, "{}='0'", coupling.as_ref())?;
             }
-            if i != model_couplings.len() - 1 {
+            if i != n {
                 write!(out, ", ")?;
             }
         }

@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use feyngraph_core::model::LineStyle;
+use model::LineStyle;
 
 use super::{
     backend::Backend,

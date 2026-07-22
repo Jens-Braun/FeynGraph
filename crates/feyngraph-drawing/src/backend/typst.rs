@@ -1,3 +1,5 @@
+use model::{ParticleBase, ParticleDraw};
+
 use super::super::style::{Color, DecorationKind};
 use super::{Anchor, Backend, Decoration, Label, PathStyle, Segment, Stroke, Vec2D};
 
@@ -42,8 +44,8 @@ impl Backend for TypstBackend {
 
     type Output = String;
 
-    fn particle_name(p: &feyngraph_core::model::Particle) -> &str {
-        p.texname()
+    fn particle_name<P: ParticleBase + ParticleDraw>(p: &P) -> &str {
+        p.display_name()
     }
 
     fn init(_size_x: f64, _size_y: f64) -> Self {
