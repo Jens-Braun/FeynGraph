@@ -467,6 +467,15 @@ impl LegView<'_> {
         }
         return result;
     }
+
+    /// Get the leg's ID.
+    ///
+    /// This is an index into [`DiagramView::legs`] and can be used to identify the leg.
+    /// For incoming legs, this is the index in `diagram.incoming_legs`, while
+    /// for outgoing legs, this is the index in `diagram.outgoing_legs` plus the number of incoming legs.
+    pub fn index(&self) -> usize {
+        return self.leg_index;
+    }
 }
 
 impl std::fmt::Display for LegView<'_> {
