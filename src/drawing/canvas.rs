@@ -45,13 +45,13 @@ impl<B: Backend> CanvasGrid<B> {
         });
     }
 
-    pub(crate) fn canvas<'a>(&'a mut self, col: usize, row: usize) -> Canvas<'a, B> {
+    pub(crate) fn canvas<'a>(&'a mut self, row: usize, col: usize) -> Canvas<'a, B> {
         let theme = Theme::get_global();
         Canvas {
             backend: &mut self.backend,
             origin: Vec2D::from([
-                ((1. + 2. * theme.border_size) * row as f64 + theme.border_size) * B::BASE_SIZE_X,
-                (theme.title_size + col as f64 * (1. + theme.title_size + theme.border_size)) * B::BASE_SIZE_Y,
+                ((1. + 2. * theme.border_size) * col as f64 + theme.border_size) * B::BASE_SIZE_X,
+                (theme.title_size + row as f64 * (1. + theme.title_size + theme.border_size)) * B::BASE_SIZE_Y,
             ]),
             labels: Vec::new(),
             paths: Vec::new(),
