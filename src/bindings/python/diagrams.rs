@@ -1071,8 +1071,8 @@ impl PyDiagramGenerator {
         model: PyModel,
         selector: Option<PyDiagramSelector>,
     ) -> PyResult<PyDiagramGenerator> {
-        let incoming = incoming.iter().map(String::as_ref).collect_vec();
-        let outgoing = outgoing.iter().map(String::as_ref).collect_vec();
+        let incoming = incoming;
+        let outgoing = outgoing;
         return if let Some(selector) = selector {
             Ok(Self(DiagramGenerator::new(
                 &incoming,

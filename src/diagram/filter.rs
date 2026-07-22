@@ -93,24 +93,24 @@ impl DiagramSelector {
     }
 
     /// Add a criterion to only keep diagrams which have power `power` in the given coupling `coupling`.
-    pub fn select_coupling_power(&mut self, coupling: &str, power: usize) {
-        if let Some(powers) = self.coupling_powers.get_mut(coupling) {
+    pub fn select_coupling_power(&mut self, coupling: impl AsRef<str>, power: usize) {
+        if let Some(powers) = self.coupling_powers.get_mut(coupling.as_ref()) {
             if !powers.contains(&power) {
                 powers.push(power);
             }
         } else {
-            self.coupling_powers.insert(coupling.to_string(), vec![power]);
+            self.coupling_powers.insert(coupling.as_ref().to_owned(), vec![power]);
         }
     }
 
     /// Add a criterion to only keep diagrams which contain `count` propagators of the field `particle`.
-    pub fn select_propagator_count(&mut self, particle: &str, count: usize) {
-        if let Some(powers) = self.propagator_counts.get_mut(particle) {
+    pub fn select_propagator_count(&mut self, particle: impl AsRef<str>, count: usize) {
+        if let Some(powers) = self.propagator_counts.get_mut(particle.as_ref()) {
             if !powers.contains(&count) {
                 powers.push(count);
             }
         } else {
-            self.propagator_counts.insert(particle.to_string(), vec![count]);
+            self.propagator_counts.insert(particle.as_ref().to_owned(), vec![count]);
         }
     }
 
@@ -128,11 +128,11 @@ impl DiagramSelector {
     }
 
     /// Add a criterion to only keep diagrams for which the power of the coupling `coupling` is contained in `powers`.
-    pub fn select_coupling_power_list(&mut self, coupling: &str, mut powers: Vec<usize>) {
-        if let Some(existing_powers) = self.coupling_powers.get_mut(coupling) {
+    pub fn select_coupling_power_list(&mut self, coupling: impl AsRef<str>, mut powers: Vec<usize>) {
+        if let Some(existing_powers) = self.coupling_powers.get_mut(coupling.as_ref()) {
             existing_powers.append(&mut powers);
         } else {
-            self.coupling_powers.insert(coupling.to_string(), powers);
+            self.coupling_powers.insert(coupling.as_ref().to_owned(), powers);
         }
     }
 

@@ -90,13 +90,7 @@ pub(crate) fn diagrams_feynarts(
                 .join(", ")
         )
         .unwrap();
-        let generator = DiagramGenerator::new(
-            &particles_in.iter().map(String::as_ref).collect_vec(),
-            &particles_out.iter().map(String::as_ref).collect_vec(),
-            n_loops,
-            sm,
-            None,
-        )?;
+        let generator = DiagramGenerator::new(&particles_in, &particles_out, n_loops, sm, None)?;
         for topo in topos.iter() {
             let diags = generator.assign_topology(topo).unwrap();
             if diags.len() == 0 {

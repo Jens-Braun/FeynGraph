@@ -444,19 +444,19 @@ impl DiagramGenerator {
     /// - `model`: physical [`Model`]
     /// - `selector`\[optional\]: [`DiagramSelector`] restricting the generated diagrams
     pub fn new(
-        particles_in: &[&str],
-        particles_out: &[&str],
+        particles_in: impl IntoIterator<Item = impl AsRef<str>>,
+        particles_out: impl IntoIterator<Item = impl AsRef<str>>,
         n_loops: usize,
         model: Model,
         selector: Option<DiagramSelector>,
     ) -> Result<Self, ModelError> {
         let incoming_particles: Vec<usize> = particles_in
-            .iter()
-            .map(|p| model.get_particle_index(p))
+            .into_iter()
+            .map(|p| model.get_particle_index(p.as_ref()))
             .collect::<Result<_, _>>()?;
         let outgoing_particles: Vec<usize> = particles_out
-            .iter()
-            .map(|p| model.get_particle_index(p))
+            .into_iter()
+            .map(|p| model.get_particle_index(p.as_ref()))
             .collect::<Result<_, _>>()?;
         let n_external = incoming_particles.len() + outgoing_particles.len();
         let outgoing = outgoing_particles
