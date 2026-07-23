@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock, RwLockReadGuard},
 };
 
-use std::collections::HashMap;
+use util::HashMap;
 
 static GLOBAL_THEME: LazyLock<Arc<RwLock<Theme>>> = LazyLock::new(|| Arc::new(RwLock::new(Theme::default())));
 

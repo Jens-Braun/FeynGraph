@@ -371,6 +371,7 @@ dependencies = [
  "either",
  "feyngraph-core",
  "feyngraph-model",
+ "feyngraph-util",
  "itertools 0.15.0",
  "pretty_assertions",
 ]

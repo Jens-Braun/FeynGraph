@@ -10,8 +10,8 @@ use crate::{
     topology::{PyTopology, PyTopologyContainer, PyTopologyGenerator, PyTopologyModel, PyTopologySelector},
 };
 use feyngraph_core::{
-    InputError,
     model::{InteractionVertex, LineStyle, Model, ModelError, Particle, Statistic, TopologyModel},
+    InputError,
 };
 
 use indexmap::IndexMap as OriginalIndexMap;
@@ -38,6 +38,7 @@ fn feyngraph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     topology_submodule.add_class::<PyTopologyContainer>()?;
     topology_submodule.add_class::<PyTopologyGenerator>()?;
     topology_submodule.add_class::<PyTopologySelector>()?;
+    let drawing_submodule = PyModule::new(m.py(), "drawing")?;
     m.add_submodule(&topology_submodule)?;
     #[cfg(feature = "drawing")]
     {

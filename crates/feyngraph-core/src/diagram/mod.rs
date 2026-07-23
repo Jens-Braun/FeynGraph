@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use crate::diagram::view::DiagramView;
 use crate::diagram::workspace::AssignWorkspace;
-use crate::util::InputError;
 use crate::util::factorial;
+use crate::util::InputError;
 use rayon::prelude::*;
 
 mod components;

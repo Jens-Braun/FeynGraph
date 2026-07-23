@@ -7,13 +7,13 @@ use std::{fmt::Write, path::PathBuf, sync::Arc};
 use drawing::{Draw, DrawGrid};
 use feyngraph_core::{
     diagram::{
-        Diagram, DiagramContainer, DiagramGenerator, DiagramSelector, Leg, Propagator, Vertex, view::DiagramView,
+        view::DiagramView, Diagram, DiagramContainer, DiagramGenerator, DiagramSelector, Leg, Propagator, Vertex,
     },
     model::Model,
     topology::Topology,
 };
 
-use super::{PyInteractionVertex, PyModel, PyParticle, topology::PyTopology};
+use super::{topology::PyTopology, PyInteractionVertex, PyModel, PyParticle};
 use crate::{HashMap, PyInputError, PyModelError};
 
 #[derive(Clone)]
@@ -818,7 +818,8 @@ impl PyDiagram {
                     .into_iter()
                     .filter(|p| {
                         either::for_both!(p, p => p.momentum()[momentum_index]) == 0 // Only propagators not part of loop `index`
-                            && either::for_both!(p, p => p.particle().color()).abs() > 1 // Non-trivial color representation
+                            && either::for_both!(p, p => p.particle().color()).abs() > 1
+                        // Non-trivial color representation
                     })
                     .count()
             })

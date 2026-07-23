@@ -10,8 +10,9 @@ repository.workspace = true
 version = "0.0.1"
 
 [dependencies]
-feyngraph-core = { path = "../feyngraph-core", features = ["_internal_api"]}
-model = { package = "feyngraph-model", path = "../feyngraph-model"}
+feyngraph-core = { path = "../feyngraph-core", features = ["_internal_api"] }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }
 itertools = { workspace = true }
 either = { workspace = true }
 
