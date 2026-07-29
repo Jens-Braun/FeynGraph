@@ -337,6 +337,7 @@ dependencies = [
  "itertools 0.15.0",
  "paste",
  "pretty_assertions",
+ "rayon",
  "regex",
  "rustc-hash",
  "tempfile",

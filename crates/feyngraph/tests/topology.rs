@@ -21,7 +21,7 @@ macro_rules! test_topo {
                     $n_loops,
                     model.clone(),
                     None,
-                ).count_topologies();
+                ).count();
                 let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
                 common::write_qgraf_topo_model(
                     &qgraf_model,
@@ -80,14 +80,14 @@ test_topo!([3, 4, 5, 6], 4, 2);
 #[test]
 fn test_topo_3_4_legs_0_loops_2() {
     let model = TopologyModel::from(vec![3, 4]);
-    let n_topos = TopologyGenerator::new(0, 2, model, None).count_topologies();
+    let n_topos = TopologyGenerator::new(0, 2, model, None).count();
     assert_eq!(n_topos, 3);
 }
 
 #[test]
 fn test_topo_3_4_legs_0_loops_3() {
     let model = TopologyModel::from(vec![3, 4]);
-    let n_topos = TopologyGenerator::new(0, 3, model, None).count_topologies();
+    let n_topos = TopologyGenerator::new(0, 3, model, None).count();
     assert_eq!(n_topos, 12);
 }
 
@@ -96,6 +96,6 @@ fn test_topo_3_4_5_legs_0_loops_3() {
     let model = TopologyModel::from(vec![3, 4, 5]);
     let mut s = TopologySelector::new();
     s.select_node_partition(vec![(5, 1), (3, 1)]);
-    let n_topos = TopologyGenerator::new(0, 3, model, Some(s)).count_topologies();
+    let n_topos = TopologyGenerator::new(0, 3, model, Some(s)).count();
     assert_eq!(n_topos, 2);
 }

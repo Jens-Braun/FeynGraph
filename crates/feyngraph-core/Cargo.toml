@@ -11,7 +11,7 @@ version = "0.0.1"
 
 [dependencies]
 itertools = { workspace = true }
-rayon = { workspace = true }
+rayon = { workspace = true, optional = true }
 log = { workspace = true }
 indexmap = { workspace = true }
 either = { workspace = true }
@@ -30,4 +30,6 @@ pretty_assertions ={ workspace = true }
 [features]
 default = []
 check_momenta = []
+rayon = ["dep:rayon"]
+
 _internal_api = []

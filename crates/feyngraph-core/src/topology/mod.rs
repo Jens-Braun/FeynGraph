@@ -4,6 +4,7 @@ pub use filter::TopologySelector;
 use itertools::Itertools;
 use matrix::SymmetricMatrix;
 use model::TopologyModel;
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 use std::cmp::min;
 use std::fmt::Write;
@@ -712,6 +713,51 @@ impl TopologyGenerator {
         })
         .collect_vec();
 
+        let containers = node_partitions
+            .into_iter()
+            .map(|partition| {
+                let mut nodes = vec![1; self.n_external];
+                let mut internal_nodes = partition
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, n)| vec![self.model.get(i); n])
+                    .concat();
+                nodes.append(&mut internal_nodes);
+                let mut workspace = TopologyWorkspace::from_nodes(self.n_external, self.n_loops, &nodes);
+                workspace.topology_selector = self.selector.clone();
+                if let Some(ref labels) = self.momentum_labels {
+                    workspace.set_momentum_labels(labels.clone());
+                }
+                return workspace.generate();
+            })
+            .collect_vec();
+        return TopologyContainer::from(containers);
+    }
+
+    /// Generate the topologies.
+    #[cfg(feature = "rayon")]
+    pub fn par_generate(&self) -> TopologyContainer {
+        let degrees = self.model.degrees_iter().collect_vec();
+        // Let N_k be the number of nodes with degree k, then
+        //      \sum_{k=3}^\infty (k-2) N_k = 2 L - 2 + E                                        (1)
+        // where L is the number of loops and E is the number of external particles.
+        // The full set of diagrams is then the sum of all node partitions {N_k}, such that (1) is satisfied.
+        let node_partitions = find_partitions(
+            self.model.degrees_iter().map(|d| d - 2),
+            2 * self.n_loops + self.n_external - 2,
+        )
+        .into_iter()
+        .filter(|partition| {
+            self.selector.select_partition(
+                partition
+                    .iter()
+                    .enumerate()
+                    .map(|(i, count)| (degrees[i], *count))
+                    .collect_vec(),
+            )
+        })
+        .collect_vec();
+
         let mut containers = Vec::new();
         node_partitions
             .into_par_iter()
@@ -735,7 +781,7 @@ impl TopologyGenerator {
     }
 
     /// Generate and count the topologies without saving them
-    pub fn count_topologies(&self) -> usize {
+    pub fn count(&self) -> usize {
         let degrees = self.model.degrees_iter().collect_vec();
         let node_partitions = find_partitions(
             self.model.degrees_iter().map(|d| d - 2),
@@ -752,7 +798,42 @@ impl TopologyGenerator {
             )
         })
         .collect_vec();
-        let mut counts = Vec::new();
+        node_partitions
+            .into_iter()
+            .map(|partition| {
+                let mut nodes = vec![1; self.n_external];
+                let mut internal_nodes = partition
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, n)| vec![self.model.get(i); n])
+                    .concat();
+                nodes.append(&mut internal_nodes);
+                let mut workspace = TopologyWorkspace::from_nodes(self.n_external, self.n_loops, &nodes);
+                workspace.topology_selector = self.selector.clone();
+                return workspace.count();
+            })
+            .sum::<usize>()
+    }
+
+    /// Generate and count the topologies without saving them
+    #[cfg(feature = "rayon")]
+    pub fn par_count(&self) -> usize {
+        let degrees = self.model.degrees_iter().collect_vec();
+        let node_partitions = find_partitions(
+            self.model.degrees_iter().map(|d| d - 2),
+            2 * self.n_loops + self.n_external - 2,
+        )
+        .into_iter()
+        .filter(|partition| {
+            self.selector.select_partition(
+                partition
+                    .iter()
+                    .enumerate()
+                    .map(|(i, count)| (degrees[i], *count))
+                    .collect_vec(),
+            )
+        })
+        .collect_vec();
         node_partitions
             .into_par_iter()
             .map(|partition| {
@@ -767,8 +848,7 @@ impl TopologyGenerator {
                 workspace.topology_selector = self.selector.clone();
                 return workspace.count();
             })
-            .collect_into_vec(&mut counts);
-        return counts.into_iter().sum();
+            .sum::<usize>()
     }
 }
 

@@ -1,2 +1,6 @@
 [build]
 rustdocflags = [ "--html-in-header", "./docs-header.html" ]
+
+[profile.profiling]
+inherits = "release"
+debug = true

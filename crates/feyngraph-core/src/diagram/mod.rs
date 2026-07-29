@@ -10,8 +10,9 @@ use std::sync::Arc;
 
 use crate::diagram::view::DiagramView;
 use crate::diagram::workspace::AssignWorkspace;
-use crate::util::factorial;
 use crate::util::InputError;
+use crate::util::factorial;
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 mod components;
@@ -521,6 +522,38 @@ impl<M: ModelBase> DiagramGenerator<M> {
             topo_generator.set_momentum_labels(labels.clone()).unwrap();
         }
         let topologies = topo_generator.generate();
+        let containers = topologies
+            .inner_ref()
+            .into_iter()
+            .map(|topology| {
+                let mut assign_workspace = AssignWorkspace::new(
+                    topology,
+                    self.model.clone(),
+                    &self.selector,
+                    &self.incoming_particles,
+                    &self.outgoing_particles,
+                );
+                return assign_workspace.assign();
+            })
+            .collect_vec();
+        let mut container = DiagramContainer::from(containers);
+        container.model = Some(self.model.clone());
+        return container;
+    }
+
+    /// Generate the Feynman diagrams for the given setup.
+    #[cfg(feature = "rayon")]
+    pub fn par_generate(&self) -> DiagramContainer<M> {
+        let mut topo_generator = TopologyGenerator::new(
+            self.n_external,
+            self.n_loops,
+            TopologyModel::from(self.model.as_ref()),
+            Some(self.selector.as_topology_selector()),
+        );
+        if let Some(ref labels) = self.momentum_labels {
+            topo_generator.set_momentum_labels(labels.clone()).unwrap();
+        }
+        let topologies = topo_generator.generate();
         let mut containers: Vec<DiagramContainer<M>> = Vec::new();
         topologies
             .inner_ref()
@@ -544,6 +577,36 @@ impl<M: ModelBase> DiagramGenerator<M> {
     /// Generate the Feynman diagrams for the given setup without saving them, only returning the total number of
     /// diagrams.
     pub fn count(&self) -> usize {
+        let mut topo_generator = TopologyGenerator::new(
+            self.n_external,
+            self.n_loops,
+            TopologyModel::from(self.model.as_ref()),
+            Some(self.selector.as_topology_selector()),
+        );
+        if let Some(ref labels) = self.momentum_labels {
+            topo_generator.set_momentum_labels(labels.clone()).unwrap();
+        }
+        let topologies = topo_generator.generate();
+        return topologies
+            .data
+            .into_iter()
+            .map(|topology| {
+                let mut assign_workspace = AssignWorkspace::new(
+                    &topology,
+                    self.model.clone(),
+                    &self.selector,
+                    &self.incoming_particles,
+                    &self.outgoing_particles,
+                );
+                assign_workspace.count()
+            })
+            .sum::<usize>();
+    }
+
+    /// Generate the Feynman diagrams for the given setup without saving them, only returning the total number of
+    /// diagrams.
+    #[cfg(feature = "rayon")]
+    pub fn par_count(&self) -> usize {
         let mut topo_generator = TopologyGenerator::new(
             self.n_external,
             self.n_loops,
@@ -598,6 +661,41 @@ impl<M: ModelBase> DiagramGenerator<M> {
 
     /// Produce Feynman diagrams by assigning particles to a given set of topologies `topologies`.
     pub fn assign_topologies(&self, topologies: &[Topology]) -> Result<DiagramContainer<M>, InputError> {
+        for topology in topologies {
+            if self.n_external != topology.n_external {
+                return Err(InputError::new(format!(
+                    "expected topologies with {} legs, found topology with {} legs",
+                    self.n_external, topology.n_external
+                )));
+            }
+            if self.n_loops != topology.n_loops {
+                return Err(InputError::new(format!(
+                    "expected topologies with {} loops, found topology with {} loops",
+                    self.n_loops, topology.n_loops
+                )));
+            }
+        }
+        let containers = topologies
+            .into_iter()
+            .map(|topology| {
+                let mut assign_workspace = AssignWorkspace::new(
+                    topology,
+                    self.model.clone(),
+                    &self.selector,
+                    &self.incoming_particles,
+                    &self.outgoing_particles,
+                );
+                return assign_workspace.assign();
+            })
+            .collect_vec();
+        let mut container = DiagramContainer::from(containers);
+        container.model = Some(self.model.clone());
+        return Ok(container);
+    }
+
+    /// Produce Feynman diagrams by assigning particles to a given set of topologies `topologies`.
+    #[cfg(feature = "rayon")]
+    pub fn par_assign_topologies(&self, topologies: &[Topology]) -> Result<DiagramContainer<M>, InputError> {
         for topology in topologies {
             if self.n_external != topology.n_external {
                 return Err(InputError::new(format!(
