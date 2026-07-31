@@ -10,17 +10,17 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ufomodel = { path = "../ufomodel", optional = true }
 chumsky = { workspace = true }
 ariadne = { workspace = true }
 util = { package = "feyngraph-util", path = "../feyngraph-util" }
 itertools = { workspace = true }
 peg = { workspace = true }
 log = { workspace = true }
-
-[features]
-ufo = ["dep:ufomodel"]
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log ={ workspace = true }
 pretty_assertions ={ workspace = true }
+
+[features]
+serde = ["dep:serde"]

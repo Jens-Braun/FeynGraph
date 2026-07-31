@@ -3,7 +3,7 @@
 # Date: Fri 28 Apr 2023 20:57:32
 
 
-from object_library import all_orders, CouplingOrder
+from .object_library import all_orders, CouplingOrder
 
 
 QCD = CouplingOrder(name = 'QCD',

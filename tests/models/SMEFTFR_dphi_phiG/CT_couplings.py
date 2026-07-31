@@ -3,9 +3,9 @@
 # Date: Mon 8 Jan 2024 12:54:06
 
 
-from object_library import all_couplings, Coupling
+from .object_library import all_couplings, Coupling
 
-from function_library import complexconjugate, re, im, csc, sec, acsc, asec, cot
+from .function_library import complexconjugate, re, im, csc, sec, acsc, asec, cot
 
 UVGC_146 = Coupling(name = 'UVGC_146',
 	value = '(-3*Cbphi_CT*Lam)/cmath.sqrt(2)',

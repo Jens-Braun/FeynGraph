@@ -342,6 +342,7 @@ dependencies = [
  "rustc-hash",
  "tempfile",
  "test-log",
+ "ufomodel",
 ]
 
 [[package]]
@@ -362,6 +363,7 @@ dependencies = [
  "rustc-hash",
  "tempfile",
  "test-log",
+ "ufomodel",
 ]
 
 [[package]]
@@ -375,6 +377,7 @@ dependencies = [
  "feyngraph-util",
  "itertools 0.15.0",
  "pretty_assertions",
+ "ufomodel",
 ]
 
 [[package]]
@@ -396,14 +399,15 @@ dependencies = [
  "log",
  "peg",
  "pretty_assertions",
+ "serde",
  "test-log",
- "ufomodel",
 ]
 
 [[package]]
 name = "feyngraph-util"
 version = "0.0.1"
 dependencies = [
+ "ariadne",
  "indexmap",
  "rustc-hash",
 ]
@@ -473,6 +477,8 @@ checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1008,6 +1014,7 @@ dependencies = [
  "ariadne",
  "chumsky",
  "feyngraph-expression",
+ "feyngraph-model",
  "feyngraph-util",
  "log",
  "num-complex",

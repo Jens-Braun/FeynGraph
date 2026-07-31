@@ -1,14 +1,14 @@
 
-import particles
-import couplings
-import lorentz
-import parameters
-import vertices
-import coupling_orders
+from . import particles
+from . import couplings
+from . import lorentz
+from . import parameters
+from . import vertices
+from . import coupling_orders
 #import write_param_card
-import propagators
-import object_library
-import function_library
+from . import propagators
+from . import object_library
+from . import function_library
 
 
 all_particles = particles.all_particles
@@ -21,21 +21,21 @@ all_functions = function_library.all_functions
 all_propagators = propagators.all_propagators
 
 try:
-   import decays
+   from . import decays
 except ImportError:
    pass
 else:
    all_decays = decays.all_decays
 
 try:
-   import form_factors
+   from . import form_factors
 except ImportError:
    pass
 else:
    all_form_factors = form_factors.all_form_factors
 
 try:
-   import CT_vertices
+   from . import CT_vertices
 except ImportError:
    pass
 else:

@@ -265,9 +265,9 @@ class Coupling(UFOBaseClass):
                if not CTparam:
                    CTparam=param
                else:
-                   raise UFOError, "UFO does not support yet more than one occurence of CTParameters in the couplings values."
+                   raise UFOError("UFO does not support yet more than one occurence of CTParameters in the couplings values.")
            elif numberOfMatches>1:
-               raise UFOError, "UFO does not support yet more than one occurence of CTParameters in the couplings values."
+               raise UFOError("UFO does not support yet more than one occurence of CTParameters in the couplings values.")
 
         if not CTparam:
             if x==0:

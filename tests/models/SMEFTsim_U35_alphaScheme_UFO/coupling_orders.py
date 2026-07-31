@@ -3,7 +3,7 @@
 # Date: Tue 18 Aug 2020 11:58:03
 
 
-from object_library import CouplingOrder, all_orders
+from .object_library import CouplingOrder, all_orders
 
 QCD = CouplingOrder(name="QCD", expansion_order=99, hierarchy=1)
 

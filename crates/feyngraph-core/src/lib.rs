@@ -20,7 +20,8 @@ pub(crate) use model::{Model, ModelBase, ModelError};
 /// ```rust
 /// # use feyngraph_core::generate_diagrams;
 /// # use model::Model;
-/// let diags = generate_diagrams(&["u", "u~"], &["g"; 3], 2, Model::sm(), Default::default());
+/// # use ufomodel::UFOModel;
+/// let diags = generate_diagrams(&["u", "u~"], &["g"; 3], 2, Model::from_base(UFOModel::sm()), Default::default());
 /// ```
 pub fn generate_diagrams<M: ModelBase>(
     particles_in: &[&str],

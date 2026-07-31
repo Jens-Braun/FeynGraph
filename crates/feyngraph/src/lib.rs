@@ -29,7 +29,7 @@ pub mod model {
     };
 
     pub mod ufo {
-        pub use feyngraph_model::{UFOModel, UFOParticle, UFOVertex};
+        pub use ufomodel::{Reader, UFOModel, components::*};
     }
 }
 

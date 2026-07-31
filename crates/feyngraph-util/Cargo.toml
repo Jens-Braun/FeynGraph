@@ -12,3 +12,7 @@ version = "0.0.1"
 [dependencies]
 indexmap = { workspace = true }
 rustc-hash = { workspace = true }
+ariadne = { workspace = true }
+
+[features]
+serde = ["indexmap/serde"]

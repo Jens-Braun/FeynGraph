@@ -3,8 +3,8 @@
 # Date: Wed 6 Jan 2021 16:20:39
 
 
-from function_library import acsc, asec, complexconjugate, cot, csc, im, re, sec
-from object_library import Coupling, all_couplings
+from .function_library import acsc, asec, complexconjugate, cot, csc, im, re, sec
+from .object_library import Coupling, all_couplings
 
 GC_1 = Coupling(name="GC_1", value="(ee*complex(0,1))/3.", order={"QED": 1})
 

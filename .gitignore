@@ -12,3 +12,5 @@ doc/html
 **/tests/resources/form
 .zed
 site
+**/*.bak
+**/__pycache__

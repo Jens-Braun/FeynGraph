@@ -575,10 +575,12 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use test_log::test;
+    use ufomodel::{Reader, UFOModel};
 
     #[test]
     fn assign_qcd_gluon_4point_tree_test() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let incoming = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
@@ -652,7 +654,8 @@ mod tests {
 
     #[test]
     fn assign_qcd_gluon_s_channel_tree_test() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let incoming = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
         let outgoing = incoming.clone();
         let topology = Topology {
@@ -739,7 +742,8 @@ mod tests {
         topo_selector.select_opi_components(1);
         let topos = TopologyGenerator::new(2, 4, TopologyModel::from(vec![3, 4]), Some(topo_selector)).generate();
         let topo = topos[1004].clone();
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_U_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_U_UFO"), Reader::CPython).unwrap());
         let selector = DiagramSelector::new();
         let particles_in = vec![model.particle_index_by_name("G").unwrap().clone()];
         let particle_out = vec![model.particle_index_by_name("G").unwrap().clone()];
@@ -751,7 +755,15 @@ mod tests {
     #[test]
     fn workspace_gg_gg_1loop() {
         let topos = TopologyGenerator::new(4, 1, TopologyModel::from(vec![3, 4]), None).generate();
-        let model = Model::ufo(&PathBuf::from("/home/jens/KIT/FeynGraph/tests/models/QCD_UFO")).unwrap();
+        let model = Model::from_base(
+            match UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("{e}");
+                    panic!()
+                }
+            },
+        );
         let selector = DiagramSelector::new();
         let particles_in = vec![model.particle_index_by_name("G").unwrap().clone(); 2];
         let particle_out = vec![model.particle_index_by_name("G").unwrap().clone(); 2];

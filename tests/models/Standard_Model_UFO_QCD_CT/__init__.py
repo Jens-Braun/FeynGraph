@@ -26,7 +26,7 @@ else:
    all_decays = decays.all_decays
 
 try:
-   import form_factors
+   from . import form_factors
 except ImportError:
    pass
 else:

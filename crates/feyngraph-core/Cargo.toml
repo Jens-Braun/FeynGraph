@@ -26,6 +26,7 @@ test-log ={ workspace = true }
 approx ={ workspace = true }
 criterion ={ workspace = true }
 pretty_assertions ={ workspace = true }
+ufomodel = { path = "../ufomodel", features = ["py-reader"] }
 
 [features]
 default = []

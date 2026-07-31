@@ -7,7 +7,7 @@ use util::{HashMap, IndexMap};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstValue {
-    Int(isize),
+    Int(i64),
     String(String),
     List(Vec<ConstValue>),
 }
@@ -16,7 +16,7 @@ pub enum ConstValue {
 pub struct QGRAFParticle {
     name: String,
     anti_name: String,
-    id: isize,
+    id: i64,
     fermi: bool,
     self_anti: bool,
     optional_keywords: Vec<String>,
@@ -27,7 +27,7 @@ impl QGRAFParticle {
     fn new(
         name: impl Into<String>,
         anti_name: impl Into<String>,
-        id: isize,
+        id: i64,
         fermi: bool,
         optional_keywords: Vec<String>,
         constants: HashMap<String, ConstValue>,
@@ -72,8 +72,8 @@ impl ParticleBase for QGRAFParticle {
         &self.name
     }
 
-    fn id(&self) -> isize {
-        todo!()
+    fn id(&self) -> i64 {
+        self.id
     }
 
     fn is_self_anti(&self) -> bool {
@@ -91,7 +91,7 @@ pub struct QGRAFVertex {
     particles: Vec<String>,
     couplings: HashMap<String, usize>,
     constants: HashMap<String, ConstValue>,
-    spin_map: Vec<isize>,
+    spin_map: Vec<i64>,
 }
 
 impl QGRAFVertex {
@@ -100,7 +100,7 @@ impl QGRAFVertex {
         particles: Vec<String>,
         couplings: HashMap<String, usize>,
         constants: HashMap<String, ConstValue>,
-        spin_map: Vec<isize>,
+        spin_map: Vec<i64>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -232,7 +232,7 @@ impl ModelBase for QGRAFModel {
 
 #[derive(Debug)]
 enum Value<'a> {
-    Int(isize),
+    Int(i64),
     String(&'a str),
     List(Vec<Value<'a>>),
 }
@@ -291,14 +291,14 @@ peg::parser!(
 
         rule property() -> (&'input str, Value<'input>) = prop:name() _ "=" _ value:property_value() {(prop, value)}
 
-        rule propagator(particle_counter: &mut isize) -> QGRAFParticle =
+        rule propagator(particle_counter: &mut i64) -> QGRAFParticle =
             "[" _ name:name() _ "," _ anti_name:name() _ "," _ fermi:fermi() _ keywords:("," _ kw:keywords() {kw})? _
             props:(";" _ props:(property()** (_ "," _))? {props} )? _ "]" {?
                 let keywords = keywords.unwrap_or(Vec::new()).into_iter().map(|s| s.to_owned()).collect();
                 let constants = if let Some(Some(props)) = props {
                     props.into_iter().map(|(k, v)| v.to_owned().map(
                         |v| {
-                            if let ConstValue::String(ref s) = v && let Ok(n) = s.parse::<isize>() {
+                            if let ConstValue::String(ref s) = v && let Ok(n) = s.parse::<i64>() {
                                 (k.into(), ConstValue::Int(n))
                             } else {
                                 (k.into(), v)
@@ -340,7 +340,7 @@ peg::parser!(
                                 }
                             },
                             Value::String(s) => {
-                                if let Ok(n) = s.parse::<isize>() {
+                                if let Ok(n) = s.parse::<i64>() {
                                     if n < 0 {
                                         log::warn!("Vertex at position '{}' has negative order in coupling '{}'\
                                             , ignoring this coupling", pos, coupling);
@@ -371,7 +371,7 @@ peg::parser!(
         rule misc() -> &'input str =
             s:$("[" [^ ']']* "]")
 
-        pub rule qgraf_model(particle_counter: &mut isize, vertex_counter: &mut usize) -> QGRAFModel =
+        pub rule qgraf_model(particle_counter: &mut i64, vertex_counter: &mut usize) -> QGRAFModel =
             _ entries:(
                 (
                     p:propagator(particle_counter) {ModelEntry::Prop(p)}
@@ -422,7 +422,7 @@ pub(crate) fn parse_qgraf_model(path: &Path) -> Result<QGRAFModel, ModelError> {
             return Err(ModelError::io(path.display(), e));
         }
     };
-    let mut particle_counter: isize = 1;
+    let mut particle_counter: i64 = 1;
     let mut vertex_counter: usize = 1;
     return match qgraf_model::qgraf_model(&content, &mut particle_counter, &mut vertex_counter) {
         Ok(mut m) => {
@@ -458,8 +458,8 @@ fn build_spin_maps(model: &mut QGRAFModel) {
             let mut spin_map = vec![-1; v.particles.len()];
             while let Some(index) = fermions.pop() {
                 let out_leg = fermions.pop().unwrap();
-                spin_map[index] = out_leg as isize;
-                spin_map[out_leg] = index as isize;
+                spin_map[index] = out_leg as i64;
+                spin_map[out_leg] = index as i64;
             }
             v.spin_map.extend(spin_map.into_iter().map(|i| i));
         }

@@ -7,6 +7,7 @@ members = [
     "crates/feyngraph-model",
     # "crates/feyngraph-python",
     "crates/feyngraph-util",
+    "crates/ufomodel"
 ]
 resolver = "3"
 

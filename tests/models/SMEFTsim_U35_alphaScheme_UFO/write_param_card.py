@@ -178,7 +178,7 @@ class ParamCardWriter(object):
     def write_qnumber(self):
         """ write qnumber """
         from particles import all_particles
-        import particles
+        from . import particles
         print particles.__file__
         text="""#===========================================================\n"""
         text += """# QUANTUM NUMBERS OF NEW STATE(S) (NON SM PDG CODE)\n"""

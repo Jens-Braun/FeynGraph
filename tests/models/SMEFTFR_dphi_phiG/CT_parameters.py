@@ -4,10 +4,10 @@
 
 
 
-from object_library import all_parameters, Parameter, all_CTparameters, CTParameter
+from .object_library import all_parameters, Parameter, all_CTparameters, CTParameter
 
 
-from function_library import complexconjugate, re, im, csc, sec, acsc, asec, cot
+from .function_library import complexconjugate, re, im, csc, sec, acsc, asec, cot
 
 #mueft = Parameter(name = 'mueft',
 #                  nature = 'external',

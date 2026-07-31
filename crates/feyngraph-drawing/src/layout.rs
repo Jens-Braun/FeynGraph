@@ -527,8 +527,9 @@ mod tests {
         diagram::{Leg, Propagator, Vertex},
         topology::TopologyGenerator,
     };
-    use model::{TopologyModel, UFOModel};
+    use model::TopologyModel;
     use pretty_assertions::assert_eq;
+    use ufomodel::UFOModel;
 
     #[test]
     fn linear_solve_test() {

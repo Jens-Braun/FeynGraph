@@ -1,0 +1,33 @@
+[package]
+authors.workspace = true
+categories.workspace = true
+description = "A crate to read and use UFO2.0 models"
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+name = "ufomodel"
+repository.workspace = true
+version = "0.0.1"
+
+
+[dependencies]
+expression = { package = "feyngraph-expression", path = "../feyngraph-expression" }
+chumsky = { workspace = true, default-features = false , features = ["pratt"] }
+ariadne = { workspace = true }
+log = { workspace = true }
+pyo3 = { workspace = true, features = ["auto-initialize", "num-complex"], optional = true }
+num-complex = { workspace = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
+
+[features]
+py-reader = ["dep:pyo3"]
+serde = ["dep:serde", "num-complex/serde", "expression/serde", "util/serde"]
+
+# Reports emitted in tests are not captured by libtest, if this is enabled a bunch of output is always
+# written to stderr during tests
+emit-test-reports = []
+
+[dev-dependencies]
+serde_json = { workspace = true }

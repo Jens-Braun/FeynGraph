@@ -29,14 +29,14 @@ else:
    all_decays = decays.all_decays
 
 try:
-   import form_factors
+   from . import form_factors
 except ImportError:
    pass
 else:
    all_form_factors = form_factors.all_form_factors
 
 try:
-   import CT_vertices
+   from . import CT_vertices
 except ImportError:
    pass
 else:

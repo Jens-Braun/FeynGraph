@@ -3,7 +3,7 @@
 # Date: Fri 22 Nov 2024 22:31:21
 
 
-from object_library import all_decays, Decay
-import particles as P
+from .object_library import all_decays, Decay
+from . import particles as P
 
 

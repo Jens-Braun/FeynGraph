@@ -15,7 +15,7 @@ use std::sync::Arc;
 /// # Examples
 /// ```rust
 /// # use feyngraph_core::DiagramSelector;
-/// # use model::UFOModel;
+/// # use ufomodel::UFOModel;
 /// // The `UFOModel` type annotation is inferred automatically when the selector is used and can therefore
 /// // be removed in almost all cases
 /// let mut s = DiagramSelector::<UFOModel>::new();

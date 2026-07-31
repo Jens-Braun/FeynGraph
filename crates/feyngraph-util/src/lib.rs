@@ -1,3 +1,4 @@
+pub mod parser;
 pub mod unicode;
 
 use indexmap::IndexMap as OriginalIndexMap;
@@ -9,7 +10,7 @@ pub type HashMap<K, V> = FxHashMap<K, V>;
 /// Contract all internal (negative) indices in a list of connected indices and build a connection map.
 /// The `i`-th entry of the connection map contains the index `j` to which index `i` is connected. For indices
 /// for which no information is available, the map contains the entry `-1`.
-pub fn contract_indices(mut connections: Vec<(isize, isize)>) -> Vec<isize> {
+pub fn contract_indices(mut connections: Vec<(i64, i64)>) -> Vec<i64> {
     if connections.is_empty() {
         return vec![];
     }

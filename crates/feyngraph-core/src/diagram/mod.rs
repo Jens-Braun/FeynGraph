@@ -433,8 +433,9 @@ impl<M: ModelBase> Deref for DiagramContainer<M> {
 /// ```rust
 /// # use feyngraph_core::{DiagramGenerator, DiagramSelector};
 /// # use model::Model;
+/// # use ufomodel::UFOModel;
 ///
-/// let model = Model::sm();
+/// let model = Model::from_base(UFOModel::sm());
 /// let mut selector = DiagramSelector::new();
 /// selector.select_on_shell();
 /// selector.select_self_loops(0);
@@ -738,10 +739,12 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use test_log::test;
+    use ufomodel::{Reader, UFOModel};
 
     #[test]
     pub fn diagram_generator_qcd_g_prop_opi_3loop() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let mut selector = DiagramSelector::new();
         selector.select_opi_components(1);
         let particles_in = ["G"];
@@ -753,7 +756,8 @@ mod tests {
 
     #[test]
     pub fn diagram_generator_qcd_g_prop_no_self_loops_3loop() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let mut topo_selector = TopologySelector::new();
         topo_selector.add_custom_function(Arc::new(|topo: &Topology| -> bool {
             !topo
@@ -772,7 +776,8 @@ mod tests {
 
     #[test]
     pub fn diagram_generator_sign_test() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let particles_in = ["u", "u"];
         let particle_out = ["u", "u"];
         let generator = DiagramGenerator::new(&particles_in, &particle_out, 0, model, None).unwrap();
@@ -783,7 +788,8 @@ mod tests {
 
     #[test]
     fn diagram_generator_sign_1l_test() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/QCD_UFO")).unwrap();
+        let model =
+            Model::from_base(UFOModel::read(&PathBuf::from("../../tests/models/QCD_UFO"), Reader::CPython).unwrap());
         let mut topo_selector = TopologySelector::new();
         topo_selector.add_custom_function(Arc::new(|topo: &Topology| -> bool {
             !topo

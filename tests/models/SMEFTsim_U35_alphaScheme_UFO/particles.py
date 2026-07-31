@@ -4,10 +4,10 @@
 
 
 from __future__ import division
-from object_library import all_particles, Particle
-import parameters as Param
+from .object_library import all_particles, Particle
+from . import parameters as Param
 
-import propagators as Prop
+from . import propagators as Prop
 
 a = Particle(pdg_code = 22,
              name = 'a',

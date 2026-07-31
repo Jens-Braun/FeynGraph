@@ -8,7 +8,7 @@ from .function_library import acsc, asec, complexconjugate, cot, csc, im, re, se
 from .object_library import Lorentz, all_lorentz
 
 try:
-    import form_factors as ForFac
+    from . import form_factors as ForFac
 except ImportError:
     pass
 

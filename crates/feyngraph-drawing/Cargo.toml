@@ -19,3 +19,4 @@ either = { workspace = true }
 [dev-dependencies]
 approx = { workspace = true }
 pretty_assertions = { workspace = true }
+ufomodel = { path = "../ufomodel" }

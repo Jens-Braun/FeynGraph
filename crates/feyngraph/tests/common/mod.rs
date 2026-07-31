@@ -102,7 +102,15 @@ options = {};
 }
 
 pub fn run_qgraf(config_path: &str) -> Result<usize, Box<dyn Error>> {
-    let output = Command::new("qgraf").arg(config_path).output()?;
+    let output = match Command::new("qgraf").arg(config_path).output() {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(Box::new(IOError::new(
+                ErrorKind::Other,
+                format!("Unable to run QGRAF, please make sure it can be found on $PATH:\n {e}"),
+            )));
+        }
+    };
     let re = Regex::new(r"total\s*=\s*(\d+)\s+connected diagrams").unwrap();
     let res = re.captures(&std::str::from_utf8(&output.stdout)?);
     if res.is_none() {

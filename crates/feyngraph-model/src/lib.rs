@@ -10,11 +10,11 @@ use util::{HashMap, IndexMap};
 
 mod particle;
 mod qgraf;
-mod ufo;
+// mod ufo;
 mod vertex;
 
 pub use particle::{LineStyle, ParticleBase, ParticleColor, ParticleDraw};
-pub use ufo::{UFOModel, UFOParticle, UFOVertex};
+// pub use ufo::{UFOModel, UFOParticle, UFOVertex};
 pub use vertex::VertexBase;
 
 use crate::qgraf::QGRAFModel;
@@ -132,33 +132,33 @@ impl Model<QGRAFModel> {
     }
 }
 
-impl Model<UFOModel> {
-    pub fn ufo(path: &Path) -> Result<Self, ModelError> {
-        Ok(Self::from_base(UFOModel::parse(path)?))
-    }
+// impl Model<UFOModel> {
+//     pub fn ufo(path: &Path) -> Result<Self, ModelError> {
+//         Ok(Self::from_base(UFOModel::parse(path)?))
+//     }
 
-    pub fn sm() -> Self {
-        Self::from_base(UFOModel::sm())
-    }
+//     pub fn sm() -> Self {
+//         Self::from_base(UFOModel::sm())
+//     }
 
-    pub fn add_vertex<S: Into<String> + AsRef<str> + PartialEq + Clone>(
-        &mut self,
-        name: S,
-        particles: Vec<S>,
-        spin_map: Vec<isize>,
-        coupling_orders: HashMap<S, usize>,
-    ) -> Result<(), ModelError> {
-        self.base.add_vertex(name, particles, spin_map, coupling_orders)?;
-        self.rebuild_cache();
-        Ok(())
-    }
+//     pub fn add_vertex<S: Into<String> + AsRef<str> + PartialEq + Clone>(
+//         &mut self,
+//         name: S,
+//         particles: Vec<S>,
+//         spin_map: Vec<i64>,
+//         coupling_orders: HashMap<S, usize>,
+//     ) -> Result<(), ModelError> {
+//         self.base.add_vertex(name, particles, spin_map, coupling_orders)?;
+//         self.rebuild_cache();
+//         Ok(())
+//     }
 
-    pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
-        let res = self.base.merge_vertices();
-        self.rebuild_cache();
-        res
-    }
-}
+//     pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
+//         let res = self.base.merge_vertices();
+//         self.rebuild_cache();
+//         res
+//     }
+// }
 
 impl<M: ModelBase> Model<M> {
     pub fn from_base(base: M) -> Self {
@@ -292,22 +292,22 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{Model, TopologyModel};
-    use pretty_assertions::assert_eq;
-    use std::path::PathBuf;
-    use test_log::test;
+// #[cfg(test)]
+// mod tests {
+//     use super::{Model, TopologyModel};
+//     use pretty_assertions::assert_eq;
+//     use std::path::PathBuf;
+//     use test_log::test;
 
-    #[test]
-    fn model_conversion_test() {
-        let model = Model::ufo(&PathBuf::from("../../tests/models/Standard_Model_UFO")).unwrap();
-        let topology_model = TopologyModel::from(&model);
-        assert_eq!(
-            topology_model,
-            TopologyModel {
-                vertex_degrees: vec![3, 4]
-            }
-        );
-    }
-}
+//     #[test]
+//     fn model_conversion_test() {
+//         let model = Model::ufo(&PathBuf::from("../../tests/models/Standard_Model_UFO")).unwrap();
+//         let topology_model = TopologyModel::from(&model);
+//         assert_eq!(
+//             topology_model,
+//             TopologyModel {
+//                 vertex_degrees: vec![3, 4]
+//             }
+//         );
+//     }
+// }

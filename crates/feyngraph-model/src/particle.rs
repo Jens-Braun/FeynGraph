@@ -2,6 +2,7 @@
 ///
 /// This property is used for drawing propagators.
 #[derive(PartialEq, Debug, Hash, Clone, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LineStyle {
     Dashed,
     Dotted,
@@ -13,10 +14,25 @@ pub enum LineStyle {
     Double,
     None,
 }
+impl From<&str> for LineStyle {
+    fn from(value: &str) -> Self {
+        return match value.to_lowercase().as_str() {
+            "dashed" => Self::Dashed,
+            "dotted" => Self::Dotted,
+            "straight" => Self::Straight,
+            "wavy" => Self::Wavy,
+            "curly" => Self::Curly,
+            "scurly" => Self::Scurly,
+            "swavy" => Self::Swavy,
+            "double" => Self::Double,
+            _ => Self::None,
+        };
+    }
+}
 
 pub trait ParticleBase {
     fn name(&self) -> &str;
-    fn id(&self) -> isize;
+    fn id(&self) -> i64;
     fn is_self_anti(&self) -> bool;
     fn is_fermi(&self) -> bool;
 
@@ -31,5 +47,5 @@ pub trait ParticleDraw {
 }
 
 pub trait ParticleColor {
-    fn color(&self) -> isize;
+    fn color(&self) -> i64;
 }

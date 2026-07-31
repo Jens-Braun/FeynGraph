@@ -3,10 +3,10 @@
 # Date: Mon 8 Jan 2024 12:54:06
 
 
-from object_library import all_vertices, all_CTvertices, Vertex, CTVertex
-import particles as P
-import CT_couplings as C
-import lorentz as L
+from .object_library import all_vertices, all_CTvertices, Vertex, CTVertex
+from . import particles as P
+from . import CT_couplings as C
+from . import lorentz as L
 
 CTV_25 = CTVertex(name = 'CTV_25',
 	type = 'UV',
