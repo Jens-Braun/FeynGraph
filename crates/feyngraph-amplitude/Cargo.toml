@@ -1,0 +1,20 @@
+[package]
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+name = "feyngraph-amplitude"
+repository.workspace = true
+version = "0.0.1"
+
+[dependencies]
+ufomodel = { path = "../ufomodel" }
+expression = { package = "feyngraph-expression", path = "../feyngraph-expression" }
+feyngraph-core = { path = "../feyngraph-core" }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }
+
+[dev-dependencies]
+ufomodel = { path = "../ufomodel", features = ["py-reader"] }

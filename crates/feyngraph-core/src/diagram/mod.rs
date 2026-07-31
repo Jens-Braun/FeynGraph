@@ -102,6 +102,8 @@ pub struct Diagram<M> {
     pub bridges: Vec<usize>,
     /// Sign of the diagram
     pub sign: i8,
+    /// Number of loops in the diagram
+    pub n_loops: usize,
     pub model: PhantomData<M>,
 }
 
@@ -127,6 +129,7 @@ impl<M: ModelBase> Diagram<M> {
                 propagator_symmetry: 1,
                 bridges: vec![],
                 sign: 0,
+                n_loops: workspace.topology.n_loops,
                 model: PhantomData,
             };
         }
@@ -251,6 +254,7 @@ impl<M: ModelBase> Diagram<M> {
                 })
                 .collect_vec(),
             sign: 0,
+            n_loops: workspace.topology.n_loops,
             model: PhantomData,
         };
         if workspace.model.supports_sign() {

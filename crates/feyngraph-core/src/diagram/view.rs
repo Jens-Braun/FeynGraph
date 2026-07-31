@@ -44,6 +44,14 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
         };
     }
 
+    pub fn model(&self) -> &'a M {
+        self.model
+    }
+
+    pub fn n_loops(&self) -> usize {
+        self.diagram.n_loops
+    }
+
     /// Get an iterator over the incoming legs.
     pub fn incoming(&self) -> impl Iterator<Item = LegView<'_, M>> {
         return self.diagram.incoming_legs.iter().enumerate().map(|(i, p)| LegView {
@@ -438,6 +446,9 @@ impl<M: ModelBase> LegView<'_, M> {
         return self.leg;
     }
 
+    pub fn model(&self) -> &M {
+        self.model
+    }
     /// Get the ID of the leg, i.e. the index in the list of external legs.
     pub fn id(&self) -> usize {
         return self.leg_index;
@@ -559,6 +570,10 @@ impl<M: ModelBase> PropagatorView<'_, M> {
     #[cfg(feature = "_internal_api")]
     pub fn propagator(&self) -> &Propagator {
         return self.propagator;
+    }
+
+    pub fn model(&self) -> &M {
+        self.model
     }
 
     /// Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle.
@@ -760,6 +775,10 @@ impl<M: ModelBase> VertexView<'_, M> {
     #[cfg(feature = "_internal_api")]
     pub fn vertex(&self) -> &Vertex {
         return self.vertex;
+    }
+
+    pub fn model(&self) -> &M {
+        self.model
     }
 
     /// Get an iterator over the propagators connected to the vertex.

@@ -346,6 +346,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "feyngraph-amplitude"
+version = "0.0.1"
+dependencies = [
+ "feyngraph-core",
+ "feyngraph-expression",
+ "feyngraph-model",
+ "feyngraph-util",
+ "ufomodel",
+]
+
+[[package]]
 name = "feyngraph-core"
 version = "0.0.1"
 dependencies = [

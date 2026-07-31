@@ -735,6 +735,7 @@ mod tests {
             propagator_symmetry: 0,
             bridges: vec![],
             sign: 1,
+            n_loops: 0,
             model: PhantomData::<UFOModel>,
         };
         let mut layout = DiagramLayout {

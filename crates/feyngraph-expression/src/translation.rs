@@ -93,7 +93,7 @@ pub trait Translator<A: ExpressionAtom, D: Dictionary<A, Self::Output, Self>> {
     }
 }
 
-pub trait Dictionary<A: ExpressionAtom, O, C: ?Sized> {
+pub trait Dictionary<A: ExpressionAtom, O: Write, C: ?Sized> {
     const L_PAREN: &'static str = "(";
     const R_PAREN: &'static str = ")";
     const SUM: &'static str = "+";
