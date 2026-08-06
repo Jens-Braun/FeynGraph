@@ -43,7 +43,7 @@ impl Leg {
 }
 
 /// Internal representation of an internal propagator.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Propagator {
     /// Internal IDs of the vertices connected by the propagator.
     pub vertices: [usize; 2],
@@ -188,14 +188,41 @@ impl Diagram {
             })
             .collect_vec();
         let mut propagator_symmetry = 1;
-        for ((vertices, particle), count) in propagators.iter().counts_by(|prop| (prop.vertices, prop.particle)) {
-            if vertices[0] == vertices[1] {
-                if workspace.model.get_particle(particle).self_anti() {
-                    propagator_symmetry *= 2_usize.pow(count as u32);
+        if !propagators.is_empty() {
+            let mut counts: Vec<(usize, u32)> = Vec::new();
+            let mut v0 = propagators[0].vertices[0];
+            let mut v1 = propagators[0].vertices[1];
+            let mut start = 0;
+            let mut end = 1;
+            for (i, p) in propagators
+                .iter()
+                .chain([Propagator::default()].iter())
+                .enumerate()
+                .skip(1)
+            {
+                if p.vertices[0] == v0 && p.vertices[1] == v1 && i != propagators.len() {
+                    end += 1;
+                } else {
+                    propagators[start..end].iter().for_each(|cp| {
+                        if let Some((_, c)) = counts.iter_mut().find(|(p, _)| cp.particle == *p) {
+                            *c += 1;
+                        } else {
+                            counts.push((cp.particle, 1));
+                        }
+                    });
+                    let v = &propagators[start].vertices;
+                    for (p, c) in counts.iter() {
+                        if v[0] == v[1] && workspace.model.get_particle(*p).self_anti() {
+                            propagator_symmetry *= 2_usize.pow(*c);
+                        }
+                        propagator_symmetry *= factorial(*c as usize);
+                    }
+                    start = i;
+                    end = start + 1;
+                    v0 = p.vertices[0];
+                    v1 = p.vertices[1];
+                    counts.clear();
                 }
-                propagator_symmetry *= factorial(count);
-            } else {
-                propagator_symmetry *= factorial(count);
             }
         }
         let vertices = workspace

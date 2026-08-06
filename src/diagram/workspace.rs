@@ -103,29 +103,30 @@ impl<'a> AssignWorkspace<'a> {
                 continue;
             }
             let connected_particles = self.get_connected_particles(index);
-            let mut candidates = self
+            let mut counts = Vec::with_capacity(connected_particles.len());
+            connected_particles.iter().for_each(|cp| {
+                if let Some((_, c)) = counts.iter_mut().find(|(p, _)| *cp == *p) {
+                    *c += 1;
+                } else {
+                    counts.push((*cp, 1));
+                }
+            });
+            let candidates = self
                 .model
                 .vertices_iter()
                 .enumerate()
                 .filter_map(|(i, interaction)| {
-                    if interaction.degree() == self.vertex_candidates[index].degree {
+                    if interaction.degree() == self.vertex_candidates[index].degree
+                        && counts.iter().all(|(particle_index, count)| {
+                            *count <= self.model.vertex(i).particle_count(particle_index)
+                        })
+                    {
                         Some(i)
                     } else {
                         None
                     }
                 })
                 .collect_vec();
-            if !connected_particles.is_empty() {
-                candidates.retain(|candidate| {
-                    connected_particles
-                        .iter()
-                        .counts()
-                        .into_iter()
-                        .all(|(particle_index, count)| {
-                            count <= self.model.vertex(*candidate).particle_count(particle_index)
-                        })
-                })
-            }
             if candidates.is_empty() {
                 return DiagramContainer::new(None, &self.topology.momentum_labels);
             }
