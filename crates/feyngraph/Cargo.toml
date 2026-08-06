@@ -43,6 +43,10 @@ harness = false
 name = "diagrams"
 harness = false
 
+[[bench]]
+name = "gg_ggg_2loop"
+harness = false
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]
 

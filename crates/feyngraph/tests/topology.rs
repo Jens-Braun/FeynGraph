@@ -21,7 +21,7 @@ macro_rules! test_topo {
                     $n_loops,
                     model.clone(),
                     None,
-                ).count();
+                ).par_count();
                 let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
                 common::write_qgraf_topo_model(
                     &qgraf_model,

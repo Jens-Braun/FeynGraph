@@ -58,7 +58,7 @@ macro_rules! test_diagrams {
                     $n_loops,
                     model,
                     None,
-                ).unwrap().count();
+                ).unwrap().par_count();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
                     assert_eq!(n_qgraf, n_diags);
@@ -113,7 +113,7 @@ macro_rules! test_diagrams {
                     $n_loops,
                     model,
                     None,
-                ).unwrap().count();
+                ).unwrap().par_count();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
                 if let Ok(n_qgraf) = n_qgraf {
                     assert_eq!(n_qgraf, n_diags);
