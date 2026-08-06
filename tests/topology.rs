@@ -16,6 +16,7 @@ macro_rules! test_topo {
         $n_loops:literal
     ) => {
         paste!{
+            #[cfg(not(feature = "skip-qgraf"))]
             #[test]
             fn [< test_topo $(_$degree)* _legs_ $n_legs _loops_ $n_loops >]() {
                 let model = TopologyModel::from(vec![$($degree,)*]);
