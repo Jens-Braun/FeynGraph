@@ -397,6 +397,11 @@ pub struct LegView<'a> {
 }
 
 impl LegView<'_> {
+    /// Get the leg's external index.
+    pub fn id(&self) -> usize {
+        return self.leg_index;
+    }
+
     /// Get the vertex the leg is attached to.
     pub fn vertex(&self) -> VertexView<'_> {
         return self.diagram.vertex(self.leg.vertex);
