@@ -1,0 +1,16 @@
+[package]
+name = "feyngraph-amplitude"
+version = "0.0.1"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+expression = { package = "feyngraph-expression", path = "../feyngraph-expression" }
+feyngraph-core = { path = "../feyngraph-core" }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }

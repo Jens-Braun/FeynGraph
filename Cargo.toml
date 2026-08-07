@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/feyngraph",
+    "crates/feyngraph-amplitude",
     "crates/feyngraph-core",
     "crates/feyngraph-drawing",
     "crates/feyngraph-expression",

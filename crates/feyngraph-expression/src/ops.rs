@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::{Expression, ExpressionAtom};
 
@@ -23,6 +23,26 @@ impl<A: ExpressionAtom> Add<Expression<A>> for Expression<A> {
     }
 }
 
+impl<A: ExpressionAtom> AddAssign for Expression<A> {
+    fn add_assign(&mut self, rhs: Self) {
+        return match (self, rhs) {
+            (Expression::Sum(x), Expression::Sum(mut y)) => {
+                x.append(&mut y);
+            }
+            (Expression::Sum(x), y) => {
+                x.push(y);
+            }
+            (x, Expression::Sum(mut y)) => {
+                y.push(std::mem::replace(x, Expression::IConst(0)));
+                *x = Expression::Sum(y);
+            }
+            (x, y) => {
+                *x = Expression::Sum(vec![std::mem::replace(x, Expression::IConst(0)), y]);
+            }
+        };
+    }
+}
+
 impl<A: ExpressionAtom> Neg for Expression<A> {
     type Output = Expression<A>;
     fn neg(self) -> Self::Output {
@@ -40,6 +60,12 @@ impl<A: ExpressionAtom> Sub<Expression<A>> for Expression<A> {
     type Output = Expression<A>;
     fn sub(self, rhs: Expression<A>) -> Self::Output {
         self + (-rhs)
+    }
+}
+
+impl<A: ExpressionAtom> SubAssign for Expression<A> {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self += -rhs;
     }
 }
 
@@ -65,9 +91,38 @@ impl<A: ExpressionAtom> Mul<Expression<A>> for Expression<A> {
     }
 }
 
+impl<A: ExpressionAtom> MulAssign for Expression<A> {
+    fn mul_assign(&mut self, rhs: Self) {
+        return match (self, rhs) {
+            (Expression::Product(x), Expression::Product(mut y)) => {
+                x.append(&mut y);
+            }
+            (Expression::Product(x), y) => {
+                x.push(y);
+            }
+            (x, Expression::Product(mut y)) => {
+                y.push(std::mem::replace(x, Expression::IConst(0)));
+                *x = Expression::Product(y);
+            }
+            (Expression::Inverse(x), Expression::Inverse(y)) => {
+                **x = Expression::Inverse(Box::new(std::mem::replace(x.as_mut(), Expression::IConst(0)) * *y));
+            }
+            (x, y) => {
+                *x = Expression::Sum(vec![std::mem::replace(x, Expression::IConst(0)), y]);
+            }
+        };
+    }
+}
+
 impl<A: ExpressionAtom> Div<Expression<A>> for Expression<A> {
     type Output = Expression<A>;
     fn div(self, rhs: Expression<A>) -> Self::Output {
         self * Expression::Inverse(Box::new(rhs))
+    }
+}
+
+impl<A: ExpressionAtom> DivAssign for Expression<A> {
+    fn div_assign(&mut self, rhs: Self) {
+        *self *= Expression::Inverse(Box::new(rhs));
     }
 }

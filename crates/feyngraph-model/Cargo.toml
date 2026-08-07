@@ -1,6 +1,6 @@
 [package]
 name = "feyngraph-model"
-version = "0.1.0"
+version = "0.0.1"
 authors.workspace = true
 categories.workspace = true
 description.workspace = true
@@ -13,6 +13,7 @@ repository.workspace = true
 chumsky = { workspace = true }
 ariadne = { workspace = true }
 util = { package = "feyngraph-util", path = "../feyngraph-util" }
+expression = { package = "feyngraph-expression", path = "../feyngraph-expression"}
 itertools = { workspace = true }
 peg = { workspace = true }
 log = { workspace = true }

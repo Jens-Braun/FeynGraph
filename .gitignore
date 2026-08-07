@@ -12,3 +12,4 @@ doc/html
 **/tests/resources/form
 .zed
 site
+**/__pycache__

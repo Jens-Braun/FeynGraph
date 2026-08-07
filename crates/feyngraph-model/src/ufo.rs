@@ -4,7 +4,7 @@ use log;
 use peg;
 use peg::Parse;
 use std::path::Path;
-use util::{HashMap, IndexMap, contract_indices};
+use util::{HashMap, IndexMap, contract_index_map};
 
 const SM_PARTICLES: &str = include_str!("../Standard_Model/particles.py");
 const SM_COUPLING_ORDERS: &str = include_str!("../Standard_Model/coupling_orders.py");
@@ -754,7 +754,7 @@ peg::parser! {
                         connections.push((i as isize, j as isize));
                     }
                 }
-                return Ok((py_name, contract_indices(connections)));
+                return Ok((py_name, contract_index_map(connections)));
             }
 
         pub rule particles(input: &str) -> Vec<(String, UFOParticle)> =

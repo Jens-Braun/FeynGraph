@@ -8,6 +8,7 @@ use std::{
 
 use util::{HashMap, IndexMap};
 
+pub mod analytic;
 mod particle;
 mod qgraf;
 mod ufo;
