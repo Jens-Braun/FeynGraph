@@ -6,6 +6,11 @@ build-backend = "maturin"
 features = ["python-bindings", "pyo3/extension-module", "wolfram-bindings"]
 python-source = "python"
 
+[tool.maturin.generate-ci.github]
+trusted-publishing = true
+linux = { targets = ["x86_64", "aarch64"] }
+macos = { targets = ["aarch64"] }
+
 [project]
 name = "feyngraph"
 requires-python = ">=3.10"
@@ -21,6 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Scientific/Engineering :: Physics",
 ]
