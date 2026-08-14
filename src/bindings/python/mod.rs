@@ -175,9 +175,9 @@ impl PyModel {
         self.0.add_particle(
             name,
             anti_name,
-            pdg_code,
             spin,
             color,
+            pdg_code,
             texname,
             antitexname,
             linestyle,
