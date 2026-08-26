@@ -12,3 +12,6 @@ version = "0.0.1"
 [dependencies]
 indexmap = { workspace = true }
 rustc-hash = { workspace = true }
+ariadne = { workspace = true }
+unicode-ident = { workspace = true }
+logos = { workspace = true }

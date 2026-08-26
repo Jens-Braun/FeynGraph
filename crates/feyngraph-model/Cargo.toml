@@ -10,7 +10,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-chumsky = { workspace = true }
 ariadne = { workspace = true }
 util = { package = "feyngraph-util", path = "../feyngraph-util" }
 expression = { package = "feyngraph-expression", path = "../feyngraph-expression"}

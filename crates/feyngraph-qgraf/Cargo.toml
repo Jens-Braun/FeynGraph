@@ -1,0 +1,24 @@
+[package]
+name = "feyngraph-qgraf"
+version = "0.0.1"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ariadne = { workspace = true }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }
+model = { package = "feyngraph-model", path = "../feyngraph-model" }
+log = { workspace = true }
+logos = { workspace = true }
+
+[dev-dependencies]
+test-log ={ workspace = true }
+pretty_assertions ={ workspace = true }
+
+[features]
+emit_test_reports = []

@@ -1,3 +1,4 @@
+pub mod parsing;
 pub mod unicode;
 
 use indexmap::IndexMap as OriginalIndexMap;

@@ -31,6 +31,11 @@ pub mod model {
     pub mod ufo {
         pub use feyngraph_model::{UFOModel, UFOParticle, UFOVertex};
     }
+
+    #[cfg(feature = "qgraf")]
+    pub mod qgraf {
+        pub use feyngraph_qgraf::{ConstValue, QGRAFModel, QGRAFParticle, QGRAFVertex};
+    }
 }
 
 pub mod topology {

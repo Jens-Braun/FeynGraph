@@ -10,15 +10,12 @@ use util::{HashMap, IndexMap};
 
 pub mod analytic;
 mod particle;
-mod qgraf;
 mod ufo;
 mod vertex;
 
 pub use particle::{LineStyle, ParticleBase, ParticleColor, ParticleDraw};
 pub use ufo::{UFOModel, UFOParticle, UFOVertex};
 pub use vertex::VertexBase;
-
-use crate::qgraf::QGRAFModel;
 
 #[derive(Debug)]
 pub struct ModelError {
@@ -29,7 +26,7 @@ pub struct ModelError {
 impl std::error::Error for ModelError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
-            ErrorKind::ParticleNotFound | ErrorKind::VertexNotFound => None,
+            ErrorKind::ParticleNotFound | ErrorKind::VertexNotFound | ErrorKind::InvalidModel => None,
             ErrorKind::IO(err) => Some(err),
             ErrorKind::ParseError(err) => Some(err.as_ref()),
         }
@@ -64,6 +61,13 @@ impl ModelError {
             kind: ErrorKind::ParseError(source),
         }
     }
+
+    pub fn invalid_model(msg: impl Display) -> Self {
+        Self {
+            msg: msg.to_string(),
+            kind: ErrorKind::InvalidModel,
+        }
+    }
 }
 
 impl Display for ModelError {
@@ -76,6 +80,7 @@ impl Display for ModelError {
 pub enum ErrorKind {
     ParticleNotFound,
     VertexNotFound,
+    InvalidModel,
     IO(std::io::Error),
     ParseError(Box<dyn Error>),
 }
@@ -127,12 +132,6 @@ pub struct Model<M> {
     particle_counts: IndexMap<usize, Vec<(usize, usize)>>,
 }
 
-impl Model<QGRAFModel> {
-    pub fn qgraf(path: &Path) -> Result<Self, ModelError> {
-        Ok(Self::from_base(QGRAFModel::parse(path)?))
-    }
-}
-
 impl Model<UFOModel> {
     pub fn ufo(path: &Path) -> Result<Self, ModelError> {
         Ok(Self::from_base(UFOModel::parse(path)?))
@@ -150,41 +149,28 @@ impl Model<UFOModel> {
         coupling_orders: HashMap<S, usize>,
     ) -> Result<(), ModelError> {
         self.base.add_vertex(name, particles, spin_map, coupling_orders)?;
-        self.rebuild_cache();
+        self.rebuild_counts();
         Ok(())
     }
 
     pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
         let res = self.base.merge_vertices();
-        self.rebuild_cache();
+        self.rebuild_counts();
         res
     }
 }
 
 impl<M: ModelBase> Model<M> {
     pub fn from_base(base: M) -> Self {
-        let counts = base
-            .vertices()
-            .enumerate()
-            .map(|(v_i, v)| {
-                (
-                    v_i,
-                    v.particles()
-                        .iter()
-                        .counts_by(|p| p.as_ref())
-                        .into_iter()
-                        .map(|(k, v)| (base.particle_index_by_name(k).unwrap(), v))
-                        .collect(),
-                )
-            })
-            .collect();
-        Self {
+        let mut res = Self {
             base,
-            particle_counts: counts,
-        }
+            particle_counts: IndexMap::default(),
+        };
+        res.rebuild_counts();
+        res
     }
 
-    pub fn rebuild_cache(&mut self) {
+    pub fn rebuild_counts(&mut self) {
         self.particle_counts = self
             .base
             .vertices()

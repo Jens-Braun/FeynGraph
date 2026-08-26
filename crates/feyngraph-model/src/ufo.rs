@@ -75,8 +75,8 @@ impl ParticleBase for UFOParticle {
         &self.name
     }
 
-    fn id(&self) -> isize {
-        self.pdg_code
+    fn id(&self) -> i64 {
+        self.pdg_code as i64
     }
 
     fn is_self_anti(&self) -> bool {

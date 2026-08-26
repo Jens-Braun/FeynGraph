@@ -16,7 +16,7 @@ pub enum LineStyle {
 
 pub trait ParticleBase {
     fn name(&self) -> &str;
-    fn id(&self) -> isize;
+    fn id(&self) -> i64;
     fn is_self_anti(&self) -> bool;
     fn is_fermi(&self) -> bool;
 
@@ -31,5 +31,5 @@ pub trait ParticleDraw {
 }
 
 pub trait ParticleColor {
-    fn color(&self) -> isize;
+    fn color(&self) -> i64;
 }
