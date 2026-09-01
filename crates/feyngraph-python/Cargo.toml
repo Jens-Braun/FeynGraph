@@ -1,37 +1,45 @@
 [package]
-authors.workspace = true
-categories.workspace = true
-description.workspace = true
-edition.workspace = true
-keywords.workspace = true
-license.workspace = true
 name = "feyngraph-python"
-repository.workspace = true
 version = "0.0.1"
+authors.workspace = true
+edition.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
-name = "feyngraph"
 crate-type = ["cdylib"]
 doc = false
+name = "feyngraph"
 
 [dependencies]
-feyngraph-core = {  path = "../feyngraph-core", features = ["_internal_api"] }
 drawing = { package = "feyngraph-drawing", path = "../feyngraph-drawing", optional = true }
+feyngraph-core = { path = "../feyngraph-core", features = ["_internal_api", "rayon"] }
+feyngraph-model = { path = "../feyngraph-model" }
+feyngraph-qgraf = { path = "../feyngraph-qgraf" }
+util = { package = "feyngraph-util", path = "../feyngraph-util" }
+
 either = { workspace = true }
-log = { workspace = true }
-itertools = { workspace = true }
 indexmap = { workspace = true }
-rustc-hash = { workspace = true }
-rayon = { workspace = true }
-pyo3 = { workspace = true, features = [
+itertools = { workspace = true }
+log = { workspace = true }
+pyo3 = {
+  workspace = true,
+  features = [
+    "abi3-py310",
     "auto-initialize",
     "either",
     "indexmap",
     "multiple-pymethods",
-    "abi3-py310",
-]}
+    "experimental-inspect"
+  ]
+}
 pyo3-ffi = { workspace = true }
 pyo3-log = { workspace = true }
+rayon = { workspace = true }
+rustc-hash = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }

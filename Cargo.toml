@@ -6,7 +6,7 @@ members = [
     "crates/feyngraph-drawing",
     "crates/feyngraph-expression",
     "crates/feyngraph-model",
-    # "crates/feyngraph-python",
+    "crates/feyngraph-python",
     "crates/feyngraph-qgraf",
     "crates/feyngraph-util",
 ]

@@ -6,10 +6,8 @@ use std::sync::Arc;
 #[cfg(feature = "drawing")]
 use drawing::{Draw, DrawGrid};
 
-use feyngraph_core::{
-    model::TopologyModel,
-    topology::{Edge, Node, Topology, TopologyContainer, TopologyGenerator, TopologySelector},
-};
+use feyngraph_core::topology::{Edge, Node, Topology, TopologyContainer, TopologyGenerator, TopologySelector};
+use feyngraph_model::TopologyModel;
 
 #[derive(Clone)]
 #[pyclass(from_py_object)]
@@ -258,7 +256,7 @@ impl PyTopologyGenerator {
 
     pub(crate) fn count(&self, py: Python<'_>) -> usize {
         return py.detach(|| -> usize {
-            return self.0.count_topologies();
+            return self.0.count();
         });
     }
 }

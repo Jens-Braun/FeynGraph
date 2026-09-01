@@ -1,26 +1,31 @@
 use either::Either;
 use itertools::Itertools;
-use pyo3::{exceptions::PyIndexError, prelude::*, types::PyDict};
+use pyo3::{
+    exceptions::{PyBaseException, PyIndexError},
+    prelude::*,
+    types::PyDict,
+};
 use std::{fmt::Write, path::PathBuf, sync::Arc};
 
 #[cfg(feature = "drawing")]
 use drawing::{Draw, DrawGrid};
 use feyngraph_core::{
     diagram::{
-        view::DiagramView, Diagram, DiagramContainer, DiagramGenerator, DiagramSelector, Leg, Propagator, Vertex,
+        Diagram, DiagramContainer, DiagramGenerator, DiagramSelector, Leg, Propagator, Vertex, view::DiagramView,
     },
-    model::Model,
     topology::Topology,
 };
+use feyngraph_model::{Model, ModelBase, ParticleBase, ParticleColor, VertexBase};
+use util::HashMap;
 
-use super::{topology::PyTopology, PyInteractionVertex, PyModel, PyParticle};
-use crate::{HashMap, PyInputError, PyModelError};
+use super::{PyInteraction, PyModel, PyParticle, topology::PyTopology};
+use crate::{PyInputError, PyModelError};
 
 #[derive(Clone)]
 #[pyclass(skip_from_py_object)]
 #[pyo3(name = "Leg")]
 pub(crate) struct PyLeg {
-    container: Arc<DiagramContainer>,
+    container: Arc<DiagramContainer<PyModel>>,
     diagram: Arc<PyDiagram>,
     leg: Arc<Leg>,
     leg_index: usize,
@@ -63,9 +68,9 @@ impl PyLeg {
 
     pub fn particle(&self) -> PyParticle {
         return if self.invert_particle {
-            PyParticle(self.container.model().get_anti(self.leg.particle).clone())
+            self.container.model().anti_particle(self.leg.particle).clone()
         } else {
-            PyParticle(self.container.model().get_particle(self.leg.particle).clone())
+            self.container.model().particle(self.leg.particle).clone()
         };
     }
 
@@ -160,7 +165,7 @@ impl std::fmt::Display for PyLeg {
 #[pyclass(skip_from_py_object)]
 #[pyo3(name = "Propagator")]
 pub(crate) struct PyPropagator {
-    container: Arc<DiagramContainer>,
+    container: Arc<DiagramContainer<PyModel>>,
     diagram: Arc<PyDiagram>,
     propagator: Arc<Propagator>,
     index: usize,
@@ -244,9 +249,9 @@ impl PyPropagator {
 
     pub fn particle(&self) -> PyParticle {
         return if self.invert {
-            PyParticle(self.container.model().get_anti(self.propagator.particle).clone())
+            self.container.model().anti_particle(self.propagator.particle).clone()
         } else {
-            PyParticle(self.container.model().get_particle(self.propagator.particle).clone())
+            self.container.model().particle(self.propagator.particle).clone()
         };
     }
 
@@ -278,7 +283,7 @@ impl PyPropagator {
                     if p.index == self.index {
                         if self.propagator.vertices[0] == self.propagator.vertices[1] {
                             if index == 1 {
-                                if p.particle().self_anti() {
+                                if p.particle().is_self_anti() {
                                     if !seen {
                                         seen = true;
                                         return false;
@@ -289,7 +294,7 @@ impl PyPropagator {
                                     return p.particle().is_anti();
                                 }
                             } else {
-                                if p.particle().self_anti() {
+                                if p.particle().is_self_anti() {
                                     return true;
                                 } else {
                                     return !p.particle().is_anti();
@@ -375,7 +380,7 @@ impl std::fmt::Display for PyPropagator {
 #[pyclass(skip_from_py_object)]
 #[pyo3(name = "Vertex")]
 pub(crate) struct PyVertex {
-    container: Arc<DiagramContainer>,
+    container: Arc<DiagramContainer<PyModel>>,
     diagram: Arc<PyDiagram>,
     vertex: Arc<Vertex>,
     index: usize,
@@ -447,7 +452,7 @@ impl PyVertex {
                     .map(|view| either::for_both!(view, p => p.particle()))
                     .enumerate()
                 {
-                    if !seen[i] && part.name() == *ref_particle {
+                    if !seen[i] && part.name() == ref_particle.as_ref() {
                         seen[i] = true;
                         return props[i].clone();
                     } else {
@@ -459,17 +464,16 @@ impl PyVertex {
             .collect();
     }
 
-    pub fn interaction(&self) -> PyInteractionVertex {
-        return PyInteractionVertex(self.container.model().vertex(self.vertex.interaction).clone());
+    pub fn interaction(&self) -> PyInteraction {
+        return self.container.model().vertex(self.vertex.interaction).clone();
     }
 
     pub fn particles_ordered(&self) -> Vec<PyParticle> {
         return self
             .interaction()
-            .0
             .particles()
             .iter()
-            .map(|p| PyParticle(self.container.model().get_particle_by_name(p).unwrap().clone()))
+            .map(|p| self.container.model().particle_by_name(p).unwrap().clone())
             .collect_vec();
     }
 
@@ -482,17 +486,17 @@ impl PyVertex {
     }
 
     pub fn match_particles(&self, query: Vec<String>) -> bool {
-        return self.interaction().match_particles(query);
+        return self.interaction().match_particles(query.iter());
     }
 
     pub fn match_particle_combinations(&self, query: Vec<Vec<String>>) -> bool {
-        if query.len() != self.interaction().0.particles().len() {
+        if query.len() != self.interaction().particles().len() {
             return false;
         }
         return query
             .iter()
             .multi_cartesian_product()
-            .any(|q| self.interaction().0.match_particles(q.iter().map(|s| *s)));
+            .any(|q| self.interaction().match_particles(q.iter().map(|s| *s)));
     }
 }
 
@@ -506,7 +510,7 @@ impl std::fmt::Display for PyVertex {
             .particles()
             .iter()
         {
-            write!(f, "{} ", p)?;
+            write!(f, "{} ", p.as_ref())?;
         }
         write!(f, "]")?;
         Ok(())
@@ -517,8 +521,8 @@ impl std::fmt::Display for PyVertex {
 #[pyclass(skip_from_py_object)]
 #[pyo3(name = "Diagram")]
 pub(crate) struct PyDiagram {
-    pub(crate) diagram: Arc<Diagram>,
-    pub(crate) container: Arc<DiagramContainer>,
+    pub(crate) diagram: Arc<Diagram<PyModel>>,
+    pub(crate) container: Arc<DiagramContainer<PyModel>>,
 }
 
 #[pymethods]
@@ -774,14 +778,14 @@ impl PyDiagram {
         return self
             .vertices()
             .into_iter()
-            .map(|v| v.interaction().0.order(&coupling))
+            .map(|v| v.interaction().order(&coupling))
             .sum::<usize>();
     }
 
     pub fn orders(&self) -> HashMap<String, usize> {
         let mut result = HashMap::default();
         for v in self.vertices() {
-            for (coupling, power) in v.interaction().0.coupling_orders().iter() {
+            for (coupling, power) in v.interaction().coupling_orders().iter() {
                 if result.contains_key(coupling) {
                     *result.get_mut(coupling).unwrap() += power;
                 } else {
@@ -839,7 +843,7 @@ impl PyDiagram {
 #[derive(Clone)]
 #[pyclass(from_py_object)]
 #[pyo3(name = "DiagramSelector")]
-pub(crate) struct PyDiagramSelector(DiagramSelector);
+pub(crate) struct PyDiagramSelector(DiagramSelector<PyModel>);
 
 #[pymethods]
 impl PyDiagramSelector {
@@ -874,10 +878,10 @@ impl PyDiagramSelector {
 
     fn add_custom_function(&mut self, py_function: Py<PyAny>) {
         self.0.add_unwrapped_custom_function(Arc::new(
-            move |model: Arc<Model>, momentum_labels: Arc<Vec<String>>, diag: &Diagram| -> bool {
+            move |model: Arc<Model<PyModel>>, momentum_labels: Arc<Vec<String>>, diag: &Diagram<PyModel>| -> bool {
                 let py_diag = PyDiagram {
                     diagram: Arc::new(diag.clone()),
-                    container: Arc::new(DiagramContainer::new(Some(&model), &momentum_labels)),
+                    container: Arc::new(DiagramContainer::new(Some(model), &momentum_labels)),
                 };
                 Python::attach(|py| -> bool { py_function.call1(py, (py_diag,)).unwrap().extract(py).unwrap() })
             },
@@ -924,7 +928,7 @@ impl PyDiagramSelector {
 #[derive(Clone)]
 #[pyclass(skip_from_py_object)]
 #[pyo3(name = "DiagramContainer")]
-pub(crate) struct PyDiagramContainer(Arc<DiagramContainer>);
+pub(crate) struct PyDiagramContainer(Arc<DiagramContainer<PyModel>>);
 
 #[pymethods]
 impl PyDiagramContainer {
@@ -1010,7 +1014,7 @@ impl PyDiagramContainer {
 
 #[pyclass]
 #[pyo3(name = "DiagramGenerator")]
-pub(crate) struct PyDiagramGenerator(DiagramGenerator);
+pub(crate) struct PyDiagramGenerator(DiagramGenerator<PyModel>);
 
 #[pymethods]
 impl PyDiagramGenerator {
@@ -1030,12 +1034,16 @@ impl PyDiagramGenerator {
                 &incoming,
                 &outgoing,
                 n_loops,
-                model.0,
+                Model::from_base(model),
                 Some(selector.0),
             )?))
         } else {
             Ok(Self(DiagramGenerator::new(
-                &incoming, &outgoing, n_loops, model.0, None,
+                &incoming,
+                &outgoing,
+                n_loops,
+                Model::from_base(model),
+                None,
             )?))
         };
     }
@@ -1045,9 +1053,18 @@ impl PyDiagramGenerator {
         return Ok(());
     }
 
-    pub(crate) fn generate(&self, py: Python<'_>) -> PyDiagramContainer {
-        return py.detach(|| -> PyDiagramContainer {
-            return PyDiagramContainer(Arc::new(self.0.generate()));
+    #[pyo3(signature = (threads = 0))]
+    pub(crate) fn generate(&self, py: Python<'_>, threads: usize) -> PyResult<PyDiagramContainer> {
+        return py.detach(|| -> PyResult<PyDiagramContainer> {
+            if threads != 1 {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .build()
+                    .map_err(|e| PyBaseException::new_err(e.to_string()))?;
+                Ok(PyDiagramContainer(Arc::new(pool.install(|| self.0.par_generate()))))
+            } else {
+                Ok(PyDiagramContainer(Arc::new(self.0.generate())))
+            }
         });
     }
 
