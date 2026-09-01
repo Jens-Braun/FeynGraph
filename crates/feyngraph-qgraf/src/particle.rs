@@ -55,6 +55,10 @@ impl ParticleBase for QGRAFParticle {
         &self.name
     }
 
+    fn anti_name(&self) -> &str {
+        &self.anti_name
+    }
+
     fn id(&self) -> i64 {
         self.id
     }

@@ -7,7 +7,7 @@ pub trait VertexBase {
     fn particles(&self) -> &[impl AsRef<str>];
     fn coupling_orders(&self) -> &HashMap<String, usize>;
 
-    fn fermi_map(&self, in_ray: usize) -> usize;
+    fn fermi_map(&self, in_ray: usize) -> i64;
 
     fn order<Q>(&self, coupling: &Q) -> usize
     where

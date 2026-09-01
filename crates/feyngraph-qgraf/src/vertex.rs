@@ -5,11 +5,11 @@ use crate::ConstValue;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct QGRAFVertex {
-    name: String,
-    particles: Vec<String>,
-    couplings: HashMap<String, usize>,
-    constants: HashMap<String, ConstValue>,
-    spin_map: Vec<isize>,
+    pub name: String,
+    pub particles: Vec<String>,
+    pub couplings: HashMap<String, usize>,
+    pub constants: HashMap<String, ConstValue>,
+    pub fermi_map: Vec<i64>,
 }
 
 impl QGRAFVertex {
@@ -18,14 +18,14 @@ impl QGRAFVertex {
         particles: Vec<String>,
         couplings: HashMap<String, usize>,
         constants: HashMap<String, ConstValue>,
-        spin_map: Vec<isize>,
+        fermi_map: Vec<i64>,
     ) -> Self {
         Self {
             name: name.into(),
             particles,
             couplings,
             constants,
-            spin_map,
+            fermi_map,
         }
     }
 
@@ -47,7 +47,7 @@ impl VertexBase for QGRAFVertex {
         &self.couplings
     }
 
-    fn fermi_map(&self, in_ray: usize) -> usize {
-        self.spin_map[in_ray].try_into().unwrap()
+    fn fermi_map(&self, in_ray: usize) -> i64 {
+        self.fermi_map[in_ray]
     }
 }

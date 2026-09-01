@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use log::warn;
-use model::{ModelBase, ModelError};
+use model::{ModelBase, ModelError, ParticleBase};
 use util::{HashMap, IndexMap, parsing::diagnostic::DiagnosticContainer};
 
 pub use particle::QGRAFParticle;
@@ -25,7 +25,6 @@ pub struct QGRAFModel {
     particles: IndexMap<String, QGRAFParticle>,
     vertices: IndexMap<String, QGRAFVertex>,
     couplings: Vec<String>,
-    anti_map: Vec<usize>,
     supports_sign: bool,
 }
 
@@ -48,7 +47,6 @@ impl QGRAFModel {
             particles: IndexMap::default(),
             vertices: IndexMap::default(),
             couplings: Vec::new(),
-            anti_map: Vec::new(),
             supports_sign: true,
         }
     }
@@ -83,53 +81,54 @@ impl QGRAFModel {
         let mut orphaned = None;
         if p.self_anti {
             match self.particles.insert(name.clone().into(), p) {
-                None => self.anti_map.push(self.anti_map.len()),
+                None => (),
                 Some(p_old) => {
                     warn!("Particle `{}` already present in model, replacing.", &name);
                     if !p_old.self_anti {
                         let p_index = self.particles.get_index_of(&p_old.name).unwrap();
-                        orphaned = Some(vec![self.anti_map[p_index]]);
-                        self.anti_map[p_index] = p_index;
+                        orphaned = Some(vec![
+                            self.particle_index_by_name(self.particle(p_index).anti_name()).unwrap(),
+                        ]);
                     }
                 }
             }
         } else {
             match self.particles.insert(name.clone().into(), p.clone()) {
-                None => {
-                    match self.particles.insert(anti_name.clone().into(), p.into_anti()) {
-                        None => (),
-                        Some(anti_old) => {
-                            warn!("Particle `{}` already present in model, replacing.", &anti_name);
-                            let anti_index = self.particles.get_index_of(&anti_old.name).unwrap();
-                            if !anti_old.self_anti {
-                                orphaned = Some(vec![self.anti_map[anti_index]]);
-                            }
-                            self.anti_map[anti_index] = self.anti_map.len();
-                            self.anti_map.push(anti_index);
+                None => match self.particles.insert(anti_name.clone().into(), p.into_anti()) {
+                    None => (),
+                    Some(anti_old) => {
+                        warn!("Particle `{}` already present in model, replacing.", &anti_name);
+                        let anti_index = self.particles.get_index_of(&anti_old.name).unwrap();
+                        if !anti_old.self_anti {
+                            orphaned = Some(vec![
+                                self.particle_index_by_name(self.particle(anti_index).anti_name())
+                                    .unwrap(),
+                            ]);
                         }
                     }
-                    self.anti_map.push(self.anti_map.len() + 1);
-                    self.anti_map.push(self.anti_map.len() - 1);
-                }
+                },
                 Some(p_old) => {
                     warn!("Particle `{}` already present in model, replacing.", &name);
                     let p_index = self.particles.get_index_of(&p_old.name).unwrap();
                     match self.particles.insert(anti_name.clone().into(), p.into_anti()) {
                         None => {
                             if !p_old.self_anti {
-                                orphaned = Some(vec![self.anti_map[p_index]]);
+                                orphaned = Some(vec![
+                                    self.particle_index_by_name(self.particle(p_index).anti_name()).unwrap(),
+                                ]);
                             }
-                            self.anti_map[p_index] = self.anti_map.len();
-                            self.anti_map.push(p_index);
                         }
                         Some(anti_old) => {
                             warn!("Particle `{}` already present in model, replacing.", &anti_name);
                             let anti_index = self.particles.get_index_of(&anti_old.name).unwrap();
-                            if self.anti_map[p_index] != anti_index {
-                                orphaned = Some(vec![self.anti_map[p_index], self.anti_map[anti_index]]);
+                            let p_anti = self.particle_index_by_name(self.particle(p_index).anti_name()).unwrap();
+                            if p_anti != anti_index {
+                                orphaned = Some(vec![
+                                    p_anti,
+                                    self.particle_index_by_name(self.particle(anti_index).anti_name())
+                                        .unwrap(),
+                                ]);
                             }
-                            self.anti_map[p_index] = anti_index;
-                            self.anti_map[anti_index] = p_index;
                         }
                     }
                 }
@@ -143,9 +142,7 @@ impl QGRAFModel {
                     self.particles[*orphan].name
                 );
                 self.particles.shift_remove_index(*orphan);
-                self.anti_map.remove(*orphan);
             }
-            self.rebuild_anti_map();
         }
     }
 
@@ -177,34 +174,22 @@ impl QGRAFModel {
             );
             self.supports_sign = false;
         }
-        let mut spin_map = vec![-1; particles.len()];
+        let mut fermi_map = vec![-1; particles.len()];
         if fermi_indices.len() == 1 {
             warn!(
                 "Vertex `{name}` has a single anti-commuting field attached, disabling diagram signs for this model."
             );
             self.supports_sign = false;
         } else if fermi_indices.len() == 2 {
-            spin_map[fermi_indices[0]] = fermi_indices[1] as isize;
-            spin_map[fermi_indices[1]] = fermi_indices[0] as isize;
+            fermi_map[fermi_indices[0]] = fermi_indices[1] as i64;
+            fermi_map[fermi_indices[1]] = fermi_indices[0] as i64;
         }
-        let v = QGRAFVertex::new(name.clone(), particles, couplings, constants, spin_map);
+        let v = QGRAFVertex::new(name.clone(), particles, couplings, constants, fermi_map);
         match self.vertices.insert(name.clone(), v) {
             None => (),
             Some(_) => log::warn!("Vertex {name} already present in model, replacing."),
         }
         Ok(())
-    }
-
-    fn rebuild_anti_map(&mut self) {
-        for (i, p) in self.particles.values().enumerate() {
-            if p.self_anti {
-                self.anti_map[i] = i;
-            } else {
-                let anti_index = self.particles.get_index_of(&p.anti_name).unwrap();
-                self.anti_map[i] = anti_index;
-                self.anti_map[anti_index] = i;
-            }
-        }
     }
 }
 
@@ -228,14 +213,6 @@ impl ModelBase for QGRAFModel {
             .particles
             .get_index_of(name.as_ref())
             .ok_or_else(|| ModelError::particle_not_found(name.as_ref()));
-    }
-
-    fn anti_particle(&self, particle: usize) -> &Self::Particle {
-        &self.particles[self.anti_map[particle]]
-    }
-
-    fn anti_particle_index(&self, particle: usize) -> usize {
-        self.anti_map[particle]
     }
 
     fn vertex(&self, index: usize) -> &Self::Vertex {

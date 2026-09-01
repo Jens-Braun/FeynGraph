@@ -1,6 +1,6 @@
 #![allow(dead_code, non_snake_case)]
 use feyngraph::{
-    model::{Model, ModelBase, ParticleBase, VertexBase},
+    model::{ModelBase, ParticleBase, VertexBase},
     topology::TopologyModel,
 };
 use regex::Regex;
@@ -8,7 +8,7 @@ use std::error::Error;
 use std::io::{Error as IOError, ErrorKind};
 use std::process::Command;
 
-pub fn write_qgraf_model<M: ModelBase>(mut out: impl std::io::Write, model: &Model<M>) -> Result<(), Box<dyn Error>> {
+pub fn write_qgraf_model<M: ModelBase>(mut out: impl std::io::Write, model: &M) -> Result<(), Box<dyn Error>> {
     writeln!(out, "% Particles")?;
     for particle in model.particles() {
         if particle.id() < 0 {

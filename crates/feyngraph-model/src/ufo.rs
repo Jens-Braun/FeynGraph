@@ -16,9 +16,9 @@ const SM_VERTICES: &str = include_str!("../Standard_Model/vertices.py");
 pub struct UFOParticle {
     pub name: String,
     pub anti_name: String,
-    pub spin: isize,
-    pub color: isize,
-    pub pdg_code: isize,
+    pub spin: i64,
+    pub color: i64,
+    pub pdg_code: i64,
     pub texname: String,
     pub antitexname: String,
     pub linestyle: LineStyle,
@@ -30,9 +30,9 @@ impl UFOParticle {
     pub(crate) fn new(
         name: impl Into<String>,
         anti_name: impl Into<String>,
-        spin: isize,
-        color: isize,
-        pdg_code: isize,
+        spin: i64,
+        color: i64,
+        pdg_code: i64,
         texname: impl Into<String>,
         antitexname: impl Into<String>,
         linestyle: LineStyle,
@@ -75,6 +75,10 @@ impl ParticleBase for UFOParticle {
         &self.name
     }
 
+    fn anti_name(&self) -> &str {
+        &self.anti_name
+    }
+
     fn id(&self) -> i64 {
         self.pdg_code as i64
     }
@@ -102,7 +106,7 @@ impl ParticleDraw for UFOParticle {
 pub struct UFOVertex {
     pub name: String,
     pub particles: Vec<String>,
-    pub spin_map: Vec<isize>,
+    pub fermi_map: Vec<i64>,
     pub coupling_orders: HashMap<String, usize>,
 }
 
@@ -110,13 +114,13 @@ impl UFOVertex {
     pub(crate) fn new(
         name: String,
         particles: Vec<String>,
-        spin_map: Vec<isize>,
+        fermi_map: Vec<i64>,
         coupling_orders: HashMap<String, usize>,
     ) -> Self {
         return Self {
             name,
             particles,
-            spin_map,
+            fermi_map,
             coupling_orders,
         };
     }
@@ -146,8 +150,8 @@ impl VertexBase for UFOVertex {
         &self.coupling_orders
     }
 
-    fn fermi_map(&self, in_ray: usize) -> usize {
-        self.spin_map[in_ray] as usize
+    fn fermi_map(&self, in_ray: usize) -> i64 {
+        self.fermi_map[in_ray]
     }
 }
 
@@ -218,9 +222,9 @@ impl UFOModel {
         &mut self,
         name: S,
         anti_name: S,
-        spin: isize,
-        color: isize,
-        pdg_code: isize,
+        spin: i64,
+        color: i64,
+        pdg_code: i64,
         texname: S,
         antitexname: S,
         linestyle: LineStyle,
@@ -261,7 +265,7 @@ impl UFOModel {
         &mut self,
         name: S,
         particles: Vec<S>,
-        spin_map: Vec<isize>,
+        spin_map: Vec<i64>,
         coupling_orders: HashMap<S, usize>,
     ) -> Result<(), ModelError> {
         for coupling in coupling_orders.keys() {
@@ -300,7 +304,7 @@ impl UFOModel {
                 (
                     v.particles.clone(),
                     v.coupling_orders.clone().into_iter().collect_vec(),
-                    v.spin_map.clone(),
+                    v.fermi_map.clone(),
                 )
             })
             .into_iter()
@@ -313,7 +317,7 @@ impl UFOModel {
                     UFOVertex {
                         name: format!("V_M_{}", i),
                         particles: vertices[0].particles.clone(),
-                        spin_map: vertices[0].spin_map.clone(),
+                        fermi_map: vertices[0].fermi_map.clone(),
                         coupling_orders: vertices[0].coupling_orders.clone(),
                     },
                 );
@@ -366,6 +370,10 @@ impl UFOModel {
         }
         Ok(())
     }
+
+    pub fn splittings(&self) -> &HashMap<String, HashMap<String, Vec<(usize, usize)>>> {
+        &self.splittings
+    }
 }
 
 impl ModelBase for UFOModel {
@@ -388,14 +396,6 @@ impl ModelBase for UFOModel {
             .particles
             .get_index_of(name.as_ref())
             .ok_or_else(|| ModelError::particle_not_found(name.as_ref()));
-    }
-
-    fn anti_particle(&self, particle: usize) -> &Self::Particle {
-        &self.particles[self.anti_map[particle]]
-    }
-
-    fn anti_particle_index(&self, particle: usize) -> usize {
-        self.anti_map[particle]
     }
 
     fn vertex(&self, index: usize) -> &Self::Vertex {
@@ -422,8 +422,8 @@ impl ModelBase for UFOModel {
 #[allow(unused)]
 #[derive(Debug)]
 enum Value<'a> {
-    Int(isize),
-    Rational(isize, isize),
+    Int(i64),
+    Rational(i64, i64),
     String(&'a str),
     Bool(bool),
     List(Vec<Value<'a>>),
@@ -434,7 +434,7 @@ enum Value<'a> {
 }
 
 impl<'a> Value<'a> {
-    fn int(self) -> Result<isize, &'static str> {
+    fn int(self) -> Result<i64, &'static str> {
         match self {
             Self::Int(i) => Ok(i),
             _ => Err("int"),
@@ -448,7 +448,7 @@ impl<'a> Value<'a> {
         }
     }
 
-    fn i_list(self) -> Result<Vec<isize>, &'static str> {
+    fn i_list(self) -> Result<Vec<i64>, &'static str> {
         match self {
             Self::List(l) => Ok(l.into_iter().map(|v| v.int()).collect::<Result<Vec<_>, &str>>()?),
             _ => Err("list of ints"),
@@ -685,7 +685,7 @@ peg::parser! {
             input: &str,
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
-            lorentz_structures: &HashMap<String, Vec<isize>>
+            lorentz_structures: &HashMap<String, Vec<i64>>
         ) -> (Vec<UFOVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
             pos: position!() py_name:name() _ "=" _ "Vertex(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 return parse_vertex(input, couplings, ident_map, lorentz_structures, py_name, props, pos);
@@ -695,24 +695,24 @@ peg::parser! {
             input: &str,
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
-            lorentz_structures: &HashMap<String, Vec<isize>>
+            lorentz_structures: &HashMap<String, Vec<i64>>
         ) -> (Vec<UFOVertex>, (String, HashMap<String, Vec<(usize, usize)>>)) =
             pos: position!() py_name:name() _ "=" _ "CTVertex(" _ props:(property(input) **<1,> (_ "," _)) _ ")" {?
                 return parse_vertex(input, couplings, ident_map, lorentz_structures, py_name, props, pos);
             }
 
-        rule lorentz_atom() -> (isize, isize) =
+        rule lorentz_atom() -> (i64, i64) =
             ("Identity" /  "Gamma5" / "ProjM" / "ProjP"  / "C") _
             "(" _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
             / "Gamma" _ "(" _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
             / "Sigma" _ "(" _ int() _ "," _ int() _ "," _ i:int() _ "," _ j:int() _ ")" {? Ok((i.int()? - 1, j.int()? - 1)) }
 
-        pub rule lorentz_structure() -> Vec<(isize, isize)> =
+        pub rule lorentz_structure() -> Vec<(i64, i64)> =
             _ connections:((a:lorentz_atom() {Some(a)} / [_] {None})) ** _ {
                 connections.into_iter().flatten().collect_vec()
             }
 
-        pub rule lorentz(input: &str) -> (&'input str, Vec<isize>) =
+        pub rule lorentz(input: &str) -> (&'input str, Vec<i64>) =
             pos: position!() py_name:name() _ "=" _ "Lorentz(" _ props:(property(input) **<1,> (_ "," _)) _ ","? _ ")" {?
                 let mut name = None;
                 let mut spins = None;
@@ -751,7 +751,7 @@ peg::parser! {
                         let j = connected[0];
                         seen[i] = true;
                         seen[j] = true;
-                        connections.push((i as isize, j as isize));
+                        connections.push((i as i64, j as i64));
                     }
                 }
                 return Ok((py_name, contract_index_map(connections)));
@@ -784,7 +784,7 @@ peg::parser! {
         pub rule couplings(input: &str) -> HashMap<String, HashMap<String, usize>> =
         _ (!coupling(input) [_])* _ couplings:(coupling(input) ** _) _ {couplings.into_iter().collect()}
 
-        pub rule lorentz_structures(input: &str) -> HashMap<String, Vec<isize>> =
+        pub rule lorentz_structures(input: &str) -> HashMap<String, Vec<i64>> =
         _ (!lorentz(input) [_])* _ structures:(lorentz(input) ** _) _ {
             structures.into_iter().map(|(s, v)| (s.to_owned(), v)).collect()
         }
@@ -793,7 +793,7 @@ peg::parser! {
             input: &str,
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
-            lorentz_structures: &HashMap<String, Vec<isize>>
+            lorentz_structures: &HashMap<String, Vec<i64>>
         ) -> (IndexMap<String, UFOVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
         _ (!vertex(input, couplings, ident_map, lorentz_structures) [_])* _
         vertices:(vertex(input, couplings, ident_map, lorentz_structures) ** _) _ {
@@ -808,7 +808,7 @@ peg::parser! {
             input: &str,
             couplings: &HashMap<String, HashMap<String, usize>>,
             ident_map: &HashMap<String, String>,
-            lorentz_structures: &HashMap<String, Vec<isize>>
+            lorentz_structures: &HashMap<String, Vec<i64>>
         ) -> (IndexMap<String, UFOVertex>, HashMap<String, HashMap<String, Vec<(usize, usize)>>>) =
         _ (!ct_vertex(input, couplings, ident_map, lorentz_structures) [_])* _
         vertices:(ct_vertex(input, couplings, ident_map, lorentz_structures) ** _) _ {
@@ -830,7 +830,7 @@ fn parse_vertex(
     input: &str,
     couplings: &HashMap<String, HashMap<String, usize>>,
     ident_map: &HashMap<String, String>,
-    lorentz_structures: &HashMap<String, Vec<isize>>,
+    lorentz_structures: &HashMap<String, Vec<i64>>,
     py_name: &str,
     props: Vec<(&str, Value<'_>)>,
     pos: usize,
@@ -867,7 +867,7 @@ fn parse_vertex(
         .collect_vec();
     let name = name.unwrap();
 
-    let mut unique_spin_mappings: Vec<(Vec<isize>, Vec<usize>)> = Vec::new();
+    let mut unique_spin_mappings: Vec<(Vec<i64>, Vec<usize>)> = Vec::new();
     for (i, spin_map) in lorentz_list
         .unwrap()
         .iter()

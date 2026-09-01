@@ -2,7 +2,7 @@ use itertools::Itertools;
 use std::{
     error::Error,
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut},
+    ops::Deref,
     path::Path,
 };
 
@@ -19,8 +19,8 @@ pub use vertex::VertexBase;
 
 #[derive(Debug)]
 pub struct ModelError {
-    msg: String,
-    kind: ErrorKind,
+    pub msg: String,
+    pub kind: ErrorKind,
 }
 
 impl std::error::Error for ModelError {
@@ -28,7 +28,7 @@ impl std::error::Error for ModelError {
         match &self.kind {
             ErrorKind::ParticleNotFound | ErrorKind::VertexNotFound | ErrorKind::InvalidModel => None,
             ErrorKind::IO(err) => Some(err),
-            ErrorKind::ParseError(err) => Some(err.as_ref()),
+            ErrorKind::ParseError(err) | ErrorKind::MiscError(err) => Some(err.as_ref()),
         }
     }
 }
@@ -68,6 +68,13 @@ impl ModelError {
             kind: ErrorKind::InvalidModel,
         }
     }
+
+    pub fn misc(msg: impl Display, source: impl Error + 'static) -> Self {
+        Self {
+            msg: msg.to_string(),
+            kind: ErrorKind::ParseError(Box::new(source) as Box<dyn Error>),
+        }
+    }
 }
 
 impl Display for ModelError {
@@ -83,6 +90,7 @@ pub enum ErrorKind {
     InvalidModel,
     IO(std::io::Error),
     ParseError(Box<dyn Error>),
+    MiscError(Box<dyn Error>),
 }
 
 pub trait ModelBase: Debug + Send + Sync {
@@ -92,8 +100,6 @@ pub trait ModelBase: Debug + Send + Sync {
     fn particle(&self, index: usize) -> &Self::Particle;
     fn particle_by_name(&self, name: impl AsRef<str>) -> Result<&Self::Particle, ModelError>;
     fn particle_index_by_name(&self, name: impl AsRef<str>) -> Result<usize, ModelError>;
-    fn anti_particle(&self, particle: usize) -> &Self::Particle;
-    fn anti_particle_index(&self, particle: usize) -> usize;
 
     fn vertex(&self, index: usize) -> &Self::Vertex;
 
@@ -130,6 +136,7 @@ pub trait ModelBase: Debug + Send + Sync {
 pub struct Model<M> {
     base: M,
     particle_counts: IndexMap<usize, Vec<(usize, usize)>>,
+    anti_map: Vec<usize>,
 }
 
 impl Model<UFOModel> {
@@ -140,24 +147,6 @@ impl Model<UFOModel> {
     pub fn sm() -> Self {
         Self::from_base(UFOModel::sm())
     }
-
-    pub fn add_vertex<S: Into<String> + AsRef<str> + PartialEq + Clone>(
-        &mut self,
-        name: S,
-        particles: Vec<S>,
-        spin_map: Vec<isize>,
-        coupling_orders: HashMap<S, usize>,
-    ) -> Result<(), ModelError> {
-        self.base.add_vertex(name, particles, spin_map, coupling_orders)?;
-        self.rebuild_counts();
-        Ok(())
-    }
-
-    pub fn merge_vertices(&mut self) -> IndexMap<String, Vec<String>> {
-        let res = self.base.merge_vertices();
-        self.rebuild_counts();
-        res
-    }
 }
 
 impl<M: ModelBase> Model<M> {
@@ -165,12 +154,14 @@ impl<M: ModelBase> Model<M> {
         let mut res = Self {
             base,
             particle_counts: IndexMap::default(),
+            anti_map: Vec::new(),
         };
-        res.rebuild_counts();
+        res.build_counts();
+        res.build_anti_map();
         res
     }
 
-    pub fn rebuild_counts(&mut self) {
+    fn build_counts(&mut self) {
         self.particle_counts = self
             .base
             .vertices()
@@ -186,6 +177,13 @@ impl<M: ModelBase> Model<M> {
                         .collect(),
                 )
             })
+            .collect();
+    }
+
+    fn build_anti_map(&mut self) {
+        self.anti_map = self
+            .particles()
+            .map(|p| self.particle_index_by_name(p.anti_name()).unwrap())
             .collect();
     }
 
@@ -205,6 +203,14 @@ impl<M: ModelBase> Model<M> {
             Some(v) => v,
         }
     }
+
+    pub fn anti_particle(&self, particle: usize) -> &M::Particle {
+        self.particle(self.anti_map[particle])
+    }
+
+    pub fn anti_particle_index(&self, particle: usize) -> usize {
+        self.anti_map[particle]
+    }
 }
 
 impl<M: ModelBase> Deref for Model<M> {
@@ -214,11 +220,6 @@ impl<M: ModelBase> Deref for Model<M> {
     }
 }
 
-impl<M: ModelBase> DerefMut for Model<M> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.base
-    }
-}
 /// Reduced model object only containing topological properties.
 ///
 /// This object can be constructed from a given physical [`Model`] or from a list of allowed node degrees.

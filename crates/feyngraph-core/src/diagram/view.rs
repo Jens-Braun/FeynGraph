@@ -45,7 +45,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the incoming legs.
-    pub fn incoming(&self) -> impl Iterator<Item = LegView<'_, M>> {
+    pub fn incoming<'s>(&'s self) -> impl Iterator<Item = LegView<'s, M>> + use<'s, M> {
         return self.diagram.incoming_legs.iter().enumerate().map(|(i, p)| LegView {
             model: self.model,
             diagram: self,
@@ -57,7 +57,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the outgoing legs.
-    pub fn outgoing(&self) -> impl Iterator<Item = LegView<'_, M>> {
+    pub fn outgoing<'s>(&'s self) -> impl Iterator<Item = LegView<'s, M>> + use<'s, M> {
         return self.diagram.outgoing_legs.iter().enumerate().map(|(i, p)| LegView {
             model: self.model,
             diagram: self,
@@ -69,12 +69,12 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the incoming and outgoing legs.
-    pub fn legs(&self) -> impl Iterator<Item = LegView<'_, M>> {
+    pub fn legs<'s>(&'s self) -> impl Iterator<Item = LegView<'s, M>> + use<'s, M> {
         return self.incoming().chain(self.outgoing());
     }
 
     /// Get an iterator over the internal propagators.
-    pub fn propagators(&self) -> impl Iterator<Item = PropagatorView<'_, M>> {
+    pub fn propagators<'s>(&'s self) -> impl Iterator<Item = PropagatorView<'s, M>> + use<'s, M> {
         return self
             .diagram
             .propagators
@@ -90,7 +90,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get the `index`-th internal propagator.
-    pub fn propagator(&self, index: usize) -> PropagatorView<'_, M> {
+    pub fn propagator<'s>(&'s self, index: usize) -> PropagatorView<'s, M> {
         return PropagatorView {
             model: self.model,
             diagram: self,
@@ -101,7 +101,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get the `index`-th internal vertex.
-    pub fn vertex(&self, index: usize) -> VertexView<'_, M> {
+    pub fn vertex<'s>(&'s self, index: usize) -> VertexView<'s, M> {
         return VertexView {
             model: self.model,
             diagram: self,
@@ -111,7 +111,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the internal vertices.
-    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_, M>> {
+    pub fn vertices<'s>(&'s self) -> impl Iterator<Item = VertexView<'s, M>> + use<'s, M> {
         return self.diagram.vertices.iter().enumerate().map(|(i, v)| VertexView {
             model: self.model,
             diagram: self,
@@ -121,7 +121,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the vertices belonging to the `index`-th loop.
-    pub fn loop_vertices(&self, index: usize) -> impl Iterator<Item = VertexView<'_, M>> {
+    pub fn loop_vertices<'s>(&'s self, index: usize) -> impl Iterator<Item = VertexView<'s, M>> + use<'s, M> {
         let loop_index = self.n_ext() + index;
         return self.diagram.vertices.iter().enumerate().filter_map(move |(i, v)| {
             if v.propagators
@@ -141,7 +141,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the propagators belonging to the `index`-th loop.
-    pub fn chord(&self, index: usize) -> impl Iterator<Item = PropagatorView<'_, M>> {
+    pub fn chord<'s>(&'s self, index: usize) -> impl Iterator<Item = PropagatorView<'s, M>> + use<'s, M> {
         let loop_index = self.n_ext() + index;
         return self
             .diagram
@@ -169,7 +169,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
     }
 
     /// Get an iterator over the bridge propagators of the diagram.
-    pub fn bridges(&self) -> impl Iterator<Item = PropagatorView<'_, M>> {
+    pub fn bridges<'s>(&'s self) -> impl Iterator<Item = PropagatorView<'s, M>> + use<'s, M> {
         return self.diagram.bridges.iter().map(|i| self.propagator(*i));
     }
 
@@ -266,7 +266,7 @@ impl<'a, M: ModelBase> DiagramView<'a, M> {
         let mut in_ray = ray;
         while let Some(current) = to_visit.pop() {
             let out_ray = current.interaction().fermi_map(in_ray);
-            let out_prop = current.propagators_ordered().nth(out_ray).unwrap();
+            let out_prop = current.propagators_ordered().nth(out_ray as usize).unwrap();
             match out_prop {
                 Either::Left(leg) => {
                     if visited_legs[leg.leg_index] {
@@ -432,7 +432,7 @@ impl<M> Clone for LegView<'_, M> {
     }
 }
 
-impl<M: ModelBase> LegView<'_, M> {
+impl<'a, M: ModelBase> LegView<'a, M> {
     #[cfg(feature = "_internal_api")]
     pub fn leg(&self) -> &Leg {
         return self.leg;
@@ -444,12 +444,12 @@ impl<M: ModelBase> LegView<'_, M> {
     }
 
     /// Get the vertex the leg is attached to.
-    pub fn vertex(&self) -> VertexView<'_, M> {
+    pub fn vertex(&self) -> VertexView<'a, M> {
         return self.diagram.vertex(self.leg.vertex);
     }
 
     /// Get the particle assigned to the leg
-    pub fn particle(&self) -> &M::Particle {
+    pub fn particle(&self) -> &'a M::Particle {
         return if self.invert_particle {
             self.model.anti_particle(self.leg.particle)
         } else {
@@ -555,14 +555,14 @@ impl<M> Clone for PropagatorView<'_, M> {
     }
 }
 
-impl<M: ModelBase> PropagatorView<'_, M> {
+impl<'a, M: ModelBase> PropagatorView<'a, M> {
     #[cfg(feature = "_internal_api")]
     pub fn propagator(&self) -> &Propagator {
         return self.propagator;
     }
 
     /// Normalize the propagator, i.e. get an inverted version of it if it carries an anti particle.
-    pub fn normalize(&self) -> PropagatorView<'_, M> {
+    pub fn normalize(&self) -> PropagatorView<'a, M> {
         return if self.particle().is_anti() {
             Self {
                 model: self.model,
@@ -577,7 +577,7 @@ impl<M: ModelBase> PropagatorView<'_, M> {
     }
 
     /// Get an inverted version of the propagator.
-    pub fn invert(&self) -> PropagatorView<'_, M> {
+    pub fn invert(&self) -> PropagatorView<'a, M> {
         Self {
             model: self.model,
             diagram: self.diagram,
@@ -588,7 +588,7 @@ impl<M: ModelBase> PropagatorView<'_, M> {
     }
 
     /// Get an iterator over the vertices connected by the propagator.
-    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'_, M>> {
+    pub fn vertices(&self) -> impl Iterator<Item = VertexView<'a, M>> + use<'a, M> {
         return if self.invert {
             [
                 self.diagram.vertex(self.propagator.vertices[1]),
@@ -605,13 +605,13 @@ impl<M: ModelBase> PropagatorView<'_, M> {
     }
 
     /// Get the `index`-th vertex connected to the propagator.
-    pub fn vertex(&self, index: usize) -> VertexView<'_, M> {
+    pub fn vertex(&self, index: usize) -> VertexView<'a, M> {
         let i = if self.invert { 1 - index } else { index };
         return self.diagram.vertex(self.propagator.vertices[i]);
     }
 
     /// Get the particle assigned to the propagator.
-    pub fn particle(&self) -> &M::Particle {
+    pub fn particle(&self) -> &'a M::Particle {
         return if self.invert {
             self.model.anti_particle(self.propagator.particle)
         } else {
@@ -756,46 +756,55 @@ impl<M> Clone for VertexView<'_, M> {
     }
 }
 
-impl<M: ModelBase> VertexView<'_, M> {
+impl<'a, M: ModelBase> VertexView<'a, M>
+where
+    Self: 'a,
+{
     #[cfg(feature = "_internal_api")]
     pub fn vertex(&self) -> &Vertex {
         return self.vertex;
     }
 
     /// Get an iterator over the propagators connected to the vertex.
-    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView<'_, M>, PropagatorView<'_, M>>> {
-        return self.vertex.propagators.iter().enumerate().map(|(i, prop)| {
+    pub fn propagators(&self) -> impl Iterator<Item = Either<LegView<'a, M>, PropagatorView<'a, M>>> + use<'a, M> {
+        let m = self.model;
+        let diag = self.diagram;
+        let index = self.index;
+        let v = self.vertex;
+        return v.propagators.iter().enumerate().map(move |(i, prop)| {
             if *prop >= 0 {
                 Either::Right(PropagatorView {
-                    model: self.model,
-                    diagram: self.diagram,
-                    propagator: &self.diagram.diagram.propagators[*prop as usize],
+                    model: m,
+                    diagram: diag,
+                    propagator: &diag.diagram.propagators[*prop as usize],
                     index: *prop as usize,
-                    invert: (self.diagram.diagram.propagators[*prop as usize].vertices[0] == self.index
-                        && self.diagram.diagram.propagators[*prop as usize].vertices[1] != self.index)
-                        || (i > 0 && self.vertex.propagators[i - 1] == self.vertex.propagators[i]),
+                    invert: (diag.diagram.propagators[*prop as usize].vertices[0] == index
+                        && diag.diagram.propagators[*prop as usize].vertices[1] != index)
+                        || (i > 0 && v.propagators[i - 1] == v.propagators[i]),
                 })
             } else {
-                let index = (*prop + self.diagram.n_ext() as isize) as usize;
-                let leg = if index < self.diagram.diagram.incoming_legs.len() {
-                    &self.diagram.diagram.incoming_legs[index]
+                let index = (*prop + diag.n_ext() as isize) as usize;
+                let leg = if index < diag.diagram.incoming_legs.len() {
+                    &diag.diagram.incoming_legs[index]
                 } else {
-                    &self.diagram.diagram.outgoing_legs[index - self.diagram.diagram.incoming_legs.len()]
+                    &diag.diagram.outgoing_legs[index - diag.diagram.incoming_legs.len()]
                 };
                 Either::Left(LegView {
-                    model: self.model,
-                    diagram: self.diagram,
+                    model: m,
+                    diagram: diag,
                     leg,
                     leg_index: index,
                     invert_particle: false,
-                    invert_momentum: index >= self.diagram.diagram.incoming_legs.len(),
+                    invert_momentum: index >= diag.diagram.incoming_legs.len(),
                 })
             }
         });
     }
 
     /// Get an iterator over the propagators connected to the vertex ordered like the particles in the interaction.
-    pub fn propagators_ordered(&self) -> impl Iterator<Item = Either<LegView<'_, M>, PropagatorView<'_, M>>> {
+    pub fn propagators_ordered(
+        &self,
+    ) -> impl Iterator<Item = Either<LegView<'a, M>, PropagatorView<'a, M>>> + use<'a, M> {
         let views = self.propagators().collect_vec();
         let mut seen = vec![false; views.len()];
         return self.model.vertex(self.vertex.interaction).particles().iter().map(
@@ -818,7 +827,7 @@ impl<M: ModelBase> VertexView<'_, M> {
     }
 
     /// Get the interaction assigned to the vertex.
-    pub fn interaction(&self) -> &M::Vertex {
+    pub fn interaction(&self) -> &'a M::Vertex {
         return self.model.vertex(self.vertex.interaction);
     }
 

@@ -27,9 +27,10 @@ macro_rules! test_diagrams {
         paste!{
             #[test]
             fn [< test_diag _ $ufo _ $($particle_in)+ _ $($particle_out)+ _loops_ $n_loops >]() {
-                let model = Model::ufo(
-                    &PathBuf::from(format!("../../tests/models/{}", stringify!($ufo)))
-                ).unwrap();
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push(format!("../../tests/models/{}", stringify!($ufo)));
+                let mut model = UFOModel::parse(&path).unwrap();
+                let _ = model.merge_vertices();
                 let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
                 common::write_qgraf_model(
                     &qgraf_model,
@@ -56,7 +57,7 @@ macro_rules! test_diagrams {
                     &in_particles,
                     &out_particles,
                     $n_loops,
-                    model,
+                    Model::from_base(model),
                     None,
                 ).unwrap().par_count();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
@@ -80,9 +81,9 @@ macro_rules! test_diagrams {
         paste!{
             #[test]
             fn [< test_diag _ $ufo _ $name _loops_ $n_loops >]() {
-                let mut model = Model::ufo(
-                    &PathBuf::from(format!("../../tests/models/{}", stringify!($ufo)))
-                ).unwrap();
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push(format!("../../tests/models/{}", stringify!($ufo)));
+                let mut model = UFOModel::parse(&path).unwrap();
                 let _ = model.merge_vertices();
 
                 let qgraf_model = NamedTempFile::with_prefix("qgraf_model_").unwrap();
@@ -111,7 +112,7 @@ macro_rules! test_diagrams {
                     &in_particles,
                     &out_particles,
                     $n_loops,
-                    model,
+                    Model::from_base(model),
                     None,
                 ).unwrap().par_count();
                 let n_qgraf = common::run_qgraf(qgraf_config.path().to_str().unwrap());
@@ -239,7 +240,7 @@ fn diags_SM_bg_hb_loops_1_sign() {
 
 #[test]
 fn diags_QCD_g_gg_loops_1_sign() {
-    let mut m = Model::from_base(UFOModel::empty());
+    let mut m = UFOModel::empty();
     m.add_particle("g", "g", 3, 8, 21, "g", "g", feyngraph::model::LineStyle::Curly, false);
     m.add_particle(
         "u",
@@ -259,7 +260,7 @@ fn diags_QCD_g_gg_loops_1_sign() {
         FxHashMap::from_iter([("QCD", 1usize)].into_iter()),
     )
     .unwrap();
-    let diag_gen = DiagramGenerator::new(&["g"], &["g", "g"], 1, m, None).unwrap();
+    let diag_gen = DiagramGenerator::new(&["g"], &["g", "g"], 1, Model::from_base(m), None).unwrap();
     let diags = diag_gen.generate();
     assert_eq!(diags.len(), 2);
     for d in diags.views() {
